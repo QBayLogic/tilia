@@ -1,0 +1,8 @@
+# Entry points that are reachable from outside the code, and so must never
+# be reported as dead.
+roots = [
+  "^Main\\.main$",
+  "^Paths_",
+]
+
+type-class-roots = true
