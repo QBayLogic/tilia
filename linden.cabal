@@ -29,7 +29,13 @@ flag dev
   manual: True
 
 library
-  exposed-modules: Linden
+  exposed-modules:
+    Linden
+    Linden.Printer
+    Linden.Printer.Body
+    Linden.Printer.Combinators
+    Linden.Printer.Internal
+
   hs-source-dirs: src
   default-language: GHC2021
   build-depends:
@@ -86,9 +92,17 @@ test-suite tests
   main-is: Spec.hs
   build-tool-depends: hspec-discover:hspec-discover >=2 && <3
   hs-source-dirs: tests
-  other-modules: LindenSpec
+  other-modules:
+    Linden.Gen
+    Linden.Printer.BodySpec
+    Linden.Printer.CombinatorsSpec
+    Linden.Printer.InternalSpec
+    Linden.Printer.PropertiesSpec
+    LindenSpec
+
   default-language: GHC2021
   build-depends:
+    QuickCheck >=2.14 && <3,
     base >=4.14 && <5,
     hspec >=2 && <3,
     linden,
