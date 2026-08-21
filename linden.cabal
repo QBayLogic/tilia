@@ -31,6 +31,9 @@ flag dev
 library
   exposed-modules:
     Linden
+    Linden.Comments
+    Linden.Comments.Attach
+    Linden.Parser
     Linden.Printer
     Linden.Printer.Body
     Linden.Printer.Combinators
@@ -40,6 +43,8 @@ library
   default-language: GHC2021
   build-depends:
     base >=4.14 && <5,
+    ghc-lib-parser >=9.14 && <9.15,
+    syb >=0.7 && <0.8,
     text >=2.1 && <3,
 
   if flag(dev)
@@ -93,6 +98,7 @@ test-suite tests
   build-tool-depends: hspec-discover:hspec-discover >=2 && <3
   hs-source-dirs: tests
   other-modules:
+    Linden.CommentsSpec
     Linden.Gen
     Linden.Printer.BodySpec
     Linden.Printer.CombinatorsSpec

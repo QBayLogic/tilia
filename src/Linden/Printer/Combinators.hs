@@ -14,6 +14,7 @@ module Linden.Printer.Combinators
     breakOrNothing,
     hardBreak,
     blankLine,
+    emptyAnchor,
 
     -- * Layout
     Layout (..),
@@ -106,6 +107,10 @@ hardBreak = DHardBreak
 -- | An empty line.
 blankLine :: Doc
 blankLine = hardBreak <> hardBreak
+
+-- | An anchor for a construct that contains nothing.
+emptyAnchor :: Span -> Doc
+emptyAnchor s = located s mempty
 
 ----------------------------------------------------------------------------
 -- Layout
