@@ -12,6 +12,7 @@
 *~
 .HTF/
 .cabal-sandbox/
+.direnv/
 .ghc.environment.*
 .hpc
 .hsenv
