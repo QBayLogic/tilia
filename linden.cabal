@@ -33,7 +33,14 @@ library
     Linden
     Linden.Comments
     Linden.Comments.Attach
+    Linden.Fixity
+    Linden.Fixity.Builtin
+    Linden.Fixity.Cabal
+    Linden.Fixity.Cache
+    Linden.Fixity.PackageDb
+    Linden.Fixity.Plan
     Linden.Parser
+    Linden.Project
     Linden.Printer
     Linden.Printer.Body
     Linden.Printer.Combinators
@@ -42,10 +49,20 @@ library
   hs-source-dirs: src
   default-language: GHC2021
   build-depends:
+    aeson >=2.1 && <3,
     base >=4.14 && <5,
+    base16-bytestring >=1 && <2,
+    bytestring >=0.11 && <0.13,
+    containers >=0.5 && <0.9,
+    cryptohash-sha256 >=0.11 && <0.12,
+    directory ^>=1.3,
+    filepath >=1.4 && <1.6,
     ghc-lib-parser >=9.14 && <9.15,
+    process >=1.6 && <1.7,
     syb >=0.7 && <0.8,
+    tar >=0.6 && <0.7,
     text >=2.1 && <3,
+    zlib >=0.6 && <0.8,
 
   if flag(dev)
     ghc-options:
@@ -99,19 +116,29 @@ test-suite tests
   hs-source-dirs: tests
   other-modules:
     Linden.CommentsSpec
+    Linden.Fixity.CabalSpec
+    Linden.Fixity.CacheSpec
+    Linden.Fixity.PlanSpec
+    Linden.FixitySpec
     Linden.Gen
     Linden.Printer.BodySpec
     Linden.Printer.CombinatorsSpec
     Linden.Printer.InternalSpec
     Linden.Printer.PropertiesSpec
+    Linden.ProjectSpec
     LindenSpec
 
   default-language: GHC2021
   build-depends:
     QuickCheck >=2.14 && <3,
     base >=4.14 && <5,
+    containers >=0.5 && <0.9,
+    directory ^>=1.3,
+    filepath >=1.4 && <1.6,
+    ghc-lib-parser >=9.14 && <9.15,
     hspec >=2 && <3,
     linden,
+    temporary ^>=1.3,
     text >=2.1 && <3,
 
   if flag(dev)

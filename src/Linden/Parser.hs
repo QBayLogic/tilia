@@ -11,9 +11,12 @@ module Linden.Parser
     -- * Options
     ParserConfig (..),
     defaultParserConfig,
+    sourceExtensions,
   )
 where
 
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Data.EnumSet qualified as EnumSet
@@ -93,9 +96,15 @@ parseText config path source =
             pmHeaderEnd = headerEndOf hsModule
           }
   where
+    -- The module's own pragmas are added to whatever the caller asked for.
+    -- GHC's parser has to be told its extensions before it starts, and a
+    -- module that says @{-# LANGUAGE BangPatterns #-}@ will not parse
+    -- without them, so reading the header first is not optional.
+    config' = config {pcExtensions = pcExtensions config <> sourceExtensions source}
+
     initialState =
       GHC.initParserState
-        (parserOpts config)
+        (parserOpts config')
         (GHC.stringToStringBuffer (T.unpack source))
         (GHC.mkRealSrcLoc (mkFastString path) 1 1)
 
@@ -150,3 +159,48 @@ toSpan s =
   mkSpan
     (GHC.srcSpanStartLine s, GHC.srcSpanStartCol s)
     (GHC.srcSpanEndLine s, GHC.srcSpanEndCol s)
+
+----------------------------------------------------------------------------
+-- Language pragmas
+
+-- | The extensions a module's own @LANGUAGE@ pragmas ask for.
+--
+-- A @No@-prefixed name turns one off, so it is dropped from the result
+-- rather than added; nothing here is enabled by default, so removing what
+-- was never added is a no-op and that is correct.
+--
+-- Names GHC does not know are ignored. A module asking for an extension
+-- this compiler has never heard of will not parse anyway, and failing to
+-- parse is a better answer than refusing to try.
+sourceExtensions :: Text -> [Extension]
+sourceExtensions = foldl' apply [] . concatMap pragmaNames . headerLines
+  where
+    apply acc name = case T.stripPrefix "No" name >>= lookupExtension of
+      Just off -> filter (/= off) acc
+      Nothing -> case lookupExtension name of
+        Just on | on `notElem` acc -> acc <> [on]
+        _ -> acc
+
+    -- Pragmas may only appear before the module body, but finding where
+    -- that ends needs a parse, and this runs before one. Scanning the whole
+    -- file is safe: a @{-# LANGUAGE #-}@ further down is a warning from GHC
+    -- and enabling it early changes nothing that would otherwise parse.
+    headerLines = T.lines
+
+    pragmaNames l = case T.stripPrefix "{-#" (T.stripStart l) of
+      Nothing -> []
+      Just rest ->
+        let body = T.takeWhile (/= '#') rest
+            (keyword, names) = T.break (== ' ') (T.stripStart body)
+         in if T.toUpper keyword == "LANGUAGE"
+              then filter (not . T.null) (map T.strip (T.splitOn "," names))
+              else []
+
+lookupExtension :: Text -> Maybe Extension
+lookupExtension name = Map.lookup name extensionsByName
+
+-- | Every extension this compiler knows, by the name one writes in a
+-- pragma.
+extensionsByName :: Map Text Extension
+extensionsByName =
+  Map.fromList [(T.pack (show e), e) | e <- [minBound .. maxBound]]
