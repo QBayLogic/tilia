@@ -1,6 +1,6 @@
-# Linden
+# Tilia
 
-Linden is a new experimental formatter for Haskell source code. The primary
+Tilia is a new experimental formatter for Haskell source code. The primary
 design choices of the project are the following:
 
 * Use `ghc-lib-parser` for parsing, thus achieving correct parsing at all

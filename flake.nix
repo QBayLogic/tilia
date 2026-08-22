@@ -21,7 +21,7 @@
       # Files that participate in the build. Anything outside this set can
       # change without forcing a rebuild.
       sourceDirs = [ "src" "app" "tests" ];
-      sourceFiles = [ "cabal.project" "linden.cabal" ];
+      sourceFiles = [ "cabal.project" "tilia.cabal" ];
 
       # Cabal insists these exist, but their contents never affect the
       # build, so they are staged as empty placeholders.
@@ -47,12 +47,12 @@
               lib.elem rel sourceFiles
               || lib.any (d: rel == d || lib.hasPrefix "${d}/" rel) sourceDirs;
             pruned = pkgs.haskell-nix.haskellLib.cleanSourceWith {
-              name = "linden-source";
+              name = "tilia-source";
               src = ./.;
               filter = path: _type: wanted path;
             };
           in
-          pkgs.runCommand "linden-source-staged" { } ''
+          pkgs.runCommand "tilia-source-staged" { } ''
             cp -r ${pruned} $out
             chmod -R u+w $out
             touch ${lib.concatMapStringsSep " " (f: "$out/${f}") placeholders}
@@ -62,20 +62,20 @@
           pkgs.haskell-nix.cabalProject {
             inherit src;
             compiler-nix-name = compiler;
-            modules = [{ packages.linden.writeHieFiles = true; }];
+            modules = [{ packages.tilia.writeHieFiles = true; }];
           });
 
-        exeFor = compiler: projects.${compiler}.linden.components.exes.linden;
-        testsFor = compiler: projects.${compiler}.linden.checks.tests;
+        exeFor = compiler: projects.${compiler}.tilia.components.exes.tilia;
+        testsFor = compiler: projects.${compiler}.tilia.checks.tests;
 
         # Weeder needs one --hie-directory per component it should see.
         weeder =
           let
             project = projects.${baseCompiler};
-            inherit (project.linden.components) library exes tests;
-            scanned = [ library exes.linden tests.tests ];
+            inherit (project.tilia.components) library exes tests;
+            scanned = [ library exes.tilia tests.tests ];
           in
-          pkgs.runCommand "linden-weeder"
+          pkgs.runCommand "tilia-weeder"
             { nativeBuildInputs = [ (project.tool "weeder" "2.10.0") ]; }
             ''
               weeder --config ${./weeder.toml} \
@@ -87,7 +87,7 @@
       {
         packages =
           { default = exeFor baseCompiler; }
-          // perCompiler "linden-" exeFor;
+          // perCompiler "tilia-" exeFor;
 
         checks =
           { inherit weeder; }
@@ -95,7 +95,7 @@
 
         apps.default = {
           type = "app";
-          program = "${exeFor baseCompiler}/bin/linden";
+          program = "${exeFor baseCompiler}/bin/tilia";
         };
 
         devShells.default = projects.${baseCompiler}.shellFor {

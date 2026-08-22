@@ -4,15 +4,15 @@ module Main (main) where
 
 import Data.Text.IO qualified as T
 import Data.Version (showVersion)
-import Linden (linden)
 import Options.Applicative
-import Paths_linden (version)
+import Paths_tilia (version)
+import Tilia (tilia)
 
 main :: IO ()
 main = do
   Opts {..} <- execParser optsParserInfo
   input <- maybe T.getContents T.readFile optInputFile
-  T.putStr (linden input)
+  T.putStr (tilia input)
 
 ----------------------------------------------------------------------------
 -- Command line options parsing
@@ -28,12 +28,12 @@ optsParserInfo =
   info (helper <*> versionOption <*> optsParser) . mconcat $
     [ fullDesc,
       progDesc "Format Haskell source code",
-      header "linden - a formatter for Haskell source code"
+      header "tilia - a formatter for Haskell source code"
     ]
   where
     versionOption =
       infoOption
-        ("linden " ++ showVersion version)
+        ("tilia " ++ showVersion version)
         (long "version" <> short 'v' <> help "Print version of the program")
 
 optsParser :: Parser Opts
