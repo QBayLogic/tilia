@@ -67,24 +67,27 @@ spec = do
       bodies "module M where\n{- one\n     two -}\nx = 1\n"
         `shouldBe` [["{- one", "     two -}"]]
 
+  -- Widening is not part of extraction: whether a doc comment's trigger is
+  -- tidied or escaped depends on whether the syntax tree turned out to
+  -- carry it, which nothing here knows. So it is asked for.
   describe "normalization: doc trigger" $ do
     it "widens a tight trigger" $
-      bodies "module M where\n-- |Foo\nx = 1\n" `shouldBe` [["-- | Foo"]]
+      widened "module M where\n-- |Foo\nx = 1\n" `shouldBe` [["-- | Foo"]]
     it "leaves an already spaced trigger alone" $
-      bodies "module M where\n-- | Foo\nx = 1\n" `shouldBe` [["-- | Foo"]]
+      widened "module M where\n-- | Foo\nx = 1\n" `shouldBe` [["-- | Foo"]]
     it "widens a caret trigger" $
-      bodies "module M where\nx = 1\n-- ^Foo\n" `shouldBe` [["-- ^ Foo"]]
+      widened "module M where\nx = 1\n-- ^Foo\n" `shouldBe` [["-- ^ Foo"]]
     it "widens a section trigger, keeping its stars" $
-      bodies "module M where\n-- **Foo\nx = 1\n" `shouldBe` [["-- ** Foo"]]
+      widened "module M where\n-- **Foo\nx = 1\n" `shouldBe` [["-- ** Foo"]]
     it "leaves a named anchor alone" $
-      bodies "module M where\n-- $section\nx = 1\n" `shouldBe` [["-- $section"]]
+      widened "module M where\n-- $section\nx = 1\n" `shouldBe` [["-- $section"]]
     it "leaves a trigger with nothing after it alone" $
-      bodies "module M where\n-- |\nx = 1\n" `shouldBe` [["-- |"]]
+      widened "module M where\n-- |\nx = 1\n" `shouldBe` [["-- |"]]
     it "shifts continuation lines to match" $
-      bodies "module M where\n{-|Foo\n  bar\n-}\nx = 1\n"
+      widened "module M where\n{-|Foo\n  bar\n-}\nx = 1\n"
         `shouldBe` [["{-| Foo", "   bar", " -}"]]
     it "does not widen an ordinary line comment" $
-      bodies "module M where\n-- x|y\nz = 1\n" `shouldBe` [["-- x|y"]]
+      widened "module M where\n-- x|y\nz = 1\n" `shouldBe` [["-- x|y"]]
 
   describe "pragmas" $ do
     it "recognises one" $
@@ -135,7 +138,9 @@ spec = do
     it "appends a comment that follows every node rather than dropping it" $
       let c = one "module M where\nx = 1\n-- after\n"
           d = located (mkSpan (2, 1) (2, 6)) (txt "x = 1")
-       in render (attachComments [c] d) `shouldBe` "x = 1\n-- after\n"
+       -- The blank line is added: a comment after everything is about the
+       -- file rather than about the line it happens to follow.
+       in render (attachComments [c] d) `shouldBe` "x = 1\n\n-- after\n"
 
     it "reaches inside a variant, whichever branch renders" $
       let c = one "module M where\nx = 1 -- note\n"
@@ -182,6 +187,10 @@ commentsIn src =
 
 bodies :: Text -> [[Text]]
 bodies = map (NE.toList . commentBody) . commentsIn
+
+-- | The bodies a doc comment comes out with once its trigger is tidied.
+widened :: Text -> [[Text]]
+widened = map (NE.toList . commentBody . widenTrigger) . commentsIn
 
 trailings :: Text -> [Bool]
 trailings = map commentTrailing . commentsIn

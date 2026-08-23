@@ -19,14 +19,14 @@ import Tilia.Fixity
     resolveScope,
   )
 import Tilia.Fixity.Builtin (builtinFixities)
-import Tilia.Parser (sourceExtensions)
+import Tilia.Parser (effectiveExtensions)
 import Tilia.Render (Settings (..), defaultSettings)
 
 -- | How to format one corpus example.
 exampleSettings :: Text -> HsModule GhcPs -> Settings
 exampleSettings source hsModule =
   defaultSettings
-    { setExtensions = Set.fromList (sourceExtensions source),
+    { setExtensions = Set.fromList (effectiveExtensions source),
       setScope = Just (resolveScope exportsOf hsModule)
     }
 
@@ -57,7 +57,8 @@ elsewhere =
         esqueleto,
         servant,
         hspec,
-        preludeInfix
+        preludeInfix,
+        outsideBoot
       ]
   where
     infixL p ops = [(OpName o, Fixity LeftAssoc p) | o <- ops]
@@ -135,3 +136,9 @@ elsewhere =
     -- Functions written infix often enough to be worth knowing the fixity
     -- of, and which the list of module exports does not carry.
     preludeInfix = infixR 0 ["seq"] <> infixL 0 ["on"]
+
+    -- Loosest-binding operators from packages outside the boot libraries.
+    -- These decide layout rather than grouping: an @infixr 0@ is written at
+    -- the end of the line it breaks, the way @$@ is, and without the fixity
+    -- the examples come out with the operator at the start of the next one.
+    outsideBoot = infixR 0 ["deepseq", "?:"]

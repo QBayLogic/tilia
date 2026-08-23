@@ -15,11 +15,12 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Data.Text (Text)
 import GHC.Hs (HsModule (..))
 import GHC.Hs.Extension (GhcPs)
-import GHC.LanguageExtensions.Type (Extension)
+import GHC.LanguageExtensions.Type (Extension (..))
 import Tilia.Imports (normalizeImports)
-import Tilia.Comments (Comment (..), CommentStyle (..))
+import Tilia.Comments (Comment (..), CommentStyle (..), escapeTrigger, widenTrigger)
 import Tilia.Comments.Attach (attachComments)
 import Tilia.Fixity (Scope)
 import Tilia.Parser (ParsedModule (..))
@@ -28,7 +29,7 @@ import Tilia.Render.Context
 import Tilia.Render.Declaration (decls, declsKeepingGroups)
 import Tilia.Render.Expression (hsCmd, hsExprIn, untypedSplice)
 import Tilia.Render.Haddock (haddockSpans)
-import Tilia.Render.Header (hsModule, takeHeaderPragmas)
+import Tilia.Render.Header (hsModule, takeHeaderPragmas, takeStackHeader)
 import Tilia.Render.Signature (sigDecl)
 import Tilia.Span
 
@@ -67,21 +68,39 @@ defaultSettings =
 -- | Render a parsed module, comments and all.
 renderModule :: Settings -> ParsedModule -> Doc
 renderModule settings parsed =
-  attachComments loose (hsModule ctx pragmas (sorted hsMod))
+  prologue (pmPrologue parsed)
+    <> stackHeader
+    <> attachComments loose (hsModule ctx pragmas (sorted hsMod))
   where
     hsMod = pmModule parsed
-    sorted m = m {hsmodImports = normalizeImports loose (hsmodImports m)}
+    sorted m =
+      m
+        { hsmodImports =
+            normalizeImports
+              (Set.member ImplicitPrelude (setExtensions settings))
+              loose
+              (hsmodImports m)
+        }
     (haddocks, plain) = splitHaddocks hsMod (pmComments parsed)
-    (pragmas, loose) = takeHeaderPragmas (pmHeaderEnd parsed) plain
+    (stackHeader, rest) = takeStackHeader plain
+    (pragmas, loose) = takeHeaderPragmas (pmHeaderEnd parsed) rest
     ctx =
       Ctx
         { ctxExtensions = setExtensions settings,
           ctxSourceType = setSourceType settings,
           ctxScope = setScope settings,
-          ctxLineComments = indexOn commentSpan (filter takesWholeLine loose),
-          ctxHaddocks = indexOn id haddocks,
+          ctxLineComments = indexOn (filter takesWholeLine loose),
+          ctxHaddocks = indexOn haddocks,
           ctxKnot = knot
         }
+
+-- | The lines above the module, put back exactly as they were written.
+--
+-- They stand outside everything: no comment attaches to them, and no layout
+-- decision may reach them. A @#!@ line that were indented, wrapped or moved
+-- would stop being one.
+prologue :: [Text] -> Doc
+prologue = foldMap (\l -> txt l <> hardBreak)
 
 -- | The knot: the printers that a module below their definition needs.
 knot :: Knot
@@ -114,13 +133,19 @@ splitHaddocks ::
   -- that it can reuse the text the author wrote rather than rebuilding it
   -- from the doc string. The second are the comment stream proper—attached
   -- by position, and the header pragmas taken out of them first.
+  --
+  -- This is also where it is settled what a doc comment's trigger is for. A
+  -- Haddock the tree carries is going to be printed as one, so its trigger
+  -- is tidied; one the tree does not carry is going to be printed as an
+  -- ordinary comment, so its trigger is escaped and stops being a trigger.
   ([Comment], [Comment])
 splitHaddocks hsMod = foldr sort' ([], [])
   where
     inTree = Set.fromList (map startOfSpan (haddockSpans hsMod))
     sort' c (docs, rest)
-      | startOfSpan (commentSpan c) `Set.member` inTree = (c : docs, rest)
-      | otherwise = (docs, c : rest)
+      | startOfSpan (commentSpan c) `Set.member` inTree =
+          (widenTrigger c : docs, rest)
+      | otherwise = (docs, escapeTrigger c : rest)
 
 -- | Does this comment own the rest of the line it lands on?
 --
@@ -134,9 +159,9 @@ takesWholeLine c = case commentStyle c of
   where
     s = commentSpan c
 
--- | Index comments by where they begin, keeping whatever of each is wanted.
-indexOn :: (Comment -> a) -> [Comment] -> Map (Int, Int) a
-indexOn f cs = Map.fromList [(startOfSpan (commentSpan c), f c) | c <- cs]
+-- | Index comments by where they begin.
+indexOn :: [Comment] -> Map (Int, Int) Comment
+indexOn cs = Map.fromList [(startOfSpan (commentSpan c), c) | c <- cs]
 
 startOfSpan :: Span -> (Int, Int)
 startOfSpan s = (spanStartLine s, spanStartColumn s)

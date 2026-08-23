@@ -15,7 +15,7 @@ import Tilia.Parser
     defaultParserConfig,
     describeParseError,
     parseText,
-    sourceExtensions,
+    effectiveExtensions,
   )
 import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Render (Settings (..), defaultSettings, renderModule)
@@ -28,5 +28,5 @@ format source = render <$> parseText defaultParserConfig "<input>" source
     render parsed = printDoc defaultRenderOptions (renderModule settings parsed)
     settings =
       defaultSettings
-        { setExtensions = Set.fromList (sourceExtensions source)
+        { setExtensions = Set.fromList (effectiveExtensions source)
         }

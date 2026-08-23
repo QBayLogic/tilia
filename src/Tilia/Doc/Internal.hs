@@ -376,15 +376,16 @@ atStart out = null (outLines out) && not (hasContent out)
 hasContent :: Out -> Bool
 hasContent out = outStarted out || isJust (outHeldBack out)
 
--- | The current line, with trailing whitespace removed.
---
--- Stripping here, once, is why nothing upstream has to avoid emitting a
--- space before a line break.
+-- | The current line: what was written to it, then whatever was held back
+-- for its end, with one space between them and no trailing whitespace.
 currentLine :: Out -> Text
-currentLine out =
-  T.stripEnd (T.concat (reverse (outCurrent out)) <> heldBack)
+currentLine out
+  | T.null written = heldBack
+  | T.null heldBack = written
+  | otherwise = written <> " " <> heldBack
   where
-    heldBack = foldMap (" " <>) (outHeldBack out)
+    written = T.stripEnd (T.concat (reverse (outCurrent out)))
+    heldBack = maybe "" T.stripEnd (outHeldBack out)
 
 -- | Assemble the final text: one trailing newline, no blank lines at the
 -- end, no trailing whitespace anywhere.

@@ -15,6 +15,7 @@ where
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Data
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.List.NonEmpty qualified as NE
 import Data.Maybe (catMaybes, isNothing, listToMaybe, mapMaybe)
 import Data.Set (Set)
@@ -42,6 +43,8 @@ import Tilia.Comments
     CommentStyle (..),
     Pragma (..),
     commentPragma,
+    escapeTrigger,
+    triggerEscaped,
   )
 
 ----------------------------------------------------------------------------
@@ -205,9 +208,11 @@ asImports path x y = case (cast x, cast y) of
     -- No comments are offered, so both sides are always reordered. That is
     -- what makes this comparison indifferent to the order: the formatter
     -- may have declined to sort a particular module, and the question here
-    -- is whether it imports the same things either way.
+    -- is whether it imports the same things either way. For the same reason
+    -- it does not matter what is said about the Prelude, only that the same
+    -- thing is said about both sides.
     normalised :: [LImportDecl GhcPs] -> [LImportDecl GhcPs]
-    normalised = normalizeImports []
+    normalised = normalizeImports True []
 
     -- Compared one import at a time rather than as two lists, because a
     -- list of imports is what this function is called on: handing it back
@@ -325,7 +330,7 @@ typeNameOf = dataTypeName . dataTypeOf
 -- documents has to become @-- | x@—so the text is not expected to survive,
 -- but the comment is.
 commentDifference :: [Comment] -> [Comment] -> Maybe Text
-commentDifference before after
+commentDifference before0 after0
   | not (Set.null lost) = Just ("lost the pragma " <> pragmaList lost)
   | not (Set.null gained) = Just ("invented the pragma " <> pragmaList gained)
   | docsBefore /= docsAfter =
@@ -336,11 +341,25 @@ commentDifference before after
           <> tshow docsAfter
   | otherwise = diverge (ordinary before) (ordinary after)
   where
+    before = escapedAndSplit before0
+    after = escapedAndSplit after0
+
+    escapedAndSplit = concatMap explode
+    explode c = case commentStyle c of
+      DocComment
+        | "--" `T.isPrefixOf` NE.head (commentBody c) ->
+            [c {commentBody = l :| []} | l <- NE.toList (body (escapeTrigger c))]
+        | otherwise -> [escapeTrigger c]
+      _ -> [c]
+    body = commentBody
+
     lost = pragmasOf before `Set.difference` pragmasOf after
     gained = pragmasOf after `Set.difference` pragmasOf before
     docsBefore = length (documentation before)
     docsAfter = length (documentation after)
-    documentation = filter ((== DocComment) . commentStyle)
+
+    documentation = filter isDocumentation
+    isDocumentation = triggerEscaped
 
     -- Pragmas are held apart from the comments they are written as, because
     -- the formatter moves them on purpose: it hoists them to the top, sorts
@@ -349,7 +368,7 @@ commentDifference before after
     -- them in sequence with everything else would report every module that
     -- did not already have them in sorted order.
     ordinary =
-      filter (\c -> commentStyle c /= DocComment && isNothing (commentPragma c))
+      filter (\c -> not (isDocumentation c) && isNothing (commentPragma c))
 
     diverge [] [] = Nothing
     diverge (b : _) [] = Just ("lost " <> quoted b)

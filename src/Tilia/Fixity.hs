@@ -32,6 +32,7 @@ module Tilia.Fixity
   )
 where
 
+import Control.Applicative ((<|>))
 import Data.Foldable (toList)
 import Data.Generics.Schemes (listify)
 import Data.Map.Strict (Map)
@@ -400,7 +401,9 @@ lookupFixity scope qualifier op =
   where
     found = case qualifier of
       Nothing -> Map.lookup op (scopeUnqualified scope)
-      Just q -> Map.lookup (q, op) (scopeQualified scope)
+      Just q ->
+        Map.lookup (q, op) (scopeQualified scope)
+          <|> Map.lookup op (scopeUnqualified scope)
 
 -- | The fixity of a resolution, if it has one.
 resolvedFixity :: Resolution -> Maybe Fixity

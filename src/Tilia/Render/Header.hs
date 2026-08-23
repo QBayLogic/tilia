@@ -14,6 +14,7 @@ module Tilia.Render.Header
   ( -- * Pragmas
     HeaderPragma (..),
     takeHeaderPragmas,
+    takeStackHeader,
 
     -- * The module
     hsModule,
@@ -30,6 +31,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Driver.Flags (Language)
 import GHC.Hs
+import GHC.LanguageExtensions.Type (Extension (..))
 import GHC.Types.PkgQual (RawPkgQual (..))
 import GHC.Types.SrcLoc (GenLocated (..), unLoc)
 import Tilia.Comments (Comment (..), CommentStyle (..), Pragma (..), commentPragma)
@@ -155,6 +157,17 @@ takeHeaderPragmas headerEnd = go []
       "OPTIONS_HADDOCK" -> Just OptionsHaddockOrder
       _ -> Nothing
 
+-- | Take the Stack script header off the front of a comment stream.
+takeStackHeader :: [Comment] -> (Doc, [Comment])
+takeStackHeader = \case
+  (c : cs) | isStackHeader c -> (reproduce c <> blankLine, cs)
+  cs -> (mempty, cs)
+  where
+    isStackHeader =
+      T.isPrefixOf "stack" . T.stripStart . T.drop 2 . NE.head . commentBody
+    reproduce c =
+      sepBy (verbatimBreak AtMargin) (map txt (NE.toList (commentBody c)))
+
 -- | The pragmas of a header, one per line, sorted.
 pragmaBlock :: [HeaderPragma] -> Doc
 pragmaBlock = foldMap render . sortOn key . nub . concatMap split
@@ -232,7 +245,8 @@ hsModule ctx pragmas HsModule {hsmodExt = XModulePs {..}, ..} =
     moduleLine = case hsmodName of
       Nothing -> mempty
       Just modName ->
-        at ctx modName (\n -> documentation <> moduleHeadName ctx n)
+        documentation
+          <> at ctx modName (moduleHeadName ctx)
           <> breakOrSpace
           <> foldMap (\w -> at ctx w warningTxt <> breakOrSpace) hsmodDeprecMessage
           <> foldMap exports' hsmodExports
@@ -377,12 +391,8 @@ importDecl ctx ImportDecl {..} =
           <> importList
       )
   where
-    -- Which side of the module name @qualified@ goes is left as the author
-    -- had it. Normalising would mean consulting @ImportQualifiedPost@, and
-    -- an edition of the language turns that on without anyone writing it
-    -- down, so the extension is not reliably knowable from the file. The
-    -- author's own choice is, and it is recorded right here.
-    qualifiedLast = ideclQualified == QualifiedPost
+    qualifiedLast =
+      extensionOn ctx ImportQualifiedPost || ideclQualified == QualifiedPost
     isQualified = isImportDeclQualified ideclQualified
 
     packageQualifier = case ideclPkgQual of

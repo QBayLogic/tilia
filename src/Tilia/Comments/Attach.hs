@@ -29,7 +29,7 @@ attachComments :: [Comment] -> Doc -> Doc
 attachComments cs doc =
   case insert (locatedSpans doc) (sortComments cs) doc of
     (doc', []) -> doc'
-    (doc', leftover) -> doc' <> below leftover
+    (doc', leftover) -> doc' <> below doc' leftover
   where
     sortComments = foldr ins []
     ins c [] = [c]
@@ -71,7 +71,7 @@ insert everywhere = go
             (inside, rest') = span (\c -> commentSpan c `within` s) rest
             (d', unplaced) = go inside d
             (trailing, rest'') = span (\c -> trailsOnly s (commentSpan c)) rest'
-            body = DLocated s (d' <> below unplaced)
+            body = DLocated s (d' <> below d' unplaced)
          in ( above before <> body <> trailingDoc s trailing,
               rest''
             )
@@ -110,14 +110,17 @@ above = foldMap one
     gapBelow c = includeWhen (ownsTheLine c && commentBeforeGap c) blankLine
 
 -- | Comments on lines of their own, below whatever precedes them.
-below :: [Comment] -> Doc
-below = foldMap one
+below ::
+  -- | What was printed above them here
+  Doc ->
+  [Comment] ->
+  Doc
+below printed = foldMap one
   where
-    one c =
-      closeLine
-        <> includeWhen (commentAfterGap c) blankLine
-        <> commentDoc c
-        <> closeLine
+    one c = closeLine <> gapAbove <> commentDoc c <> closeLine
+    gapAbove = case printed of
+      DEmpty -> mempty
+      _ -> blankLine
 
 -- | Comments that follow an element on the line it ends on.
 --
@@ -138,7 +141,7 @@ trailingDoc _ = foldMap one
 -- | One comment, put where its own shape says it belongs.
 place :: Comment -> Doc
 place c
-  | inline c = space <> commentDoc c <> space
+  | inline c = commentDoc c <> space
   | commentTrailing c = space <> commentDoc c <> closeLine
   | otherwise = closeLine <> commentDoc c <> closeLine
 

@@ -13,6 +13,7 @@ module Tilia.Parser
     ParserConfig (..),
     defaultParserConfig,
     sourceExtensions,
+    effectiveExtensions,
   )
 where
 
@@ -27,7 +28,7 @@ import GHC.Data.FastString (mkFastString)
 import GHC.Data.StringBuffer qualified as GHC
 import GHC.Hs (HsModule (..))
 import GHC.Hs.Extension (GhcPs)
-import GHC.LanguageExtensions.Type (Extension)
+import GHC.LanguageExtensions.Type (Extension (..))
 import GHC.Parser qualified as GHC
 import GHC.Parser.Annotation (getLocA)
 import GHC.Parser.Lexer qualified as GHC
@@ -50,6 +51,13 @@ data ParsedModule = ParsedModule
     -- author wrote, so the text is taken from the comment stream and the
     -- tree is used only to know which comments are Haddocks.
     pmComments :: [Comment],
+    -- | The lines above the module that the parser never sees.
+    --
+    -- The lexer skips a @#!@ line, which puts it in no annotation and no
+    -- node, so nothing downstream could put it back. Whatever empty line
+    -- follows the last of them is kept too: it is what holds the module off
+    -- the interpreter line, and it is the author's to decide.
+    pmPrologue :: [Text],
     -- | Where the file header stops and the module proper begins, if the
     -- module has anything after its header.
     --
@@ -114,6 +122,7 @@ parseText config path source =
             ParsedModule
               { pmModule = hsModule,
                 pmComments = commentsOf source hsModule,
+                pmPrologue = prologueOf source,
                 pmHeaderEnd = headerEndOf hsModule
               }
   where
@@ -170,6 +179,18 @@ quietDiagnostics =
       GHC.diag_ppr_ctx = GHC.defaultSDocContext
     }
 
+-- | The @#!@ lines a file begins with, and the empty line after them.
+--
+-- At most one empty line is taken: the rest would only be collapsed
+-- wherever they were reproduced, so keeping them would be keeping a
+-- distinction that cannot survive.
+prologueOf :: Text -> [Text]
+prologueOf source = case span isShebang (T.lines source) of
+  ([], _) -> []
+  (shebangs, rest) -> shebangs <> filter T.null (take 1 rest)
+  where
+    isShebang = T.isPrefixOf "#!"
+
 -- | The start of the first thing that is not part of the header.
 --
 -- Imports and declarations are the only things that can end a header, and
@@ -193,16 +214,20 @@ headerEndOf hsModule =
 -- Language pragmas
 
 -- | The extensions a module's own @LANGUAGE@ pragmas ask for.
---
--- A @No@-prefixed name turns one off, so it is dropped from the result
--- rather than added; nothing here is enabled by default, so removing what
--- was never added is a no-op and that is correct.
---
--- Names GHC does not know are ignored. A module asking for an extension
--- this compiler has never heard of will not parse anyway, and failing to
--- parse is a better answer than refusing to try.
 sourceExtensions :: Text -> [Extension]
-sourceExtensions = foldl' apply [] . concatMap pragmaNames . headerLines
+sourceExtensions = pragmasOver []
+
+-- | The extensions actually in force in a module.
+effectiveExtensions :: Text -> [Extension]
+effectiveExtensions = pragmasOver onUnlessRefused
+
+-- | The extensions on until a module says otherwise.
+onUnlessRefused :: [Extension]
+onUnlessRefused = [ImplicitPrelude]
+
+-- | Apply a module's @LANGUAGE@ pragmas to a starting set.
+pragmasOver :: [Extension] -> Text -> [Extension]
+pragmasOver initial = foldl' apply initial . concatMap pragmaNames . headerLines
   where
     apply acc name = case T.stripPrefix "No" name >>= lookupExtension of
       Just off -> filter (/= off) acc

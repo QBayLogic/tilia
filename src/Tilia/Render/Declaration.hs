@@ -77,11 +77,9 @@ declRun grouping ctx style ds =
       render firstGroup <> concat (zipWith withGap groups rest)
   where
     isSignatureFile = ctxSourceType ctx == SignatureSource
-    groups = groupDecls isSignatureFile ds
+    groups = groupDecls ctx isSignatureFile ds
     render = NE.toList . fmap (at_ ctx (hsDecl ctx style))
 
-    -- An extra break between two groups is exactly a blank line, the engine
-    -- collapsing whatever else is already there.
     withGap previous current
       | separate previous current = breakOrSpace : render current
       | otherwise = render current
@@ -89,9 +87,13 @@ declRun grouping ctx style ds =
     separate previous current = case grouping of
       Disregard -> True
       Respect ->
-        separatedByBlank ctx (spanOf (NE.last previous)) (spanOf (NE.head current))
+        separatedByBlank ctx ended began
+          || ownLineCommentBetween ctx ended began
           || isDocumented previous
           || isDocumented current
+      where
+        ended = spanOf (NE.last previous)
+        began = spanOf (NE.head current)
 
     isDocumented = any (isDocNext . unLoc)
     isDocNext = \case
@@ -100,31 +102,32 @@ declRun grouping ctx style ds =
       _ -> False
 
 -- | Gather declarations that belong together.
-groupDecls :: Bool -> [LHsDecl GhcPs] -> [NonEmpty (LHsDecl GhcPs)]
-groupDecls _ [] = []
-groupDecls isSignatureFile (d : ds)
+groupDecls :: Ctx -> Bool -> [LHsDecl GhcPs] -> [NonEmpty (LHsDecl GhcPs)]
+groupDecls _ _ [] = []
+groupDecls ctx isSignatureFile (d : ds)
   -- A Haddock documenting what follows belongs to the group that follows,
   -- not to a group of its own.
-  | isDocNext (unLoc d) = case groupDecls isSignatureFile ds of
+  | isDocNext (unLoc d) = case groupDecls ctx isSignatureFile ds of
       [] -> [d :| []]
       (g : gs) -> (d <| g) : gs
   | otherwise =
       let (together, rest) = span belongs (zip (d : ds) ds)
-       in (d :| map snd together) : groupDecls isSignatureFile (map snd rest)
+       in (d :| map snd together) : groupDecls ctx isSignatureFile (map snd rest)
   where
     isDocNext = \case
       DocD _ (DocCommentNext _) -> True
       _ -> False
     belongs (previous, current) =
-      (not isSignatureFile && isSignatureSeries previous current)
+      (not isSignatureFile && isSignatureSeries ctx previous current)
         || relatedDecls d current
         || relatedDecls previous current
 
--- | A run of type signatures with nothing between them is a list, and a list
--- reads better without gaps in it.
-isSignatureSeries :: LHsDecl GhcPs -> LHsDecl GhcPs -> Bool
-isSignatureSeries (L _ x) (L _ y) = case (x, y) of
-  (SigD _ TypeSig {}, SigD _ TypeSig {}) -> True
+-- | A run of type signatures with nothing between them is a list, and a
+-- list reads better without gaps in it.
+isSignatureSeries :: Ctx -> LHsDecl GhcPs -> LHsDecl GhcPs -> Bool
+isSignatureSeries ctx x@(L _ a) y@(L _ b) = case (a, b) of
+  (SigD _ TypeSig {}, SigD _ TypeSig {}) ->
+    not (ownLineCommentBetween ctx (spanOf x) (spanOf y))
   _ -> False
 
 ----------------------------------------------------------------------------

@@ -32,7 +32,7 @@ renderLiteral literal =
   where
     body = case litKind literal of
       Regular -> variant onOneLine acrossLines
-      Multiline -> sepBy (verbatimBreak AtMargin) (map txt (litParts literal))
+      Multiline -> sepBy (verbatimBreak AtIndent) (map txt (litParts literal))
     onOneLine = txt (joinParts (litParts literal))
     acrossLines =
       sepBy breakOrSpace (map continued (places (litParts literal)))

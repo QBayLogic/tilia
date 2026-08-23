@@ -38,6 +38,7 @@ module Tilia.Render.Context
 
     -- * Spans
     commentBetween,
+    ownLineCommentBetween,
     separatedByBlank,
 
     -- * Entering the tree
@@ -45,6 +46,7 @@ module Tilia.Render.Context
     at_,
     atSpan,
     layoutFrom,
+    layoutWithin,
     layoutAcross,
     insideBrackets,
 
@@ -135,12 +137,12 @@ data Ctx = Ctx
     -- established, and an operator chain whose fixities are unknown is left
     -- exactly as the author arranged it. See "Tilia.Fixity".
     ctxScope :: Maybe Scope,
-    -- | Where the comments that take whole lines are, by starting position.
+    -- | The comments that take whole lines, by starting position.
     --
     -- Only these are here, because only these bear on layout: a construct
     -- with one written inside it cannot be put on one line, since the
     -- comment would swallow whatever followed it.
-    ctxLineComments :: Map (Int, Int) Span,
+    ctxLineComments :: Map (Int, Int) Comment,
     -- | The author's own text for each Haddock, by starting position.
     ctxHaddocks :: Map (Int, Int) Comment,
     -- | The knot.
@@ -221,6 +223,18 @@ closingFor site = if siteInBlock site then Indented else Outdented
 ----------------------------------------------------------------------------
 -- Spans
 
+-- | The comments taking whole lines written in the gap between two spans.
+--
+-- Either span being unknown means the gap is unknown too, and an unknown gap
+-- is empty: nothing may be concluded from a question that was not answered.
+commentsBetween :: Ctx -> Maybe Span -> Maybe Span -> [Comment]
+commentsBetween ctx (Just a) (Just b) =
+  Map.elems
+    . Map.takeWhileAntitone (< (spanStartLine b, spanStartColumn b))
+    . Map.dropWhileAntitone (< (spanEndLine a, spanEndColumn a))
+    $ ctxLineComments ctx
+commentsBetween _ _ _ = []
+
 -- | Is there a comment taking whole lines between the two?
 --
 -- What this is really asking is whether something is going to be printed
@@ -228,11 +242,21 @@ closingFor site = if siteInBlock site then Indented else Outdented
 -- cannot be moved to the end of the line above, because the comment would go
 -- with it and the operand would be left stranded.
 commentBetween :: Ctx -> Maybe Span -> Maybe Span -> Bool
-commentBetween ctx (Just a) (Just b) =
-  case Map.lookupGE (spanEndLine a, spanEndColumn a) (ctxLineComments ctx) of
-    Just (start, _) -> start < (spanStartLine b, spanStartColumn b)
-    Nothing -> False
-commentBetween _ _ _ = False
+commentBetween ctx a b = not (null (commentsBetween ctx a b))
+
+-- | Comments written on lines of their own.
+--
+-- The distinction is what the two spans are separated /by/. A comment on a
+-- line of its own is about what follows it and is printed above it, so it
+-- stands between the two; one trailing code belongs to the line it was
+-- written on and stands between nothing.
+ownLineCommentsBetween :: Ctx -> Maybe Span -> Maybe Span -> [Comment]
+ownLineCommentsBetween ctx a b =
+  filter (not . commentTrailing) (commentsBetween ctx a b)
+
+-- | Is there a comment on a line of its own between the two?
+ownLineCommentBetween :: Ctx -> Maybe Span -> Maybe Span -> Bool
+ownLineCommentBetween ctx a b = not (null (ownLineCommentsBetween ctx a b))
 
 -- | Did the author leave an empty line directly after the first of these?
 --
@@ -242,18 +266,13 @@ commentBetween _ _ _ = False
 -- the blank line belongs in front of, and measuring to the binding instead
 -- would move the blank line past it.
 separatedByBlank :: Ctx -> Maybe Span -> Maybe Span -> Bool
-separatedByBlank ctx (Just a) (Just b) =
+separatedByBlank ctx ma@(Just a) mb@(Just b) =
   nextLine > spanEndLine a + 1
   where
-    nextLine = maybe (spanStartLine b) spanStartLine (firstCommentBetween ctx a b)
+    nextLine = case ownLineCommentsBetween ctx ma mb of
+      (c : _) -> spanStartLine (commentSpan c)
+      [] -> spanStartLine b
 separatedByBlank _ _ _ = False
-
--- | The first comment written in the gap between two spans.
-firstCommentBetween :: Ctx -> Span -> Span -> Maybe Span
-firstCommentBetween ctx a b =
-  case Map.lookupGE (spanEndLine a, spanEndColumn a) (ctxLineComments ctx) of
-    Just (start, s) | start < (spanStartLine b, spanStartColumn b) -> Just s
-    _ -> Nothing
 
 ----------------------------------------------------------------------------
 -- Entering the tree
@@ -297,6 +316,30 @@ atSpan ctx (Just s) d = located s (grouped ctx s d)
 layoutFrom :: Ctx -> Maybe Span -> Doc -> Doc
 layoutFrom _ Nothing d = flat d
 layoutFrom ctx (Just s) d = grouped ctx s d
+
+-- | Lay a construct out from the region its contents occupy rather than the
+-- region it occupies.
+--
+-- Delimiters are not contents. @[\n Int\n]@ is a list of one thing written
+-- on one line, held apart by brackets that happen to sit on lines of their
+-- own, and breaking it because the brackets are spread out would be
+-- following the punctuation rather than the code. What the author spread
+-- out is what decides, and that is the elements.
+--
+-- Comments are still looked for across the whole construct, brackets and
+-- all: one written between a bracket and what it holds still owns the rest
+-- of its line, so the construct still cannot be put on one.
+layoutWithin ::
+  Ctx ->
+  -- | The whole construct, delimiters included
+  Maybe Span ->
+  -- | What it holds
+  Maybe Span ->
+  Doc ->
+  Doc
+layoutWithin ctx whole contents d
+  | any (holdsLineComment ctx) whole = broken d
+  | otherwise = maybe (flat d) (`group` d) contents
 
 -- | 'layoutFrom' over the region several located things cover.
 layoutAcross :: (HasLoc l) => Ctx -> [GenLocated l a] -> Doc -> Doc

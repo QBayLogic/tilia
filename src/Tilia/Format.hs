@@ -21,7 +21,7 @@ import Tilia.Parser
     describeParseError,
     parseText,
     pmModule,
-    sourceExtensions,
+    effectiveExtensions,
   )
 import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Project (ProjectRoot (..), findProjectRoot)
@@ -65,7 +65,7 @@ formatIn path source =
             scope <- scopeFor resolve (pmModule parsed)
             let settings =
                   defaultSettings
-                    { setExtensions = Set.fromList (sourceExtensions source),
+                    { setExtensions = Set.fromList (effectiveExtensions source),
                       setScope = Just scope
                     }
             pure (Right (printDoc defaultRenderOptions (renderModule settings parsed)))

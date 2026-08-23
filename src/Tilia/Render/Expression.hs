@@ -137,7 +137,9 @@ exprBody ctx site here = \case
     hsExpr ctx e <> breakOrSpace <> indent (txt "@" <> hsType ctx (hswc_body a))
   OpApp _ x op y -> exprChain ctx site x op y
   NegApp _ e _ -> txt "-" <> negationGap ctx e <> hsExpr ctx e
-  HsPar _ e -> parensWith (closingFor site) (insideBrackets here (hsExpr ctx e))
+  HsPar _ e ->
+    layoutWithin ctx here (spanOf e) $
+      parensWith (closingFor site) (insideBrackets here (hsExpr ctx e))
   SectionL _ x op -> hsExpr ctx x <> breakOrSpace <> indent (hsExpr ctx op)
   SectionR _ op x -> hsExpr ctx op <> breakOrSpace <> indent (hsExpr ctx x)
   ExplicitTuple _ args boxity -> tuple ctx here (closingFor site) boxity args

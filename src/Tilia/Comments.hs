@@ -9,6 +9,9 @@ module Tilia.Comments
     CommentStyle (..),
     commentsOf,
     renderComment,
+    widenTrigger,
+    escapeTrigger,
+    triggerEscaped,
 
     -- * Pragmas
     Pragma (..),
@@ -138,35 +141,80 @@ mkComment sourceLines spn tok =
 
 -- | Apply the normalizations, in the only order that works: dedent before
 -- stripping, since a line of nothing but spaces has to still count as
--- indented when the common indentation is measured, and widen the trigger
--- last, since it is the one that can add a character.
+-- indented when the common indentation is measured.
 normalizeBody :: Int -> CommentStyle -> Text -> NonEmpty Text
 normalizeBody startColumn style raw =
   case NE.nonEmpty (T.lines raw) of
     Nothing -> spaceAfterDashes style raw :| []
     Just (first' :| rest) ->
-      let dedented =
-            spaceAfterDashes style first' :| map dedent rest
-          dedent l = T.drop (min startColumn (T.length (T.takeWhile isSpace l))) l
-       in fmap T.stripEnd (widenTrigger style dedented)
+      fmap T.stripEnd (spaceAfterDashes style first' :| map dedent rest)
+  where
+    dedent l = T.drop (min startColumn (T.length (T.takeWhile isSpace l))) l
 
 -- | Put a space between a doc comment's trigger and the text after it, so
 -- that @-- |Foo@ comes out as @-- | Foo@.
 --
 -- Only doc comments have triggers; on anything else this is a no-op.
-widenTrigger :: CommentStyle -> NonEmpty Text -> NonEmpty Text
-widenTrigger DocComment lns@(headLine :| rest) =
-  case splitTrigger headLine of
-    Just (upToTrigger, body)
-      | not (T.null body),
-        not (" " `T.isPrefixOf` body) ->
-          (upToTrigger <> " " <> body) :| map shiftOne rest
-    _ -> lns
+widenTrigger :: Comment -> Comment
+widenTrigger c
+  | DocComment <- commentStyle c,
+    (headLine :| rest) <- commentBody c,
+    Just (upToTrigger, body) <- splitTrigger headLine,
+    not (T.null body),
+    not (" " `T.isPrefixOf` body) =
+      c {commentBody = (upToTrigger <> " " <> body) :| map shiftOne rest}
+  | otherwise = c
   where
     shiftOne l = case openerWidth l of
       Just n -> let (o, r) = T.splitAt n l in o <> " " <> r
       Nothing -> " " <> l
-widenTrigger _ lns = lns
+
+-- | Put a backslash in front of a doc comment's trigger.
+--
+-- For a doc comment the compiler did not manage to attach to anything: it
+-- is going to come back out as an ordinary comment, and written as it
+-- stands it would be lexed as a doc comment again on the next pass, so the
+-- formatter would not have a fixed point. The backslash is what Haddock
+-- reads as \"this is not a trigger\".
+escapeTrigger :: Comment -> Comment
+escapeTrigger c = case commentStyle c of
+  DocComment ->
+    c
+      { commentBody = fmap escape (commentBody c),
+        commentStyle = ordinaryStyle
+      }
+  _ -> c
+  where
+    ordinaryStyle
+      | "{-" `T.isPrefixOf` NE.head (commentBody c) = BlockComment
+      | otherwise = LineComment
+
+    escape l = case openerWidth l of
+      Just n
+        | (gap, rest) <- T.span (== ' ') (T.drop n l),
+          triggered rest ->
+            T.take n l <> (if T.null gap then " " else gap) <> "\\" <> rest
+      _ -> l
+
+-- | Has this comment been through 'escapeTrigger'?
+--
+-- What it was written as cannot be read off the comment any more—that is
+-- the point of escaping—so anything wanting to know whether a comment
+-- started life as a Haddock has to ask this.
+triggerEscaped :: Comment -> Bool
+triggerEscaped c = case openerWidth headLine of
+  Nothing -> False
+  Just n -> case T.uncons (T.dropWhile (== ' ') (T.drop n headLine)) of
+    Just ('\\', rest) -> triggered rest
+    _ -> False
+  where
+    headLine = NE.head (commentBody c)
+
+-- | Does this text begin with one of the characters that opens a Haddock?
+triggered :: Text -> Bool
+triggered t = case T.uncons t of
+  Just (ch, _) -> ch `elem` ("|^*$" :: String)
+  Nothing -> False
 
 -- | Split a doc comment's opening line into everything up to and including
 -- its trigger, and whatever follows.
@@ -260,4 +308,3 @@ sliceSpan sourceLines spn =
     endLine = GHC.srcSpanEndLine spn
     startCol = GHC.srcSpanStartCol spn
     endCol = GHC.srcSpanEndCol spn
-

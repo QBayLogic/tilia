@@ -23,13 +23,29 @@ import GHC.Types.SrcLoc
 import Tilia.Comments (Comment (..))
 import Tilia.Span (Span (..))
 
+-- | Whether an explicit @import Prelude@ is telling the reader anything.
+data PreludeImport
+  = -- | @ImplicitPrelude@ is on, so the module has the Prelude whatever it
+    -- says, and the line only trims what it already takes.
+    Refines
+  | -- | @ImplicitPrelude@ is off, so the line is the only reason the module
+    -- has a Prelude at all, and it is an import like any other.
+    Provides
+  deriving (Eq, Show)
+
 -- | Sort a module's imports and fold together the ones that say the same
 -- thing.
-normalizeImports :: [Comment] -> [LImportDecl GhcPs] -> [LImportDecl GhcPs]
-normalizeImports comments imports
+normalizeImports ::
+  -- | Whether @ImplicitPrelude@ is on
+  Bool ->
+  [Comment] ->
+  [LImportDecl GhcPs] ->
+  [LImportDecl GhcPs]
+normalizeImports implicitPrelude comments imports
   | any interrupted comments = imports
-  | otherwise = foldRuns fuse [(identity i, i) | i <- tidied]
+  | otherwise = foldRuns fuse [(identity prelude i, i) | i <- tidied]
   where
+    prelude = if implicitPrelude then Refines else Provides
     tidied = map (fmap tidyList) imports
     interrupted c = any (encloses (commentSpan c)) imports
     encloses s i = case srcSpanToRealSrcSpan (locA (getLoc i)) of
@@ -57,12 +73,21 @@ foldRuns fold' =
 
 -- | What has to agree before two imports may be folded together, in the
 -- order imports should be printed in.
+--
+-- The two leading keys are about reading rather than about identity. A
+-- @Prelude@ that only refines what the module already has goes at the end,
+-- since looking for it among the @D@s would be looking for the least
+-- interesting line in the block. The package goes before the module name so
+-- that the imports from one package stay in one run; sorting by module
+-- first would interleave them and hide who provides what.
 identity ::
+  PreludeImport ->
   LImportDecl GhcPs ->
-  (Text, (Int, Text), Bool, Bool, Bool, Maybe Text, Maybe Bool, Maybe Bool)
-identity (L _ decl) =
-  ( named (ideclName decl),
+  (Bool, (Int, Text), Text, Bool, Bool, Bool, Maybe Text, Maybe Bool, Maybe Bool)
+identity prelude (L _ decl) =
+  ( prelude == Refines && named (ideclName decl) == T.pack "Prelude",
     package (ideclPkgQual decl),
+    named (ideclName decl),
     ideclSource decl == IsBoot,
     ideclSafe decl,
     isImportDeclQualified (ideclQualified decl),
