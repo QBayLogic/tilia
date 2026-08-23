@@ -83,21 +83,13 @@ insert everywhere = go
             (b', _) = go cs b
          in (DVariant a' b', cs')
       d -> (d, cs)
-
-    -- A comment on the line an element ends on belongs to that element,
-    -- unless something still to come has it inside. In
-    --
-    -- > xs ++ [ -- what follows is generated
-    -- >   a
-    -- >   ]
-    --
-    -- the comment sits on the line the @++@ ends on, but it was written
-    -- inside the brackets and that is where it goes. Nodes that /contain/
-    -- the element are its ancestors and say nothing, so they are the ones
-    -- this has to look past.
-    trailsOnly s c = trails c s && not (any holdsIt everywhere)
+    trailsOnly s c =
+      trails c s && not (any holdsIt everywhere) && not (any nearer everywhere)
       where
         holdsIt other = c `within` other && not (s `within` other)
+        nearer other = trails c other && endsAfter other s
+        endsAfter a b =
+          (spanEndLine a, spanEndColumn a) > (spanEndLine b, spanEndColumn b)
 
 -- | Comments preceding an element.
 --
