@@ -112,12 +112,20 @@ above = foldMap one
   where
     one c = gapAbove c <> place c <> gapBelow c
     gapAbove c =
-      includeWhen (ownsTheLine c && commentAfterGap c) (closeLine <> blankLine)
+      includeWhen
+        (ownsTheLine c && not (commentTrailing c) && commentAfterGap c)
+        (closeLine <> blankLine)
     gapBelow c = includeWhen (ownsTheLine c && commentBeforeGap c) blankLine
 
 -- | Comments on lines of their own, below whatever precedes them.
 below :: [Comment] -> Doc
-below = foldMap (\c -> closeLine <> commentDoc c <> closeLine)
+below = foldMap one
+  where
+    one c =
+      closeLine
+        <> includeWhen (commentAfterGap c) blankLine
+        <> commentDoc c
+        <> closeLine
 
 -- | Comments that follow an element on the line it ends on.
 --
