@@ -12,9 +12,11 @@ module Tilia.Equivalence
   )
 where
 
+import Control.Applicative ((<|>))
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Data
+import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.List.NonEmpty qualified as NE
 import Data.Maybe (catMaybes, isNothing, listToMaybe, mapMaybe)
@@ -23,6 +25,7 @@ import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Data.FastString (FastString)
+import GHC.Hs (HsModule (..), XModulePs (..))
 import GHC.Hs.Decls (DerivClauseTys (..))
 import GHC.Hs.ImpExp (LImportDecl)
 import GHC.Hs.DocString
@@ -37,7 +40,6 @@ import GHC.Types.SrcLoc (unLoc)
 import GHC.Types.Name.Occurrence (OccName)
 import GHC.Unit.Types (Unit)
 import Language.Haskell.Syntax.Module.Name (ModuleName)
-import Tilia.Imports (normalizeImports)
 import Tilia.Comments
   ( Comment (..),
     CommentStyle (..),
@@ -46,6 +48,9 @@ import Tilia.Comments
     escapeTrigger,
     triggerEscaped,
   )
+import Tilia.Imports (normalizeImports)
+import Tilia.Span (Span (..))
+import Tilia.Span.Ghc (spanOf, spansOf)
 
 ----------------------------------------------------------------------------
 -- Syntax
@@ -212,7 +217,7 @@ asImports path x y = case (cast x, cast y) of
     -- it does not matter what is said about the Prelude, only that the same
     -- thing is said about both sides.
     normalised :: [LImportDecl GhcPs] -> [LImportDecl GhcPs]
-    normalised = normalizeImports True []
+    normalised = normalizeImports True
 
     -- Compared one import at a time rather than as two lists, because a
     -- list of imports is what this function is called on: handing it back
@@ -325,12 +330,24 @@ typeNameOf = dataTypeName . dataTypeOf
 -- back identically, and one that was mangled or moved past its neighbour
 -- does not.
 --
+-- Except in the header, where the order says nothing. The pragmas are
+-- sorted and so are the imports, and a comment written against either
+-- travels with it, so the two streams are put in a settled order there
+-- before being compared. What is still asked of that stretch is that the
+-- same comments come out of it.
+--
 -- Documentation comments are counted rather than compared. The printer may
 -- legitimately rewrite one—a @-- ^ x@ that moves in front of what it
 -- documents has to become @-- | x@—so the text is not expected to survive,
 -- but the comment is.
-commentDifference :: [Comment] -> [Comment] -> Maybe Text
-commentDifference before0 after0
+commentDifference ::
+  -- | The module each stream came from, which is asked only how far down its
+  -- header reaches
+  (HsModule GhcPs, HsModule GhcPs) ->
+  [Comment] ->
+  [Comment] ->
+  Maybe Text
+commentDifference (moduleBefore, moduleAfter) before0 after0
   | not (Set.null lost) = Just ("lost the pragma " <> pragmaList lost)
   | not (Set.null gained) = Just ("invented the pragma " <> pragmaList gained)
   | docsBefore /= docsAfter =
@@ -339,10 +356,22 @@ commentDifference before0 after0
           <> tshow docsBefore
           <> " documentation comments became "
           <> tshow docsAfter
-  | otherwise = diverge (ordinary before) (ordinary after)
+  | otherwise =
+      diverge (belowHeader moduleBefore before) (belowHeader moduleAfter after)
+        <|> diverge
+          (settled (withinHeader moduleBefore before))
+          (settled (withinHeader moduleAfter after))
   where
     before = escapedAndSplit before0
     after = escapedAndSplit after0
+
+    belowHeader m = filter (not . inHeader m) . ordinary
+    withinHeader m = filter (inHeader m) . ordinary
+    settled = sortOn commentBody
+
+    inHeader m c = case rearranged m of
+      Nothing -> False
+      Just lastLine -> spanStartLine (commentSpan c) <= lastLine
 
     escapedAndSplit = concatMap explode
     explode c = case commentStyle c of
@@ -383,6 +412,20 @@ commentDifference before0 after0
       T.intercalate ", "
         . map (\(n, b) -> "{-# " <> n <> " " <> b <> " #-}")
         . Set.toList
+
+-- | How far down the file the formatter rearranges things.
+--
+-- Everything from the top down to the last import: the pragmas are sorted,
+-- the imports are sorted and folded together, and the comments written
+-- against them travel along. Below that nothing is reordered, and there the
+-- order of the comment stream is exactly what has to be checked.
+rearranged :: HsModule GhcPs -> Maybe Int
+rearranged m = spanEndLine <$> (spansOf (hsmodImports m) <> header)
+  where
+    header =
+      foldMap spanOf (hsmodName m)
+        <> foldMap spanOf (hsmodDeprecMessage (hsmodExt m))
+        <> foldMap spanOf (hsmodExports m)
 
 -- | The pragmas a module carries, however they were written.
 --

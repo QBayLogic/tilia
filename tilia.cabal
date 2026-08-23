@@ -33,6 +33,7 @@ library
     Tilia
     Tilia.Comments
     Tilia.Comments.Attach
+    Tilia.Comments.Place
     Tilia.Doc
     Tilia.Doc.Body
     Tilia.Doc.Combinators

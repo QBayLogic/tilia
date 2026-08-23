@@ -202,7 +202,11 @@ checkPure colours source expected = case parse source of
                       <> "\n"
                       <> against "output"
                   )
-            | Just difference <- commentDifference (pmComments before) (pmComments after) ->
+            | Just difference <-
+                commentDifference
+                  (pmModule before, pmModule after)
+                  (pmComments before)
+                  (pmComments after) ->
                 Broken
                   ( "comments: "
                       <> difference

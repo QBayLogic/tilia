@@ -23,7 +23,8 @@ module Tilia.Render.Header
   )
 where
 
-import Data.List (nub, sortOn)
+import Data.Function (on)
+import Data.List (sortOn)
 import Data.List.NonEmpty qualified as NE
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -34,7 +35,7 @@ import GHC.Hs
 import GHC.LanguageExtensions.Type (Extension (..))
 import GHC.Types.PkgQual (RawPkgQual (..))
 import GHC.Types.SrcLoc (GenLocated (..), unLoc)
-import Tilia.Comments (Comment (..), CommentStyle (..), Pragma (..), commentPragma)
+import Tilia.Comments (Comment (..), Pragma (..), commentPragma)
 import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Render.Declaration (decls)
@@ -50,9 +51,8 @@ import Tilia.Span.Ghc
 
 -- | A pragma of the file header.
 data HeaderPragma = HeaderPragma
-  { -- | Comments written directly above it, which travel with it when it is
-    -- sorted into place.
-    hpComments :: [Comment],
+  { -- | The region it was written in.
+    hpSpan :: Span,
     -- | Where it sorts.
     hpOrder :: PragmaOrder,
     -- | @LANGUAGE@, @OPTIONS_GHC@ or @OPTIONS_HADDOCK@.
@@ -103,20 +103,16 @@ takeHeaderPragmas ::
   Maybe Span ->
   [Comment] ->
   ([HeaderPragma], [Comment])
-takeHeaderPragmas headerEnd = go []
+takeHeaderPragmas headerEnd comments =
+  ( [entry c p | (c, Just p) <- recognised],
+    [c | (c, Nothing) <- recognised]
+  )
   where
-    go pending = \case
-      [] -> ([], reverse pending)
-      (c : cs)
-        | Just p <- headerPragma c ->
-            let (mine, theirs) = splitLeading c pending
-                (ps, rest) = go [] cs
-             in (entry (reverse mine) p : ps, reverse theirs <> rest)
-        | otherwise -> go (c : pending) cs
+    recognised = [(c, headerPragma c) | c <- comments]
 
-    entry comments p =
+    entry c p =
       HeaderPragma
-        { hpComments = comments,
+        { hpSpan = commentSpan c,
           hpOrder = orderOf p,
           hpName = pragmaName p,
           hpBody = pragmaBody p
@@ -125,27 +121,7 @@ takeHeaderPragmas headerEnd = go []
     headerPragma c = do
       p <- commentPragma c
       _ <- lookupOrder (pragmaName p)
-      if inHeader (commentSpan c) then Just p else Nothing
-
-    inHeader s = case headerEnd of
-      Nothing -> True
-      Just end -> spanStartLine s < spanStartLine end
-
-    -- Only the comments directly above a pragma travel with it. One
-    -- separated by a blank line was written about the file rather than about
-    -- the pragma, and moving it would be a guess.
-    splitLeading c = climb (spanStartLine (commentSpan c))
-      where
-        climb line (above : rest)
-          | attached line above =
-              let (mine, theirs) = climb (spanStartLine (commentSpan above)) rest
-               in (above : mine, theirs)
-        climb _ pending = ([], pending)
-
-        attached line above =
-          not (commentTrailing above)
-            && commentStyle above /= DocComment
-            && spanEndLine (commentSpan above) + 1 == line
+      if inHeader headerEnd (commentSpan c) then Just p else Nothing
 
     orderOf p = case pragmaName p of
       "LANGUAGE" -> LanguageOrder (classifyExtension (pragmaBody p))
@@ -157,55 +133,49 @@ takeHeaderPragmas headerEnd = go []
       "OPTIONS_HADDOCK" -> Just OptionsHaddockOrder
       _ -> Nothing
 
+-- | Was this written above everything the compiler reads as code?
+inHeader :: Maybe Span -> Span -> Bool
+inHeader headerEnd s = case headerEnd of
+  Nothing -> True
+  Just end -> spanStartLine s < spanStartLine end
+
 -- | Take the Stack script header off the front of a comment stream.
-takeStackHeader :: [Comment] -> (Doc, [Comment])
-takeStackHeader = \case
+takeStackHeader ::
+  -- | Where the header ends
+  Maybe Span ->
+  [Comment] ->
+  (Doc, [Comment])
+takeStackHeader headerEnd = \case
   (c : cs) | isStackHeader c -> (reproduce c <> blankLine, cs)
   cs -> (mempty, cs)
   where
-    isStackHeader =
-      T.isPrefixOf "stack" . T.stripStart . T.drop 2 . NE.head . commentBody
+    -- Being the first comment is not enough: @stack@ reads the header off
+    -- the top of the file, so a @-- stack …@ written further down is an
+    -- ordinary comment that happens to start with a word.
+    isStackHeader c =
+      inHeader headerEnd (commentSpan c)
+        && T.isPrefixOf "stack" (T.stripStart (T.drop 2 (NE.head (commentBody c))))
     reproduce c =
       sepBy (verbatimBreak AtMargin) (map txt (NE.toList (commentBody c)))
 
 -- | The pragmas of a header, one per line, sorted.
 pragmaBlock :: [HeaderPragma] -> Doc
-pragmaBlock = foldMap render . sortOn key . nub . concatMap split
+pragmaBlock = foldMap render . dedupe . sortOn key . concatMap split
   where
-    -- Within a group the order is alphabetical, which is the only ordering a
-    -- reader can check at a glance.
     key p = (hpOrder p, hpBody p)
-
-    -- @{-# LANGUAGE A, B #-}@ is one pragma written once but two pragmas as
-    -- far as the compiler is concerned, and they may sort apart. The comment
-    -- above it was written once too, so it goes to the first of them only.
+    dedupe = map NE.head . NE.groupBy ((==) `on` key)
     split p
-      | hpName p == "LANGUAGE" = case map T.strip (T.splitOn "," (hpBody p)) of
-          [] -> []
-          (x : xs) ->
-            single (hpComments p) x : map (single []) xs
+      | hpName p == "LANGUAGE" =
+          [ p {hpBody = body, hpOrder = LanguageOrder (classifyExtension body)}
+          | body <- map T.strip (T.splitOn "," (hpBody p))
+          ]
       | otherwise = [p]
-      where
-        single comments body =
-          p
-            { hpComments = comments,
-              hpBody = body,
-              hpOrder = LanguageOrder (classifyExtension body)
-            }
 
     render p =
-      foldMap (\c -> commentLines c <> hardBreak) (hpComments p)
-        <> txt "{-# "
-        <> txt (hpName p)
-        <> space
-        <> txt (hpBody p)
-        <> txt " #-}"
+      located
+        (hpSpan p)
+        (txt "{-# " <> txt (hpName p) <> space <> txt (hpBody p) <> txt " #-}")
         <> hardBreak
-
-    -- Printed as plain text rather than as a located comment: the pragma it
-    -- belongs to may have been sorted away from where it was written, and a
-    -- located node out of order would confuse attachment.
-    commentLines c = sepBy (verbatimBreak AtIndent) (map txt (NE.toList (commentBody c)))
 
 -- | Which group an extension belongs to.
 classifyExtension :: Text -> ExtensionClass

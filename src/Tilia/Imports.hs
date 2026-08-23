@@ -20,8 +20,6 @@ import GHC.Types.Name.Reader (RdrName, rdrNameOcc)
 import GHC.Types.PkgQual (RawPkgQual (..))
 import GHC.Types.SourceText (StringLiteral (..))
 import GHC.Types.SrcLoc
-import Tilia.Comments (Comment (..))
-import Tilia.Span (Span (..))
 
 -- | Whether an explicit @import Prelude@ is telling the reader anything.
 data PreludeImport
@@ -38,21 +36,13 @@ data PreludeImport
 normalizeImports ::
   -- | Whether @ImplicitPrelude@ is on
   Bool ->
-  [Comment] ->
   [LImportDecl GhcPs] ->
   [LImportDecl GhcPs]
-normalizeImports implicitPrelude comments imports
-  | any interrupted comments = imports
-  | otherwise = foldRuns fuse [(identity prelude i, i) | i <- tidied]
+normalizeImports implicitPrelude imports =
+  foldRuns fuse [(identity prelude i, i) | i <- tidied]
   where
     prelude = if implicitPrelude then Refines else Provides
     tidied = map (fmap tidyList) imports
-    interrupted c = any (encloses (commentSpan c)) imports
-    encloses s i = case srcSpanToRealSrcSpan (locA (getLoc i)) of
-      Nothing -> False
-      Just real ->
-        spanStartLine s >= srcSpanStartLine real
-          && spanEndLine s <= srcSpanEndLine real
 
 ----------------------------------------------------------------------------
 -- Runs

@@ -16,8 +16,6 @@ module Tilia.Doc.Combinators
     Resume (..),
     verbatimBreak,
     verbatim,
-    holdBack,
-    closeLine,
     emptyAnchor,
 
     -- * Layout
@@ -131,28 +129,6 @@ verbatimBreak = DVerbatimBreak
 -- | Text reproduced exactly, line breaks and all.
 verbatim :: Text -> Doc
 verbatim = sepBy (verbatimBreak AtMargin) . map txt . T.splitOn "\n"
-
--- | Text put at the end of the line this position falls on.
---
--- For a comment the author wrote at the end of a line. It has to come after
--- everything else on that line, and the printer does not know what else is
--- still to be emitted there—a comma between two record fields, an arrow
--- after a pattern, a closing bracket—so it says where the text goes rather
--- than when.
---
--- The argument must not contain a line break.
-holdBack :: Text -> Doc
-holdBack = DHoldBack
-
--- | Close the line, absorbing a break that immediately follows.
---
--- What a comment needs after it. A comment owns the rest of its line, so the
--- line has to end; but the construct the comment was written against very
--- often ends the line too, and 'hardBreak' twice is a blank line. This says
--- \"that line is finished\" instead, and the break that follows finds nothing
--- left to do.
-closeLine :: Doc
-closeLine = DCloseLine
 
 -- | An anchor for a construct that contains nothing.
 emptyAnchor :: Span -> Doc

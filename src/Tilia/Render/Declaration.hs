@@ -88,7 +88,7 @@ declRun grouping ctx style ds =
       Disregard -> True
       Respect ->
         separatedByBlank ctx ended began
-          || ownLineCommentBetween ctx ended began
+          || commentBetween ctx ended began
           || isDocumented previous
           || isDocumented current
       where
@@ -127,7 +127,7 @@ groupDecls ctx isSignatureFile (d : ds)
 isSignatureSeries :: Ctx -> LHsDecl GhcPs -> LHsDecl GhcPs -> Bool
 isSignatureSeries ctx x@(L _ a) y@(L _ b) = case (a, b) of
   (SigD _ TypeSig {}, SigD _ TypeSig {}) ->
-    not (ownLineCommentBetween ctx (spanOf x) (spanOf y))
+    not (commentBetween ctx (spanOf x) (spanOf y))
   _ -> False
 
 ----------------------------------------------------------------------------

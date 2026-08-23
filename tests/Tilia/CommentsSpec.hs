@@ -155,8 +155,8 @@ spec = do
       let c = one "module M where\nx = [ -- note\n  ]\n"
           d =
             located (mkSpan (2, 5) (3, 4)) $
-              txt "[" <> emptyAnchor (mkSpan (2, 6) (3, 3)) <> txt "]"
-       in render (attachComments [c] d) `shouldBe` "[\n-- note\n]\n"
+              txt "[" <> emptyAnchor (mkSpan (3, 4) (3, 4)) <> txt "]"
+       in render (attachComments [c] d) `shouldBe` "[ -- note\n]\n"
 
     it "emits every comment exactly once" $
       let cs = commentsIn "module M where\n-- a\nx = 1 -- b\n-- c\ny = 2\n"

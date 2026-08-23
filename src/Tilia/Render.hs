@@ -19,10 +19,10 @@ import Data.Text (Text)
 import GHC.Hs (HsModule (..))
 import GHC.Hs.Extension (GhcPs)
 import GHC.LanguageExtensions.Type (Extension (..))
-import Tilia.Imports (normalizeImports)
-import Tilia.Comments (Comment (..), CommentStyle (..), escapeTrigger, widenTrigger)
+import Tilia.Comments (Comment (..), closesItself, escapeTrigger, widenTrigger)
 import Tilia.Comments.Attach (attachComments)
 import Tilia.Fixity (Scope)
+import Tilia.Imports (normalizeImports)
 import Tilia.Parser (ParsedModule (..))
 import Tilia.Doc.Combinators
 import Tilia.Render.Context
@@ -73,23 +73,23 @@ renderModule settings parsed =
     <> attachComments loose (hsModule ctx pragmas (sorted hsMod))
   where
     hsMod = pmModule parsed
+    (haddocks, plain) = splitHaddocks hsMod (pmComments parsed)
+    (stackHeader, rest) = takeStackHeader (pmHeaderEnd parsed) plain
+    (pragmas, loose) = takeHeaderPragmas (pmHeaderEnd parsed) rest
+
     sorted m =
       m
         { hsmodImports =
             normalizeImports
               (Set.member ImplicitPrelude (setExtensions settings))
-              loose
               (hsmodImports m)
         }
-    (haddocks, plain) = splitHaddocks hsMod (pmComments parsed)
-    (stackHeader, rest) = takeStackHeader plain
-    (pragmas, loose) = takeHeaderPragmas (pmHeaderEnd parsed) rest
     ctx =
       Ctx
         { ctxExtensions = setExtensions settings,
           ctxSourceType = setSourceType settings,
           ctxScope = setScope settings,
-          ctxLineComments = indexOn (filter takesWholeLine loose),
+          ctxLineComments = indexOn (filter (not . closesItself) loose),
           ctxHaddocks = indexOn haddocks,
           ctxKnot = knot
         }
@@ -141,27 +141,12 @@ splitHaddocks ::
   ([Comment], [Comment])
 splitHaddocks hsMod = foldr sort' ([], [])
   where
-    inTree = Set.fromList (map startOfSpan (haddockSpans hsMod))
+    inTree = Set.fromList (map startPoint (haddockSpans hsMod))
     sort' c (docs, rest)
-      | startOfSpan (commentSpan c) `Set.member` inTree =
+      | startPoint (commentSpan c) `Set.member` inTree =
           (widenTrigger c : docs, rest)
       | otherwise = (docs, escapeTrigger c : rest)
 
--- | Does this comment own the rest of the line it lands on?
---
--- A single-line block comment does not: @f {- here -} x@ is fine as it
--- stands. Everything else does, and a construct holding one cannot be put on
--- one line.
-takesWholeLine :: Comment -> Bool
-takesWholeLine c = case commentStyle c of
-  BlockComment -> spanStartLine s /= spanEndLine s
-  _ -> True
-  where
-    s = commentSpan c
-
 -- | Index comments by where they begin.
 indexOn :: [Comment] -> Map (Int, Int) Comment
-indexOn cs = Map.fromList [(startOfSpan (commentSpan c), c) | c <- cs]
-
-startOfSpan :: Span -> (Int, Int)
-startOfSpan s = (spanStartLine s, spanStartColumn s)
+indexOn cs = Map.fromList [(startPoint (commentSpan c), c) | c <- cs]

@@ -21,6 +21,10 @@ module Tilia.Span
     -- * Narrowing
     startOf,
     endOf,
+
+    -- * Positions
+    startPoint,
+    endPoint,
   )
 where
 
@@ -31,7 +35,7 @@ data Span = Span
     spanEndLine :: !Int,
     spanEndColumn :: !Int
   }
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 -- | Build a 'Span' from start and end positions, each a line and a column.
 mkSpan :: (Int, Int) -> (Int, Int) -> Span
@@ -87,3 +91,11 @@ endOf s = at (spanEndLine s, spanEndColumn s)
 
 at :: (Int, Int) -> Span
 at position = mkSpan position position
+
+-- | Where a span begins, as a position two of them may be compared by.
+startPoint :: Span -> (Int, Int)
+startPoint s = (spanStartLine s, spanStartColumn s)
+
+-- | Where a span ends.
+endPoint :: Span -> (Int, Int)
+endPoint s = (spanEndLine s, spanEndColumn s)

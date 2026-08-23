@@ -9,6 +9,8 @@ module Tilia.Comments
     CommentStyle (..),
     commentsOf,
     renderComment,
+    closesItself,
+    singleLine,
     widenTrigger,
     escapeTrigger,
     triggerEscaped,
@@ -74,6 +76,16 @@ data Comment = Comment
     commentFollowed :: Bool
   }
   deriving (Eq, Show)
+
+-- | Does this comment let code follow it on the same line?
+closesItself :: Comment -> Bool
+closesItself c = commentStyle c == BlockComment && singleLine c
+
+-- | Is this comment a single line?
+singleLine :: Comment -> Bool
+singleLine c = case commentBody c of
+  (_ :| []) -> True
+  _ -> False
 
 -- | Every comment in a module, in source order.
 commentsOf :: Text -> HsModule GhcPs -> [Comment]

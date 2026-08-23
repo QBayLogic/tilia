@@ -36,9 +36,8 @@ module Tilia.Render.Context
     -- * Fixities
     operatorFixity,
 
-    -- * Spans
+    -- * What lies between two spans
     commentBetween,
-    ownLineCommentBetween,
     separatedByBlank,
 
     -- * Entering the tree
@@ -221,57 +220,36 @@ closingFor :: Site -> ClosingIndent
 closingFor site = if siteInBlock site then Indented else Outdented
 
 ----------------------------------------------------------------------------
--- Spans
+-- What lies between two spans
 
--- | The comments taking whole lines written in the gap between two spans.
---
--- Either span being unknown means the gap is unknown too, and an unknown gap
--- is empty: nothing may be concluded from a question that was not answered.
-commentsBetween :: Ctx -> Maybe Span -> Maybe Span -> [Comment]
-commentsBetween ctx (Just a) (Just b) =
-  Map.elems
-    . Map.takeWhileAntitone (< (spanStartLine b, spanStartColumn b))
-    . Map.dropWhileAntitone (< (spanEndLine a, spanEndColumn a))
-    $ ctxLineComments ctx
-commentsBetween _ _ _ = []
+-- | Where the next thing to be printed begins. It is either the third
+-- argument or a comment, if there is any between the two spans.
+nextPrinted ::
+  Ctx ->
+  -- | What has just been printed
+  Maybe Span ->
+  -- | What follows it, if nothing comes between
+  Maybe Span ->
+  Maybe Span
+nextPrinted ctx (Just a) mb@(Just b) =
+  case filter (not . commentTrailing) (Map.elems inTheGap) of
+    (c : _) -> Just (commentSpan c)
+    [] -> mb
+  where
+    inTheGap =
+      Map.takeWhileAntitone (< startPoint b) $
+        Map.dropWhileAntitone (< endPoint a) (ctxLineComments ctx)
+nextPrinted _ _ mb = mb
 
--- | Is there a comment taking whole lines between the two?
---
--- What this is really asking is whether something is going to be printed
--- between them that ends a line. An operator with a comment in front of it
--- cannot be moved to the end of the line above, because the comment would go
--- with it and the operand would be left stranded.
+-- | Is a comment going to be printed between the two spans?
 commentBetween :: Ctx -> Maybe Span -> Maybe Span -> Bool
-commentBetween ctx a b = not (null (commentsBetween ctx a b))
-
--- | Comments written on lines of their own.
---
--- The distinction is what the two spans are separated /by/. A comment on a
--- line of its own is about what follows it and is printed above it, so it
--- stands between the two; one trailing code belongs to the line it was
--- written on and stands between nothing.
-ownLineCommentsBetween :: Ctx -> Maybe Span -> Maybe Span -> [Comment]
-ownLineCommentsBetween ctx a b =
-  filter (not . commentTrailing) (commentsBetween ctx a b)
-
--- | Is there a comment on a line of its own between the two?
-ownLineCommentBetween :: Ctx -> Maybe Span -> Maybe Span -> Bool
-ownLineCommentBetween ctx a b = not (null (ownLineCommentsBetween ctx a b))
+commentBetween ctx a b = nextPrinted ctx a b /= b
 
 -- | Did the author leave an empty line directly after the first of these?
---
--- Unlike 'blankBetween' this counts what is going to be printed in the gap
--- rather than only what the two spans say. A comment written between two
--- bindings is printed above the second of them, so it is the comment that
--- the blank line belongs in front of, and measuring to the binding instead
--- would move the blank line past it.
 separatedByBlank :: Ctx -> Maybe Span -> Maybe Span -> Bool
-separatedByBlank ctx ma@(Just a) mb@(Just b) =
-  nextLine > spanEndLine a + 1
-  where
-    nextLine = case ownLineCommentsBetween ctx ma mb of
-      (c : _) -> spanStartLine (commentSpan c)
-      [] -> spanStartLine b
+separatedByBlank ctx ma@(Just a) mb = case nextPrinted ctx ma mb of
+  Just s -> spanStartLine s > spanEndLine a + 1
+  Nothing -> False
 separatedByBlank _ _ _ = False
 
 ----------------------------------------------------------------------------
@@ -374,8 +352,8 @@ grouped ctx s d
 -- | Does a comment that takes whole lines begin inside this span?
 holdsLineComment :: Ctx -> Span -> Bool
 holdsLineComment ctx s =
-  case Map.lookupGE (spanStartLine s, spanStartColumn s) (ctxLineComments ctx) of
-    Just (start, _) -> start <= (spanEndLine s, spanEndColumn s)
+  case Map.lookupGE (startPoint s) (ctxLineComments ctx) of
+    Just (start, _) -> start <= endPoint s
     Nothing -> False
 
 ----------------------------------------------------------------------------
