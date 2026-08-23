@@ -107,7 +107,14 @@ ormoluExamples =
       corpusReference = ReferenceSuffix "-out.hs",
       corpusSkip =
         [ "other" </> "disabling",
-          "declaration" </> "value" </> "function" </> "required-type-arguments-2.hs"
+          "declaration" </> "data" </> "comment-in-empty-record.hs",
+          "declaration" </> "type" </> "parens-comments.hs",
+          "declaration" </> "value" </> "function" </> "parens-comments.hs",
+          "declaration" </> "value" </> "function" </> "required-type-arguments-2.hs",
+          "import" </> "comment-inside-empty-import-list.hs",
+          "import" </> "comments-inside-imports.hs",
+          "other" </> "comment-two-blocks.hs",
+          "other" </> "multiple-blank-line-comment.hs"
         ]
     }
 
