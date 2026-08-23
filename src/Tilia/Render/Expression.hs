@@ -54,7 +54,8 @@ import GHC.Hs hiding (Fixity)
 import GHC.LanguageExtensions.Type (Extension (..))
 import GHC.Types.Basic (Boxity (..))
 import GHC.Types.Fixity (LexicalFixity (..))
-import GHC.Types.Name.Reader (RdrName, mkVarUnqual)
+import GHC.Types.Name.Occurrence (isVarOcc)
+import GHC.Types.Name.Reader (RdrName, mkVarUnqual, rdrNameOcc)
 import GHC.Types.SourceText
 import GHC.Types.SrcLoc
   ( GenLocated (..),
@@ -236,7 +237,7 @@ exprBody ctx site here = \case
   -- signature is an expression until it is elaborated.
   HsForAll _ tele e -> forallTelescope ctx tele <> breakOrSpace <> hsExpr ctx e
   HsQual _ qs e ->
-    at ctx qs (contextOf (hsExpr ctx) . map unbracketed)
+    at ctx qs (contextOf loneVariableExpr (hsExpr ctx) . map unbracketed)
       <> space
       <> txt "=>"
       <> breakOrSpace
@@ -480,8 +481,12 @@ chainPlacement placer firstOne lastOne = case lastOne of
         (Just a, Just b) -> spanStartLine a == spanStartLine b
         _ -> False
 
--- | A quoted constraint without the brackets a context puts around it
--- anyway, so that formatting does not add a layer every time it runs.
+-- | Is this quoted constraint nothing but a variable?
+loneVariableExpr :: LHsExpr GhcPs -> Bool
+loneVariableExpr e = case unLoc e of
+  HsVar _ (L _ n) -> isVarOcc (rdrNameOcc n)
+  _ -> False
+
 unbracketed :: LHsExpr GhcPs -> LHsExpr GhcPs
 unbracketed e = case unLoc e of
   HsPar _ inner -> unbracketed inner

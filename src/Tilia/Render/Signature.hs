@@ -33,6 +33,8 @@ import Tilia.Render.Expression (hsExpr)
 import Tilia.Render.Name
 import Tilia.Render.Pragma
 import Tilia.Render.Type
+import Tilia.Span (startOf)
+import Tilia.Span.Ghc (spanOfSrcSpan)
 
 -- | A signature declaration.
 sigDecl :: Ctx -> Sig GhcPs -> Doc
@@ -234,9 +236,16 @@ standaloneKindSig ctx (StandaloneKindSig _ n sigTy) =
 -- Rewrite rules
 
 -- | A @RULES@ block.
+--
+-- The closing @#-\}@ is given an anchor of its own, so that a comment
+-- written after the last rule and before it stays inside the pragma. There
+-- is nothing else down there for such a comment to attach to, and outside
+-- the braces it would read as a remark on whatever follows the block.
 ruleDecls :: Ctx -> RuleDecls GhcPs -> Doc
-ruleDecls ctx (HsRules _ rules) =
-  pragma "RULES" (sepBy breakOrSpace (map (align . at_ ctx (ruleDecl ctx)) rules))
+ruleDecls ctx (HsRules ((_, close), _) rules) =
+  pragma "RULES" $
+    sepBy breakOrSpace (map (align . at_ ctx (ruleDecl ctx)) rules)
+      <> foldMap (emptyAnchor . startOf) (spanOfSrcSpan (getEpTokenSrcSpan close))
 
 ruleDecl :: Ctx -> RuleDecl GhcPs -> Doc
 ruleDecl ctx (HsRule _ ruleName phase binders lhs rhs) =

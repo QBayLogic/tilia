@@ -48,7 +48,8 @@ where
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Text qualified as T
 import GHC.Hs
-import GHC.Types.Name.Reader (RdrName)
+import GHC.Types.Name.Occurrence (isTvOcc)
+import GHC.Types.Name.Reader (RdrName, rdrNameOcc)
 import GHC.Types.SourceText
 import GHC.Types.SrcLoc (GenLocated (..), getLoc, unLoc)
 import GHC.Types.Var (Specificity (..))
@@ -114,13 +115,17 @@ typeBody ctx documented here = \case
       <> case unLoc y of
         HsFunTy {} -> recur (unLoc y)
         _ -> at ctx y recur
-  HsListTy _ t -> brackets (insideBrackets here (hsType ctx t))
+  HsListTy _ t ->
+    layoutWithin ctx here (spanOf t) $
+      brackets (insideBrackets here (hsType ctx t))
   HsTupleTy _ sort xs ->
-    tupleBrackets sort (insideBrackets here (commaSep (map (align . hsType ctx) xs)))
+    layoutWithin ctx here (spansOf xs) $
+      tupleBrackets sort (insideBrackets here (commaSep (map (align . hsType ctx) xs)))
   HsSumTy _ xs ->
     unboxed (sepBy (space <> txt "|" <> breakOrSpace) (map (align . hsType ctx) xs))
   HsOpTy _ _ x op y -> typeChain ctx x op y
-  HsParTy _ t -> parens (insideBrackets here (hsType ctx t))
+  HsParTy _ t ->
+    layoutWithin ctx here (spanOf t) (parens (insideBrackets here (hsType ctx t)))
   HsIParamTy _ n t ->
     align (at ctx n outputable <> space <> txt "::" <> breakOrSpace <> indent (hsType ctx t))
   HsStarTy _ _ -> txt "*"
@@ -263,7 +268,13 @@ spine t = t : case t of
 
 -- | A class context, as it appears before a @=>@.
 context :: Ctx -> LHsContext GhcPs -> Doc
-context ctx = at_ ctx (contextOf (hsType ctx) . map unbracket)
+context ctx = at_ ctx (contextOf loneVariable (hsType ctx) . map unbracket)
+
+-- | Is this constraint nothing but a type variable?
+loneVariable :: LHsType GhcPs -> Bool
+loneVariable t = case unLoc t of
+  HsTyVar _ _ (L _ n) -> isTvOcc (rdrNameOcc n)
+  _ -> False
 
 -- | A constraint without the brackets a context puts around it anyway.
 --
@@ -275,17 +286,16 @@ unbracket t = case unLoc t of
   _ -> t
 
 -- | A context over anything that can stand as a constraint.
---
--- Always bracketed, even around a single constraint. The brackets are
--- optional there and the author may not have written them, but a context is
--- one thing however many constraints it holds, and writing it the same way
--- each time is what lets a reader see where it ends without counting @=>@s.
---
--- Constraints also appear in expressions, since a quoted constraint is an
--- expression until it is elaborated, and both spell the empty context @()@.
-contextOf :: (a -> Doc) -> [a] -> Doc
-contextOf _ [] = txt "()"
-contextOf render xs = parens (commaSep (map (align . render) xs))
+contextOf ::
+  -- | Is this constraint nothing but a variable?
+  (a -> Bool) ->
+  (a -> Doc) ->
+  [a] ->
+  Doc
+contextOf lone render = \case
+  [] -> txt "()"
+  [x] | lone x -> render x
+  xs -> parens (commaSep (map (align . render) xs))
 
 ----------------------------------------------------------------------------
 -- Binders

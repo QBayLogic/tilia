@@ -16,7 +16,7 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isNothing, listToMaybe, mapMaybe)
 import Data.Ord (Down (..))
-import Tilia.Comments (Comment (..))
+import Tilia.Comments (Comment (..), commentTrailing)
 import Tilia.Span
 
 -- | Where a comment stands in relation to the region it was given to.
@@ -51,9 +51,16 @@ placeComments regions comments =
       | otherwise = Nothing
       where
         here = commentSpan c
-        trailed =
-          nearest (\r -> (Down (endPoint r), startPoint r)) $
-            filter (\r -> endsJustBefore r && not (fencedOff r)) regions
+        trailed
+          | writtenAgainst || not (commentFollowed c) =
+              nearest (\r -> (Down (endPoint r), startPoint r)) $
+                filter (\r -> endsJustBefore r && not (fencedOff r)) regions
+          | otherwise = Nothing
+
+        writtenAgainst =
+          any (\r -> Just (endPoint r) == stopsAt) regions
+        stopsAt = (,) (spanStartLine here) <$> commentFollows c
+
         endsJustBefore r =
           spanEndLine r == spanStartLine here && endPoint r <= startPoint here
         fencedOff r = any (\o -> here `inside` o && not (r `inside` o)) regions

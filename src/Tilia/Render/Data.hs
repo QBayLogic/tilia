@@ -221,7 +221,13 @@ conDecl ctx _ ConDeclGADT {..} =
     -- result, and does not parse at all.
     resultType = case unLoc con_res_ty of
       HsKindSig {} -> parens (hsType ctx con_res_ty)
+      HsForAllTy {} | standsAlone -> parens (hsType ctx con_res_ty)
+      HsQualTy {} | standsAlone -> parens (hsType ctx con_res_ty)
       _ -> hsType ctx con_res_ty
+    standsAlone = case (unLoc con_outer_bndrs, con_g_args) of
+      (HsOuterImplicit {}, PrefixConGADT _ []) ->
+        null con_inner_bndrs && null con_mb_cxt
+      _ -> False
     arguments = case con_g_args of
       PrefixConGADT NoExtField xs -> foldMap argument xs
       RecConGADT _ x ->

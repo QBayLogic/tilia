@@ -35,12 +35,11 @@ import Data.Text (Text)
 import GHC.Hs
 import GHC.Types.Basic hiding (overlapMode)
 import GHC.Types.SourceText
-import GHC.Types.SrcLoc (unLoc)
+import GHC.Types.SrcLoc (GenLocated (..), unLoc)
 import GHC.Unit.Module.Warnings
 import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Render.Name
-import Tilia.Span.Ghc
 
 ----------------------------------------------------------------------------
 -- Braces
@@ -104,39 +103,49 @@ overlapMode mode = txt . braced <$> (spelled . unLoc =<< mode)
 
 -- | A @WARNING@ or @DEPRECATED@ declaration.
 warnDecls :: Ctx -> WarnDecls GhcPs -> Doc
-warnDecls ctx (Warnings _ warnings) =
-  vsep (map (at_ ctx (warnDecl ctx)) warnings)
-
-warnDecl :: Ctx -> WarnDecl GhcPs -> Doc
-warnDecl ctx (Warning (namespace, _) names wtxt) =
-  layoutFrom ctx (spansOf names <> spansOf literals) $
-    pragma pragmaName . indent $
-      namespaceSpec namespace
-        <> commaSep (map (name ctx) names)
-        <> breakOrSpace
-        <> literalList literals
+warnDecls ctx (Warnings _ warnings) = case warnings of
+  [] -> mempty
+  (L _ (Warning _ _ wtxt) : _) ->
+    layoutAcross ctx warnings
+      . pragma (keywordOf wtxt)
+      . indent
+      $ sepBy (txt ";" <> breakOrSpace) (map (at_ ctx (warned ctx)) warnings)
   where
-    (pragmaName, literals) = warningParts wtxt
+    keywordOf wtxt = let (keyword, _, _) = warningParts wtxt in keyword
+
+-- | One of the things a warning declaration names.
+warned :: Ctx -> WarnDecl GhcPs -> Doc
+warned ctx (Warning (namespace, _) names wtxt) =
+  category
+    <> namespaceSpec namespace
+    <> commaSep (map (name ctx) names)
+    <> breakOrSpace
+    <> literalList literals
+  where
+    (_, category, literals) = warningParts wtxt
 
 -- | A warning attached to a name in an export list or to an instance.
 warningTxt :: WarningTxt GhcPs -> Doc
 warningTxt wtxt =
-  indent (pragma pragmaName (indent (literalList literals)))
+  indent (pragma keyword (indent (category <> literalList literals)))
   where
-    (pragmaName, literals) = warningParts wtxt
+    (keyword, category, literals) = warningParts wtxt
 
-warningParts :: WarningTxt GhcPs -> (Text, [LocatedE StringLiteral])
-warningParts w = (keyword, fmap hsDocString <$> messages)
+-- | Which keyword introduces a warning, which category it is filed under,
+-- and what it says.
+--
+-- The keyword is written once for a whole declaration even when it names
+-- several things, whereas the category belongs to each of them separately.
+-- That is why the two do not come back as one piece of text.
+warningParts :: WarningTxt GhcPs -> (Text, Doc, [LocatedE StringLiteral])
+warningParts = \case
+  DeprecatedTxt _ literals -> ("DEPRECATED", mempty, said literals)
+  WarningTxt category _ literals ->
+    ("WARNING", foldMap named category, said literals)
   where
-    (keyword, messages) = case w of
-      DeprecatedTxt _ literals -> ("DEPRECATED", literals)
-      WarningTxt category _ literals ->
-        ("WARNING" <> foldMap named category, literals)
-
-    -- A warning may be filed under a category, which is written in quotes
-    -- after the keyword.
+    said = map (fmap hsDocString)
     named (unLoc -> InWarningCategory {..}) =
-      " in \"" <> showGhc (unLoc iwc_wc) <> "\""
+      txt ("in \"" <> showGhc (unLoc iwc_wc) <> "\"") <> space
 
 -- | One message is written bare; several go in a list.
 literalList :: [LocatedE StringLiteral] -> Doc

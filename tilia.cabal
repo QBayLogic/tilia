@@ -15,6 +15,7 @@ synopsis: A formatter for Haskell source code
 description: A formatter for Haskell source code.
 category: Development, Formatting
 build-type: Simple
+extra-source-files: vendored-corpus/**/*.hs
 extra-doc-files:
   CHANGELOG.md
   README.md

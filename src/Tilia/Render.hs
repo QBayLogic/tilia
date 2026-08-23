@@ -73,7 +73,8 @@ renderModule settings parsed =
     <> attachComments loose (hsModule ctx pragmas (sorted hsMod))
   where
     hsMod = pmModule parsed
-    (haddocks, plain) = splitHaddocks hsMod (pmComments parsed)
+    (haddocks, loose') = splitHaddocks hsMod (pmComments parsed)
+    plain = heldOff haddocks loose'
     (stackHeader, rest) = takeStackHeader (pmHeaderEnd parsed) plain
     (pragmas, loose) = takeHeaderPragmas (pmHeaderEnd parsed) rest
 
@@ -93,6 +94,28 @@ renderModule settings parsed =
           ctxHaddocks = indexOn haddocks,
           ctxKnot = knot
         }
+
+-- | Keep a comment from running into a Haddock.
+--
+-- A Haddock is printed from the syntax tree and a comment is placed against
+-- whatever node it belongs to, so the two can come out on consecutive lines
+-- however far apart they were written. Read together they look like one
+-- block of prose, and they are not: one documents a declaration and the
+-- other is a remark. An empty line is what says so.
+heldOff :: [Comment] -> [Comment] -> [Comment]
+heldOff haddocks = map holdOff
+  where
+    ends = Set.fromList (map (spanEndLine . commentSpan) haddocks)
+    starts = Set.fromList (map (spanStartLine . commentSpan) haddocks)
+    holdOff c =
+      c
+        { commentAfterGap =
+            commentAfterGap c || Set.member (spanStartLine s - 1) ends,
+          commentBeforeGap =
+            commentBeforeGap c || Set.member (spanEndLine s + 1) starts
+        }
+      where
+        s = commentSpan c
 
 -- | The lines above the module, put back exactly as they were written.
 --

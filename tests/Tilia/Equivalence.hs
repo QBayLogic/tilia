@@ -27,14 +27,20 @@ import Data.Text qualified as T
 import GHC.Data.FastString (FastString)
 import GHC.Hs (HsModule (..), XModulePs (..))
 import GHC.Hs.Decls (DerivClauseTys (..))
-import GHC.Hs.ImpExp (LImportDecl)
+import GHC.Hs.ImpExp
+  ( ImportDeclQualifiedStyle,
+    LImportDecl,
+    isImportDeclQualified,
+  )
 import GHC.Hs.DocString
   ( HsDocString (..),
     HsDocStringChunk (..),
     HsDocStringDecorator (..),
   )
+import GHC.Hs.Expr (HsExpr (..), LHsExpr)
 import GHC.Hs.Extension (GhcPs)
 import GHC.Hs.Type (HsType (..), LHsContext, LHsSigType)
+import Language.Haskell.Syntax.Extension (XRec)
 import GHC.Types.Name (Name)
 import GHC.Types.SrcLoc (unLoc)
 import GHC.Types.Name.Occurrence (OccName)
@@ -74,6 +80,7 @@ differ :: forall a. (Data a) => [Text] -> a -> a -> Maybe Text
 differ path x y
   | incidental (typeOf x) = Nothing
   | Just outcome <- asDerivingClause path x y = outcome
+  | Just outcome <- asQualifiedStyle path x y = outcome
   | Just outcome <- asDocString path x y = outcome
   | Just outcome <- asContext path x y = outcome
   | Just outcome <- asImports path x y = outcome
@@ -176,6 +183,23 @@ structural con =
   tyConName con
     `elem` ["Maybe", "[]", "NonEmpty", "(,)", "(,,)", "(,,,)", "(,,,,)"]
 
+-- | Which side of the module name @qualified@ was written on.
+--
+-- @import qualified M@ and @import M qualified@ are the same import. Which
+-- spelling is allowed is settled by @ImportQualifiedPost@ and the formatter
+-- writes whichever the extension calls for, so the two are not expected to
+-- survive as they were. Whether the import is qualified at all is another
+-- matter, and that is what is compared.
+asQualifiedStyle :: (Data a) => [Text] -> a -> a -> Maybe (Maybe Text)
+asQualifiedStyle path x y = case (cast x, cast y) of
+  (Just before, Just after) -> Just (compared before after)
+  _ -> Nothing
+  where
+    compared :: ImportDeclQualifiedStyle -> ImportDeclQualifiedStyle -> Maybe Text
+    compared before after
+      | isImportDeclQualified before == isImportDeclQualified after = Nothing
+      | otherwise = Just (describe path "the import stopped being qualified")
+
 -- | A @deriving@ clause, however it was punctuated.
 --
 -- @deriving Eq@ and @deriving (Eq)@ are one clause written two ways, and
@@ -239,23 +263,32 @@ asImports path x y = case (cast x, cast y) of
 -- Only the brackets directly around a constraint are dropped. Brackets
 -- inside one group a type and are compared like any others.
 asContext :: (Data a) => [Text] -> a -> a -> Maybe (Maybe Text)
-asContext path x y = case (cast x, cast y) of
-  (Just before, Just after) ->
-    Just (differ path (constraints before) (constraints after))
-  _ -> case (cast x, cast y) of
-    (Just before, Just after) ->
-      Just (differ path (bare before) (bare after))
-    _ -> Nothing
+asContext path x y = compared optional <|> compared written <|> compared quoted
   where
-    constraints :: Maybe (LHsContext GhcPs) -> [HsType GhcPs]
-    constraints = maybe [] bare
+    compared :: forall b c. (Typeable b, Data c) => (b -> c) -> Maybe (Maybe Text)
+    compared strip = case (cast x, cast y) of
+      (Just before, Just after) -> Just (differ path (strip before) (strip after))
+      _ -> Nothing
 
-    bare :: LHsContext GhcPs -> [HsType GhcPs]
-    bare = map (unbracket . unLoc) . unLoc
+    optional :: Maybe (LHsContext GhcPs) -> [HsType GhcPs]
+    optional = maybe [] written
+
+    written :: LHsContext GhcPs -> [HsType GhcPs]
+    written = map (unbracket . unLoc) . unLoc
+
+    -- With @RequiredTypeArguments@ a constraint may stand where a term
+    -- does, and until it is elaborated it is an expression. The brackets
+    -- there are the context's own just as much as anywhere else.
+    quoted :: XRec GhcPs [LHsExpr GhcPs] -> [HsExpr GhcPs]
+    quoted = map (unparenthesised . unLoc) . unLoc
 
     unbracket = \case
       HsParTy _ t -> unbracket (unLoc t)
       t -> t
+
+    unparenthesised = \case
+      HsPar _ e -> unparenthesised (unLoc e)
+      e -> e
 
 -- | A Haddock, compared for what it documents.
 --

@@ -67,7 +67,7 @@ import GHC.Types.Name.Occurrence (occNameString)
 import GHC.Types.Name.Reader (RdrName (..), rdrNameOcc)
 import GHC.Types.SrcLoc (GenLocated (..))
 import GHC.Types.SrcLoc qualified as GHC
-import Tilia.Comments (Comment (..), CommentStyle (..))
+import Tilia.Comments (Comment (..), CommentStyle (..), commentTrailing)
 import Tilia.Fixity
   ( Fixity,
     OpName (..),
@@ -353,7 +353,7 @@ grouped ctx s d
 holdsLineComment :: Ctx -> Span -> Bool
 holdsLineComment ctx s =
   case Map.lookupGE (startPoint s) (ctxLineComments ctx) of
-    Just (start, _) -> start <= endPoint s
+    Just (start, _) -> start < endPoint s
     Nothing -> False
 
 ----------------------------------------------------------------------------

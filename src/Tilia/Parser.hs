@@ -162,7 +162,7 @@ parserOpts ParserConfig {pcExtensions} =
     False -- safe imports
     True -- keep Haddock tokens
     True -- keep ordinary comment tokens
-    True -- let pragmas move the source position
+    True -- let @LINE@ and @COLUMN@ pragmas move the source position
 
 -- | Diagnostics are not reported, so the settings only have to be
 -- well-formed.

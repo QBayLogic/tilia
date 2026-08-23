@@ -10,6 +10,7 @@ module Tilia.Comments
     commentsOf,
     renderComment,
     closesItself,
+    commentTrailing,
     singleLine,
     widenTrigger,
     escapeTrigger,
@@ -26,7 +27,7 @@ import Data.Generics.Schemes (listify)
 import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.List.NonEmpty qualified as NE
-import Data.Maybe (mapMaybe)
+import Data.Maybe (isJust, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Hs (HsModule)
@@ -56,11 +57,10 @@ data Comment = Comment
     commentBody :: NonEmpty Text,
     -- | How it was written.
     commentStyle :: CommentStyle,
-    -- | Whether anything other than whitespace preceded it on its opening
-    -- line. This is what separates a comment trailing some code from one
-    -- written on a line of its own, and no amount of looking at the comment
-    -- alone can tell the two apart.
-    commentTrailing :: Bool,
+    -- | Where the code before it on its opening line stops: the column one
+    -- past the last character of that code, or 'Nothing' when the comment
+    -- had the line to itself.
+    commentFollows :: Maybe Int,
     -- | Whether the line above it in the input was empty.
     --
     -- What is above a comment is often not a node at all—a Haddock the
@@ -76,6 +76,10 @@ data Comment = Comment
     commentFollowed :: Bool
   }
   deriving (Eq, Show)
+
+-- | Was the comment written after code on its line?
+commentTrailing :: Comment -> Bool
+commentTrailing = isJust . commentFollows
 
 -- | Does this comment let code follow it on the same line?
 closesItself :: Comment -> Bool
@@ -125,7 +129,7 @@ mkComment sourceLines spn tok =
     { commentSpan = spanOfReal spn,
       commentBody = normalizeBody startColumn style raw,
       commentStyle = style,
-      commentTrailing = trailing,
+      commentFollows = follows,
       commentAfterGap = afterGap,
       commentBeforeGap = beforeGap,
       commentFollowed = followed
@@ -138,9 +142,11 @@ mkComment sourceLines spn tok =
       GHC.EpaDocOptions s -> (LineComment, T.pack s)
     -- Columns are 1-based; indentation is how many characters precede.
     startColumn = GHC.srcSpanStartCol spn - 1
-    trailing = case drop (GHC.srcSpanStartLine spn - 1) sourceLines of
-      (l : _) -> not (T.all isSpace (T.take startColumn l))
-      [] -> False
+    follows = case drop (GHC.srcSpanStartLine spn - 1) sourceLines of
+      (l : _) | not (T.null before') -> Just (T.length before' + 1)
+        where
+          before' = T.stripEnd (T.take startColumn l)
+      _ -> Nothing
     afterGap = case drop (GHC.srcSpanStartLine spn - 2) sourceLines of
       (l : _) | GHC.srcSpanStartLine spn > 1 -> T.all isSpace l
       _ -> False

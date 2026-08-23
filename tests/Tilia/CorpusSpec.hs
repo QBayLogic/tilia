@@ -32,6 +32,7 @@ import Tilia.TestConfig (exampleSettings)
 
 spec :: Spec
 spec = do
+  corpusSpec vendoredExamples
   corpusSpec ormoluExamples
   corpusSpec ghcTestSuite
 

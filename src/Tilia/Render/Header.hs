@@ -26,6 +26,7 @@ where
 import Data.Function (on)
 import Data.List (sortOn)
 import Data.List.NonEmpty qualified as NE
+import Data.Maybe (isJust)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -103,12 +104,16 @@ takeHeaderPragmas ::
   Maybe Span ->
   [Comment] ->
   ([HeaderPragma], [Comment])
-takeHeaderPragmas headerEnd comments =
-  ( [entry c p | (c, Just p) <- recognised],
-    [c | (c, Nothing) <- recognised]
-  )
+takeHeaderPragmas headerEnd comments = (pragmas, plain)
   where
     recognised = [(c, headerPragma c) | c <- comments]
+    pragmas = [entry c p | (c, Just p) <- recognised]
+    plain =
+      [ if aboveAPragma then airless c else c
+      | ((c, Nothing), aboveAPragma) <- zip recognised nextIsPragma
+      ]
+    nextIsPragma = map (isJust . snd) (drop 1 recognised) <> [False]
+    airless c = c {commentAfterGap = False, commentBeforeGap = False}
 
     entry c p =
       HeaderPragma

@@ -106,10 +106,14 @@ groupDecls :: Ctx -> Bool -> [LHsDecl GhcPs] -> [NonEmpty (LHsDecl GhcPs)]
 groupDecls _ _ [] = []
 groupDecls ctx isSignatureFile (d : ds)
   -- A Haddock documenting what follows belongs to the group that follows,
-  -- not to a group of its own.
+  -- not to a group of its own—unless what follows is another Haddock, which
+  -- documents nothing either. Those two have to be kept apart: run
+  -- together they are not two doc comments but one.
   | isDocNext (unLoc d) = case groupDecls ctx isSignatureFile ds of
       [] -> [d :| []]
-      (g : gs) -> (d <| g) : gs
+      (g : gs)
+        | isDocNext (unLoc (NE.head g)) -> (d :| []) : g : gs
+        | otherwise -> (d <| g) : gs
   | otherwise =
       let (together, rest) = span belongs (zip (d : ds) ds)
        in (d :| map snd together) : groupDecls ctx isSignatureFile (map snd rest)
