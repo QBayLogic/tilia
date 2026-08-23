@@ -7,6 +7,7 @@ import Data.Text (Text)
 import Test.Hspec
 import Tilia.Printer
 import Tilia.Printer.Combinators
+import Tilia.Span
 
 spec :: Spec
 spec = do
@@ -70,14 +71,23 @@ spec = do
     it "adds nothing when flat" $
       out (flat (parens (commaSep [txt "a", txt "b"])))
         `shouldBe` "(a, b)\n"
-    it "opens up when broken" $
+    it "keeps the opening bracket company when broken" $
       out (broken (parens (commaSep [txt "a", txt "b"])))
-        `shouldBe` "(\n  a,\n  b\n)\n"
+        `shouldBe` "( a,\n  b\n)\n"
+    it "lines the body up under itself" $
+      out (broken (brackets (commaSep [txt "a", txt "b", txt "c"])))
+        `shouldBe` "[ a,\n  b,\n  c\n]\n"
+    it "keeps the closing bracket in when asked" $
+      out (broken (parensWith Indented (commaSep [txt "a", txt "b"])))
+        `shouldBe` "( a,\n  b\n  )\n"
     it "renders an empty bracket pair flat" $
       out (flat (brackets mempty)) `shouldBe` "[]\n"
     it "spaces the unboxed pair" $
       out (flat (unboxed (commaSep [txt "a", txt "b"])))
         `shouldBe` "(# a, b #)\n"
+    it "gives a spaced pair its own lines when broken" $
+      out (broken (unboxed (commaSep [txt "a", txt "b"])))
+        `shouldBe` "(#\n  a,\n  b\n#)\n"
     it "wraps in backticks" $
       out (flat (backticks (txt "div"))) `shouldBe` "`div`\n"
 

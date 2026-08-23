@@ -1,11 +1,10 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | The vocabulary for writing printing code.
 module Tilia.Printer.Combinators
   ( -- * Documents
     Doc,
-    Span (..),
-    mkSpan,
 
     -- * Atoms
     txt,
@@ -14,6 +13,11 @@ module Tilia.Printer.Combinators
     breakOrNothing,
     hardBreak,
     blankLine,
+    Resume (..),
+    verbatimBreak,
+    verbatim,
+    holdBack,
+    closeLine,
     emptyAnchor,
 
     -- * Layout
@@ -43,12 +47,19 @@ module Tilia.Printer.Combinators
 
     -- * Wrapping
     enclose,
+    ClosingIndent (..),
     bracket,
+    bracketWith,
+    spacedBracket,
     parens,
+    parensWith,
     brackets,
+    bracketsWith,
     braces,
     banana,
+    bananaWith,
     unboxed,
+    unboxedWith,
     backticks,
 
     -- * Punctuation
@@ -64,13 +75,13 @@ where
 
 import Data.List (intersperse)
 import Data.Text (Text)
+import Data.Text qualified as T
+import Tilia.Span (Span, isSingleLine)
 import Tilia.Printer.Internal
   ( Doc (..),
     Layout (..),
-    Span (..),
+    Resume (..),
     groupLayout,
-    mkSpan,
-    spanIsSingleLine,
   )
 
 ----------------------------------------------------------------------------
@@ -107,6 +118,41 @@ hardBreak = DHardBreak
 -- | An empty line.
 blankLine :: Doc
 blankLine = hardBreak <> hardBreak
+
+-- | A line break between two lines of text that is being reproduced.
+--
+-- Only for text that is being reproduced rather than laid out: the lines of
+-- a block comment, of a multi-line string literal, of a quasi-quotation.
+-- Unlike every other break this one collapses nothing, because an empty line
+-- among those is the author's and not spacing.
+verbatimBreak :: Resume -> Doc
+verbatimBreak = DVerbatimBreak
+
+-- | Text reproduced exactly, line breaks and all.
+verbatim :: Text -> Doc
+verbatim = sepBy (verbatimBreak AtMargin) . map txt . T.splitOn "\n"
+
+-- | Text put at the end of the line this position falls on.
+--
+-- For a comment the author wrote at the end of a line. It has to come after
+-- everything else on that line, and the printer does not know what else is
+-- still to be emitted there—a comma between two record fields, an arrow
+-- after a pattern, a closing bracket—so it says where the text goes rather
+-- than when.
+--
+-- The argument must not contain a line break.
+holdBack :: Text -> Doc
+holdBack = DHoldBack
+
+-- | Close the line, absorbing a break that immediately follows.
+--
+-- What a comment needs after it. A comment owns the rest of its line, so the
+-- line has to end; but the construct the comment was written against very
+-- often ends the line too, and 'hardBreak' twice is a blank line. This says
+-- \"that line is finished\" instead, and the break that follows finds nothing
+-- left to do.
+closeLine :: Doc
+closeLine = DCloseLine
 
 -- | An anchor for a construct that contains nothing.
 emptyAnchor :: Span -> Doc
@@ -175,7 +221,7 @@ attach Normal body = breakOrSpace <> indent body
 -- spelling of that question so that it reads as policy rather than as a
 -- special case repeated in each classifier.
 hangingIfSingleLine :: Span -> Placement
-hangingIfSingleLine s = if spanIsSingleLine s then Hanging else Normal
+hangingIfSingleLine s = if isSingleLine s then Hanging else Normal
 
 ----------------------------------------------------------------------------
 -- Indentation
@@ -229,38 +275,113 @@ punctuate s (x : xs) = (x <> s) : punctuate s xs
 -- | Surround with the given opening and closing documents, adding nothing
 -- of its own.
 enclose ::
-  -- | Opening
+  -- | Opening bracket
   Doc ->
-  -- | Closing
+  -- | Closing bracket
   Doc ->
   -- | Body
   Doc ->
   Doc
 enclose open close body = open <> body <> close
 
+-- | Where the closing bracket of a broken bracket pair goes.
+data ClosingIndent
+  = -- | Back out to the level the opening bracket is on.
+    Outdented
+  | -- | Kept one step in.
+    Indented
+  deriving (Eq, Show)
+
 -- | Surround with a bracket pair that opens up when broken.
 --
--- Flat, this is @open body close@ with nothing added. Broken, the body
--- moves to its own indented lines and the closing bracket goes back out to
--- the opening bracket's level.
+-- Flat, this is @open body close@ with nothing added. Broken, the opening
+-- bracket keeps the first line of the body company and the rest of the body
+-- lines up under it, with the closing bracket alone on the last line:
+--
+-- > ( first,
+-- >   second
+-- > )
 bracket ::
-  -- | Opening
+  -- | Opening bracket
   Text ->
-  -- | Closing
+  -- | Closing bracket
   Text ->
   -- | Body
   Doc ->
   Doc
-bracket open close body =
-  txt open <> indent (breakOrNothing <> body) <> breakOrNothing <> txt close
+bracket = bracketWith Outdented
+
+-- | 'bracket', with a say in where the closing bracket goes.
+bracketWith ::
+  -- | Where the closing bracket goes
+  ClosingIndent ->
+  -- | Opening bracket
+  Text ->
+  -- | Closing bracket
+  Text ->
+  -- | Body
+  Doc ->
+  Doc
+bracketWith closing open close body =
+  -- The pair is aligned as a whole so that the closing bracket comes back
+  -- out to the column the opening one is on, wherever on its line that was.
+  align $
+    txt open
+      <> variant body (space <> align body <> hardBreak)
+      <> nest (closingSteps closing) (txt close)
+
+-- | Surround with a bracket pair whose brackets are held off the body.
+--
+-- For the brackets that are more than one character wide—@(#@, @(|@—where
+-- running the body up against them makes both harder to pick out, and where
+-- an operator beginning with @#@ would lex as part of the bracket. Broken,
+-- the body goes on its own indented lines.
+spacedBracket ::
+  -- | Where the closing bracket goes
+  ClosingIndent ->
+  -- | Opening bracket
+  Text ->
+  -- | Closing bracket
+  Text ->
+  -- | Body
+  Doc ->
+  Doc
+spacedBracket closing open close body =
+  align $
+    txt open
+      <> variant (space <> body <> space) (hardBreak <> indent body <> hardBreak)
+      <> nest (closingSteps closing) (txt close)
+
+closingSteps :: ClosingIndent -> Int
+closingSteps = \case
+  Outdented -> 0
+  Indented -> 1
 
 -- | @(@ and @)@.
 parens :: Doc -> Doc
 parens = bracket "(" ")"
 
+-- | @(@ and @)@, with a say in where the closing bracket goes.
+parensWith ::
+  -- | Where the closing parenthesis goes
+  ClosingIndent ->
+  -- | Body
+  Doc ->
+  Doc
+parensWith closing = bracketWith closing "(" ")"
+
 -- | @[@ and @]@.
 brackets :: Doc -> Doc
 brackets = bracket "[" "]"
+
+-- | @[@ and @]@, with a say in where the closing bracket goes.
+bracketsWith ::
+  -- | Where the closing bracket goes
+  ClosingIndent ->
+  -- | Body
+  Doc ->
+  Doc
+bracketsWith closing = bracketWith closing "[" "]"
 
 -- | @{@ and @}@.
 braces :: Doc -> Doc
@@ -268,11 +389,29 @@ braces = bracket "{" "}"
 
 -- | @(|@ and @|)@, from arrow notation.
 banana :: Doc -> Doc
-banana = bracket "(|" "|)"
+banana = bananaWith Outdented
+
+-- | @(|@ and @|)@, with a say in where the closing bracket goes.
+bananaWith ::
+  -- | Where the closing banana goes
+  ClosingIndent ->
+  -- | Body
+  Doc ->
+  Doc
+bananaWith closing = spacedBracket closing "(|" "|)"
 
 -- | @(#@ and @#)@, for unboxed tuples and sums.
 unboxed :: Doc -> Doc
-unboxed body = txt "(#" <> space <> body <> space <> txt "#)"
+unboxed = unboxedWith Outdented
+
+-- | @(#@ and @#)@, with a say in where the closing bracket goes.
+unboxedWith ::
+  -- | Where the closing bracket goes
+  ClosingIndent ->
+  -- | Body
+  Doc ->
+  Doc
+unboxedWith closing = spacedBracket closing "(#" "#)"
 
 -- | Surround with backticks.
 backticks :: Doc -> Doc

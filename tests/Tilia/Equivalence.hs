@@ -1,0 +1,367 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+
+-- | Whether formatting changed what a module says.
+module Tilia.Equivalence
+  ( syntaxDifference,
+    commentDifference,
+  )
+where
+
+import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
+import Data.Data
+import Data.List.NonEmpty qualified as NE
+import Data.Maybe (catMaybes, isNothing, listToMaybe, mapMaybe)
+import Data.Set (Set)
+import Data.Set qualified as Set
+import Data.Text (Text)
+import Data.Text qualified as T
+import GHC.Data.FastString (FastString)
+import GHC.Hs.Decls (DerivClauseTys (..))
+import GHC.Hs.ImpExp (LImportDecl)
+import GHC.Hs.DocString
+  ( HsDocString (..),
+    HsDocStringChunk (..),
+    HsDocStringDecorator (..),
+  )
+import GHC.Hs.Extension (GhcPs)
+import GHC.Hs.Type (LHsContext, LHsSigType, LHsType)
+import GHC.Types.Name (Name)
+import GHC.Types.SrcLoc (unLoc)
+import GHC.Types.Name.Occurrence (OccName)
+import GHC.Unit.Types (Unit)
+import Language.Haskell.Syntax.Module.Name (ModuleName)
+import Tilia.Imports (normalizeImports)
+import Tilia.Comments
+  ( Comment (..),
+    CommentStyle (..),
+    Pragma (..),
+    commentPragma,
+  )
+
+----------------------------------------------------------------------------
+-- Syntax
+
+-- | Where two fragments of syntax stop saying the same thing.
+--
+-- Everything is compared but the annotations, which is what makes this a
+-- question about the program rather than about its layout: a span, a
+-- token's position and the comments hung off a node all change when the
+-- module is reformatted, and are supposed to.
+--
+-- 'Nothing' when they agree. Otherwise the constructors on the way down to
+-- the first disagreement, ending in what the two sides had there. A bare
+-- \"these differ\" is no use against ten thousand files: what makes a
+-- corpus worth running is being able to see that six hundred failures are
+-- four causes.
+syntaxDifference :: (Data a) => a -> a -> Maybe Text
+syntaxDifference = differ []
+
+differ :: forall a. (Data a) => [Text] -> a -> a -> Maybe Text
+differ path x y
+  | incidental (typeOf x) = Nothing
+  | Just outcome <- asDerivingClause path x y = outcome
+  | Just outcome <- asDocString path x y = outcome
+  | Just outcome <- asContext path x y = outcome
+  | Just outcome <- asImports path x y = outcome
+  | otherwise = case dataTypeRep (dataTypeOf x) of
+      AlgRep _
+        | constructorOf x /= constructorOf y -> Just disagreement
+        | settledByConstructor (constructorOf x) -> Nothing
+        | otherwise ->
+            firstOf
+              ( zipWith
+                  (cellDiffer (path <> [constructorOf x]))
+                  (gmapQ Cell x)
+                  (gmapQ Cell y)
+              )
+      -- A type that will not be taken apart cannot be compared field by
+      -- field, and cannot even be asked for its constructor. See 'opaque'.
+      NoRep
+        | opaque x y -> Nothing
+        | otherwise ->
+            Just (describe path (T.pack (typeNameOf x) <> " changed"))
+      -- An integer, a fractional, a character or a string. For these the
+      -- constructor carries the value, so comparing constructors compares
+      -- the literal that was written.
+      _
+        | constructorOf x == constructorOf y -> Nothing
+        | otherwise -> Just disagreement
+  where
+    disagreement =
+      describe path (constructorOf x <> " became " <> constructorOf y)
+
+-- | Constructors whose fields say only how they were written.
+--
+-- @HsStarTy@ carries a flag for whether the @*@ was typed as @★@. Both are
+-- the same kind; which one the author reached for is spelling.
+settledByConstructor :: Text -> Bool
+settledByConstructor c = c == "HsStarTy"
+
+constructorOf :: (Data a) => a -> Text
+constructorOf = T.pack . show . toConstr
+
+-- | The tail of the path, and what was found at the end of it.
+describe :: [Text] -> Text -> Text
+describe path leaf =
+  T.intercalate " > " (drop (length path - 5) path <> [leaf])
+
+firstOf :: [Maybe a] -> Maybe a
+firstOf = listToMaybe . catMaybes
+
+-- | One field of a value, with its type hidden.
+data Cell = forall d. (Data d) => Cell d
+
+cellDiffer :: [Text] -> Cell -> Cell -> Maybe Text
+cellDiffer path (Cell a) (Cell b) = case cast b of
+  Just b' -> differ path a b'
+  Nothing -> Just (describe path "fields of different types")
+
+-- | Does this type record only how or where something was written?
+incidental :: TypeRep -> Bool
+incidental rep = case splitTyConApp rep of
+  (con, args)
+    | qualified con == "GHC.Types.SrcLoc.GenLocated" -> False
+    | notation con -> True
+    | structural con -> not (null args) && all incidental args
+    | otherwise -> False
+  where
+    qualified con = tyConModule con <> "." <> tyConName con
+
+-- | Types that exist to record punctuation, position or spelling.
+notation :: TyCon -> Bool
+notation con =
+  tyConModule con == "GHC.Parser.Annotation"
+    || tyConModule con == "GHC.Types.SrcLoc"
+    || ("GHC.Hs." `isPrefix` tyConModule con && "Ann" `isPrefix` tyConName con)
+    || qualified `Set.member` alsoNotation
+  where
+    qualified = tyConModule con <> "." <> tyConName con
+    isPrefix p t = take (length p) t == p
+
+-- | The stragglers, named in full.
+alsoNotation :: Set String
+alsoNotation =
+  Set.fromList
+    [ -- Where a layout block's column was, which is the whole of what
+      -- reformatting changes.
+      "GHC.Hs.Extension.EpLayout",
+      "Language.Haskell.Syntax.Extension.EpLayout",
+      -- The text GHC keeps beside a literal or a pragma so that it can
+      -- reproduce what was typed: the spaces inside @{-# INLINE   f #-}@,
+      -- whether an integer was written in hex, how a multi-line string was
+      -- indented. The value itself is in the next field along.
+      "GHC.Types.SourceText.SourceText",
+      -- Whether a linear arrow was written @%1 ->@ or @⊸@. The multiplicity
+      -- it stands for is a different field, and is compared.
+      "GHC.Hs.Type.EpLinear"
+    ]
+
+-- | Containers that are transparent to the question.
+structural :: TyCon -> Bool
+structural con =
+  tyConName con
+    `elem` ["Maybe", "[]", "NonEmpty", "(,)", "(,,)", "(,,,)", "(,,,,)"]
+
+-- | A @deriving@ clause, however it was punctuated.
+--
+-- @deriving Eq@ and @deriving (Eq)@ are one clause written two ways, and
+-- they are held in two different constructors with two different shapes, so
+-- the generic comparison cannot see past the brackets. The formatter always
+-- writes the brackets, so what is compared is the list of types being
+-- derived.
+asDerivingClause :: (Data a) => [Text] -> a -> a -> Maybe (Maybe Text)
+asDerivingClause path x y = case (cast x, cast y) of
+  (Just before, Just after) ->
+    Just (differ path (derived before) (derived after))
+  _ -> Nothing
+  where
+    derived :: DerivClauseTys GhcPs -> [LHsSigType GhcPs]
+    derived = \case
+      DctSingle _ t -> [t]
+      DctMulti _ ts -> ts
+
+-- | A module's imports, compared as the set they are.
+--
+-- The formatter sorts them and folds together the ones that say the same
+-- thing, because the compiler reads imports as a set and the order they were
+-- written in is the order somebody happened to add them. Comparing them in
+-- sequence would report every module whose imports
+-- were not already sorted.
+--
+-- Both sides are put through the same normalisation rather than being
+-- compared loosely, so an import that was genuinely lost or whose list lost
+-- an entry still shows up.
+asImports :: (Data a) => [Text] -> a -> a -> Maybe (Maybe Text)
+asImports path x y = case (cast x, cast y) of
+  (Just before, Just after) -> Just (alongside (normalised before) (normalised after))
+  _ -> Nothing
+  where
+    -- No comments are offered, so both sides are always reordered. That is
+    -- what makes this comparison indifferent to the order: the formatter
+    -- may have declined to sort a particular module, and the question here
+    -- is whether it imports the same things either way.
+    normalised :: [LImportDecl GhcPs] -> [LImportDecl GhcPs]
+    normalised = normalizeImports []
+
+    -- Compared one import at a time rather than as two lists, because a
+    -- list of imports is what this function is called on: handing it back
+    -- to `differ` whole would arrive here again and never stop.
+    alongside before after
+      | length before /= length after =
+          Just (describe path "the module imports a different set of modules")
+      | otherwise = firstOf (zipWith (differ path) before after)
+
+-- | A context, with an empty one and none at all treated alike.
+--
+-- @class () => Foo a@ and @class Foo a@ say the same thing, and the
+-- formatter writes the second. The tree keeps them apart because one has
+-- brackets in it, so they are levelled before comparing.
+asContext :: (Data a) => [Text] -> a -> a -> Maybe (Maybe Text)
+asContext path x y = case (cast x, cast y) of
+  (Just before, Just after) ->
+    Just (differ path (levelled before) (levelled after))
+  _ -> Nothing
+  where
+    levelled :: Maybe (LHsContext GhcPs) -> [LHsType GhcPs]
+    levelled = maybe [] unLoc
+
+-- | A Haddock, compared for what it documents.
+--
+-- What must survive is the words, in order, and what kind of Haddock it is:
+-- a @$section@ and a @* heading@ say more than which way a comment points,
+-- so those stay distinct while @|@ and @^@ do not.
+asDocString :: (Data a) => [Text] -> a -> a -> Maybe (Maybe Text)
+asDocString path x y = case (cast x, cast y) of
+  (Just before, Just after)
+    | summarised before == summarised after -> Just Nothing
+    | otherwise ->
+        Just (Just (describe path "a documentation comment changed"))
+  _ -> Nothing
+  where
+    summarised :: HsDocString -> (Text, [ByteString])
+    summarised d = (kindOf d, wordsOf d)
+
+    kindOf = \case
+      MultiLineDocString dec _ -> decorator dec
+      NestedDocString dec _ -> decorator dec
+      GeneratedDocString _ -> "generated"
+
+    decorator = \case
+      HsDocStringNext -> "pointer"
+      HsDocStringPrevious -> "pointer"
+      HsDocStringNamed n -> "named " <> T.pack n
+      HsDocStringGroup n -> "group " <> T.pack (show n)
+
+    wordsOf = concatMap chunkWords . \case
+      MultiLineDocString _ cs -> map unLoc (NE.toList cs)
+      NestedDocString _ c -> [unLoc c]
+      GeneratedDocString c -> [c]
+
+    chunkWords (HsDocStringChunk bytes) =
+      filter (not . BS.null) (BS.splitWith isAsciiSpace bytes)
+    isAsciiSpace w = w == 32 || w == 9 || w == 10 || w == 13
+
+-- | Compare two values of a type that will not be taken apart.
+opaque :: forall a b. (Data a, Data b) => a -> b -> Bool
+opaque x y = case dataTypeName (dataTypeOf x) of
+  -- How every name and every literal is spelled.
+  "FastString" -> by @FastString
+  "OccName" -> by @OccName
+  "ModuleName" -> by @ModuleName
+  "Name" -> by @Name
+  "Unit" -> by @Unit
+  "Data.ByteString.ByteString" -> by @ByteString
+  name ->
+    error $
+      "Tilia.Equivalence: "
+        <> name
+        <> " does not expose its structure and is not one of the types this\
+           \ knows how to compare. Decide whether it carries meaning and add\
+           \ it to `opaque`, or to `alsoOnlyAboutPlacement` if it is a\
+           \ position."
+  where
+    by :: forall t. (Typeable t, Eq t) => Bool
+    by = case (cast x, cast y) of
+      (Just p, Just q) -> p == (q :: t)
+      _ -> False
+
+typeNameOf :: (Data a) => a -> String
+typeNameOf = dataTypeName . dataTypeOf
+
+----------------------------------------------------------------------------
+-- Comments
+
+-- | Did every comment survive, and if not, which one and how?
+--
+-- Ordinary comments are compared as they will be printed, in order: the text
+-- is normalised on the way in, so a comment that came out unchanged reads
+-- back identically, and one that was mangled or moved past its neighbour
+-- does not.
+--
+-- Documentation comments are counted rather than compared. The printer may
+-- legitimately rewrite one—a @-- ^ x@ that moves in front of what it
+-- documents has to become @-- | x@—so the text is not expected to survive,
+-- but the comment is.
+commentDifference :: [Comment] -> [Comment] -> Maybe Text
+commentDifference before after
+  | not (Set.null lost) = Just ("lost the pragma " <> pragmaList lost)
+  | not (Set.null gained) = Just ("invented the pragma " <> pragmaList gained)
+  | docsBefore /= docsAfter =
+      Just $
+        "the module's "
+          <> tshow docsBefore
+          <> " documentation comments became "
+          <> tshow docsAfter
+  | otherwise = diverge (ordinary before) (ordinary after)
+  where
+    lost = pragmasOf before `Set.difference` pragmasOf after
+    gained = pragmasOf after `Set.difference` pragmasOf before
+    docsBefore = length (documentation before)
+    docsAfter = length (documentation after)
+    documentation = filter ((== DocComment) . commentStyle)
+
+    -- Pragmas are held apart from the comments they are written as, because
+    -- the formatter moves them on purpose: it hoists them to the top, sorts
+    -- them, drops duplicates and splits a @{-# LANGUAGE A, B #-}@ in two. So
+    -- what has to survive is the set of them, not the order, and comparing
+    -- them in sequence with everything else would report every module that
+    -- did not already have them in sorted order.
+    ordinary =
+      filter (\c -> commentStyle c /= DocComment && isNothing (commentPragma c))
+
+    diverge [] [] = Nothing
+    diverge (b : _) [] = Just ("lost " <> quoted b)
+    diverge [] (a : _) = Just ("gained " <> quoted a)
+    diverge (b : bs) (a : as)
+      | commentBody b == commentBody a = diverge bs as
+      | otherwise = Just (quoted b <> " became " <> quoted a)
+
+    quoted c = "`" <> T.intercalate "\\n" (NE.toList (commentBody c)) <> "`"
+    tshow = T.pack . show
+    pragmaList =
+      T.intercalate ", "
+        . map (\(n, b) -> "{-# " <> n <> " " <> b <> " #-}")
+        . Set.toList
+
+-- | The pragmas a module carries, however they were written.
+--
+-- A @{-# LANGUAGE A, B #-}@ counts as two, because that is what the
+-- formatter turns it into, and the name is upper-cased and the body trimmed
+-- so that two spellings of the same pragma are the same pragma.
+pragmasOf :: [Comment] -> Set (Text, Text)
+pragmasOf = Set.fromList . concatMap entries . mapMaybe commentPragma
+  where
+    entries p
+      | pragmaName p == "LANGUAGE" =
+          [ ("LANGUAGE", extension)
+            | e <- T.splitOn "," (pragmaBody p),
+              let extension = T.strip e,
+              not (T.null extension)
+          ]
+      | otherwise = [(pragmaName p, pragmaBody p)]

@@ -11,6 +11,7 @@ import Test.QuickCheck
 import Tilia.Gen
 import Tilia.Printer
 import Tilia.Printer.Combinators
+import Tilia.Span
 
 spec :: Spec
 spec = do

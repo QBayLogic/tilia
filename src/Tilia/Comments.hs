@@ -28,7 +28,8 @@ import GHC.Hs (HsModule)
 import GHC.Hs.Extension (GhcPs)
 import GHC.Parser.Annotation qualified as GHC
 import GHC.Types.SrcLoc qualified as GHC
-import Tilia.Printer.Combinators (Span, mkSpan)
+import Tilia.Span (Span)
+import Tilia.Span.Ghc (spanOfReal)
 
 -- | How a comment was written. The distinction is kept because it
 -- constrains what may be done with the comment.
@@ -52,9 +53,22 @@ data Comment = Comment
     commentStyle :: CommentStyle,
     -- | Whether anything other than whitespace preceded it on its opening
     -- line. This is what separates a comment trailing some code from one
-    -- written on a line of its own, and no amount of looking at the
-    -- comment alone can tell the two apart.
-    commentTrailing :: Bool
+    -- written on a line of its own, and no amount of looking at the comment
+    -- alone can tell the two apart.
+    commentTrailing :: Bool,
+    -- | Whether the line above it in the input was empty.
+    --
+    -- What is above a comment is often not a node at all—a Haddock the
+    -- printer emits from the syntax tree, another comment—so the gap cannot
+    -- be worked out from spans later. It matters: a @-- |@ and a @--@ run
+    -- together are one doc string, and separated by an empty line they are
+    -- a doc string and a comment.
+    commentAfterGap :: Bool,
+    -- | Whether the line below it in the input was empty.
+    commentBeforeGap :: Bool,
+    -- | Whether anything other than whitespace follows it on its closing
+    -- line.
+    commentFollowed :: Bool
   }
   deriving (Eq, Show)
 
@@ -93,10 +107,13 @@ commentsOf source hsModule =
 mkComment :: [Text] -> GHC.RealSrcSpan -> GHC.EpaCommentTok -> Comment
 mkComment sourceLines spn tok =
   Comment
-    { commentSpan = toSpan spn,
+    { commentSpan = spanOfReal spn,
       commentBody = normalizeBody startColumn style raw,
       commentStyle = style,
-      commentTrailing = trailing
+      commentTrailing = trailing,
+      commentAfterGap = afterGap,
+      commentBeforeGap = beforeGap,
+      commentFollowed = followed
     }
   where
     (style, raw) = case tok of
@@ -109,6 +126,15 @@ mkComment sourceLines spn tok =
     trailing = case drop (GHC.srcSpanStartLine spn - 1) sourceLines of
       (l : _) -> not (T.all isSpace (T.take startColumn l))
       [] -> False
+    afterGap = case drop (GHC.srcSpanStartLine spn - 2) sourceLines of
+      (l : _) | GHC.srcSpanStartLine spn > 1 -> T.all isSpace l
+      _ -> False
+    beforeGap = case drop (GHC.srcSpanEndLine spn) sourceLines of
+      (l : _) -> T.all isSpace l
+      [] -> False
+    followed = case drop (GHC.srcSpanEndLine spn - 1) sourceLines of
+      (l : _) -> not (T.all isSpace (T.drop (GHC.srcSpanEndCol spn - 1) l))
+      [] -> False
 
 -- | Apply the normalizations, in the only order that works: dedent before
 -- stripping, since a line of nothing but spaces has to still count as
@@ -119,12 +145,9 @@ normalizeBody startColumn style raw =
   case NE.nonEmpty (T.lines raw) of
     Nothing -> spaceAfterDashes style raw :| []
     Just (first' :| rest) ->
-      let common = minimum (startColumn : map indentOf rest)
-          indentOf l
-            | T.all isSpace l = startColumn
-            | otherwise = T.length (T.takeWhile isSpace l)
-          dedented =
-            spaceAfterDashes style first' :| map (T.drop common) rest
+      let dedented =
+            spaceAfterDashes style first' :| map dedent rest
+          dedent l = T.drop (min startColumn (T.length (T.takeWhile isSpace l))) l
        in fmap T.stripEnd (widenTrigger style dedented)
 
 -- | Put a space between a doc comment's trigger and the text after it, so
@@ -140,10 +163,6 @@ widenTrigger DocComment lns@(headLine :| rest) =
           (upToTrigger <> " " <> body) :| map shiftOne rest
     _ -> lns
   where
-    -- The whole comment moves right by one, not just its first line.
-    -- Haddock drops a leading space from every line of a doc string when
-    -- the first line has one, so widening the first line alone would take
-    -- a space away from all the others.
     shiftOne l = case openerWidth l of
       Just n -> let (o, r) = T.splitAt n l in o <> " " <> r
       Nothing -> " " <> l
@@ -157,8 +176,6 @@ splitTrigger l = do
   let (opener, afterOpener) = T.splitAt n l
       (gap, rest) = T.span (== ' ') afterOpener
   (trigger, body) <- case T.uncons rest of
-    -- A named anchor is left alone: the name in @-- $section@ is part of
-    -- the anchor, and a space would make it a different one.
     Just ('|', b) -> Just ("|", b)
     Just ('^', b) -> Just ("^", b)
     Just ('*', _) -> Just (T.span (== '*') rest)
@@ -231,23 +248,16 @@ commentPragma c = case commentBody c of
 -- | The text a span covers.
 sliceSpan :: [Text] -> GHC.RealSrcSpan -> Text
 sliceSpan sourceLines spn =
-  case take (endLine - startLine + 1) (drop (startLine - 1) sourceLines) of
-    [] -> ""
-    [only] -> T.take (endCol - startCol) (T.drop (startCol - 1) only)
-    (first' : rest) ->
-      T.intercalate "\n" (T.drop (startCol - 1) first' : trimLast rest)
+  T.intercalate "\n" (zipWith clip [startLine ..] covered)
   where
+    covered =
+      take (endLine - startLine + 1) (drop (startLine - 1) sourceLines)
+    clip n =
+      (if n == startLine then T.drop (startCol - 1) else id)
+        . (if n == endLine then T.take (endCol - 1) else id)
+
     startLine = GHC.srcSpanStartLine spn
     endLine = GHC.srcSpanEndLine spn
     startCol = GHC.srcSpanStartCol spn
     endCol = GHC.srcSpanEndCol spn
-    trimLast xs = case reverse xs of
-      [] -> []
-      (y : ys) -> reverse (T.take (endCol - 1) y : ys)
 
--- | Convert a GHC span to the printer's.
-toSpan :: GHC.RealSrcSpan -> Span
-toSpan s =
-  mkSpan
-    (GHC.srcSpanStartLine s, GHC.srcSpanStartCol s)
-    (GHC.srcSpanEndLine s, GHC.srcSpanEndCol s)

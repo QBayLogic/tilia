@@ -5,6 +5,7 @@
 module Tilia.Fixity.Cabal
   ( packageModules,
     exposedModules,
+    sourceDirs,
   )
 where
 
@@ -65,6 +66,23 @@ exposedModules =
     looksLikeModule m = case T.uncons m of
       Just (c, _) -> c `elem` ['A' .. 'Z']
       Nothing -> False
+
+-- | Every directory named by an @hs-source-dirs@ field.
+--
+-- A package that names none keeps its modules beside the @.cabal@ file, so
+-- the current directory is the answer rather than nothing.
+sourceDirs :: Text -> [Text]
+sourceDirs contents = case named of
+  [] -> ["."]
+  ds -> ds
+  where
+    named =
+      filter (not . T.null)
+        . map T.strip
+        . concatMap (T.split (== ','))
+        . concatMap T.words
+        . fieldsNamed "hs-source-dirs"
+        $ T.lines contents
 
 -- | The values of every field with the given name, wherever it appears and
 -- however deeply it is nested.

@@ -7,15 +7,16 @@ import Data.Text (Text)
 import Test.Hspec
 import Tilia.Printer
 import Tilia.Printer.Combinators
-import Tilia.Printer.Internal (groupLayout, spanIsSingleLine)
+import Tilia.Printer.Internal (groupLayout)
+import Tilia.Span
 
 spec :: Spec
 spec = do
   describe "Span" $ do
     it "recognises a single-line span" $
-      spanIsSingleLine (mkSpan (3, 1) (3, 40)) `shouldBe` True
+      isSingleLine (mkSpan (3, 1) (3, 40)) `shouldBe` True
     it "recognises a multi-line span" $
-      spanIsSingleLine (mkSpan (3, 1) (4, 1)) `shouldBe` False
+      isSingleLine (mkSpan (3, 1) (4, 1)) `shouldBe` False
     it "unions to cover both operands" $
       mkSpan (1, 5) (1, 9) <> mkSpan (3, 2) (4, 1)
         `shouldBe` mkSpan (1, 5) (4, 1)

@@ -61,10 +61,11 @@ where
 import Codec.Archive.Tar qualified as Tar
 import Codec.Compression.GZip qualified as GZip
 import Control.Exception (SomeException, try)
-import Control.Monad (join)
+import Control.Monad (filterM, join)
 import Crypto.Hash.SHA256 qualified as SHA256
 import Data.Aeson (FromJSON (..), eitherDecodeFileStrict, withObject, (.:), (.:?))
 import Data.ByteString.Base16 qualified as B16
+import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BL
 import Data.IORef
 import Data.List (isSuffixOf)
@@ -89,7 +90,7 @@ import System.FilePath ((</>))
 import System.Process (readCreateProcessWithExitCode, proc, cwd)
 import Tilia.Fixity
 import Tilia.Fixity.Builtin (builtinFixities)
-import Tilia.Fixity.Cabal (packageModules)
+import Tilia.Fixity.Cabal (exposedModules, packageModules, sourceDirs)
 import Tilia.Fixity.Cache
 import Tilia.Fixity.PackageDb
 import Tilia.Parser
@@ -204,15 +205,17 @@ newResolver plan = do
   cache <- openCache
   installed <- readInstalledPackages
   index <- buildModuleIndex cache installed tarballs
+  local <- localModules plan
   memo <- newIORef Map.empty
-  pure $ \modName -> do
-    known <- readIORef memo
-    case Map.lookup modName known of
-      Just answer -> pure answer
-      Nothing -> do
-        answer <- resolveModule cache index Set.empty modName
-        modifyIORef' memo (Map.insert modName answer)
-        pure answer
+  let reach visiting modName = do
+        known <- readIORef memo
+        case Map.lookup modName known of
+          Just answer -> pure answer
+          Nothing -> do
+            answer <- resolveModule cache local index reach visiting modName
+            modifyIORef' memo (Map.insert modName answer)
+            pure answer
+  pure (reach Set.empty)
 
 -- | Work out what a module can see, using a resolver to reach its imports.
 --
@@ -239,10 +242,16 @@ scopeFor resolve hsModule = do
 resolveModule ::
   -- | Where to remember answers between runs.
   Maybe Cache ->
+  -- | The modules of the project's own packages, which are read straight
+  -- from disk rather than out of an archive.
+  Map Text FilePath ->
   -- | Which package holds each module, and the tarball to find it in; the
   -- package is the cache key, which carries the hash the tarball was
   -- verified against.
   Map Text (Text, FilePath) ->
+  -- | How to reach another module. Tied back on itself by 'newResolver', so
+  -- that the memo it keeps covers the recursive calls too.
+  (Set Text -> Text -> IO (Maybe (Map OpName Fixity))) ->
   -- | Modules currently being resolved further up the call chain.
   --
   -- A module reached while it is in here is part of a cycle, and yields
@@ -254,24 +263,30 @@ resolveModule ::
   -- | Its operator fixities, or 'Nothing' if they could not be
   -- established.
   IO (Maybe (Map OpName Fixity))
-resolveModule cache index visiting modName
+resolveModule cache local index reach visiting modName
   | Just builtin <- Map.lookup modName builtinFixities = pure (Just builtin)
   | modName `Set.member` visiting = pure (Just Map.empty)
   | Set.size visiting > reexportDepth = pure (Just Map.empty)
+  -- The project's own modules come first and are never remembered on disk:
+  -- they are the ones being edited, so an answer kept from a previous run is
+  -- the one thing here that can be out of date.
+  | Just path <- Map.lookup modName local =
+      readFileText path >>= \case
+        Nothing -> pure Nothing
+        Just source -> fromText (reach visiting') visiting' source modName
   | otherwise = case Map.lookup modName index of
       Nothing -> pure Nothing
       Just (package, tarball) ->
         cachedFor package >>= \case
           Just remembered -> pure (Just remembered)
-          Nothing -> do
-            let visiting' = Set.insert modName visiting
-                reach = resolveModule cache index visiting'
-            fromSource reach visiting' tarball modName >>= \case
+          Nothing ->
+            fromSource (reach visiting') visiting' tarball modName >>= \case
               Nothing -> pure Nothing
               Just fixities -> do
                 storeFor package fixities
                 pure (Just fixities)
   where
+    visiting' = Set.insert modName visiting
     cachedFor package = case cache of
       Nothing -> pure Nothing
       Just c -> cachedFixities c package modName
@@ -400,10 +415,65 @@ fromSource ::
 fromSource reach visiting tarball modName =
   readModule tarball modName >>= \case
     Nothing -> pure Nothing
-    Just source ->
-      case parseText defaultParserConfig (T.unpack modName) (blankCpp source) of
-        Left _ -> pure Nothing
-        Right pm -> Just <$> withReexports reach visiting modName (pmModule pm)
+    Just source -> fromText reach visiting source modName
+
+-- | The fixities a module's text declares and passes on.
+fromText ::
+  -- | How to reach another module, for chasing re-exports. This is
+  -- 'resolveModule' tied back on itself, with the visiting set already
+  -- extended.
+  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  -- | Modules currently being resolved, passed through so that a
+  -- re-export chain cannot loop.
+  Set Text ->
+  -- | The module's source.
+  Text ->
+  -- | Its name.
+  Text ->
+  IO (Maybe (Map OpName Fixity))
+fromText reach visiting source modName =
+  case parseText defaultParserConfig (T.unpack modName) (blankCpp source) of
+    Left _ -> pure Nothing
+    Right pm -> withReexports reach visiting modName (pmModule pm)
+
+-- | Where each module of the project's own packages lives.
+--
+-- A local package is a directory rather than an archive, so its modules are
+-- found by putting the @hs-source-dirs@ of its @.cabal@ file together with
+-- the module names it exposes. Nothing is unpacked and nothing is cached:
+-- these are the files being worked on.
+localModules :: BuildPlan -> IO (Map Text FilePath)
+localModules plan =
+  Map.unions <$> traverse forPackage [d | LocalPackage d <- map ppSource (bpPackages plan)]
+  where
+    forPackage dir = quietly Map.empty $ do
+      entries <- listDirectory dir
+      case filter (".cabal" `isSuffixOf`) entries of
+        [] -> pure Map.empty
+        (cabalFile : _) -> do
+          contents <- readFileText (dir </> cabalFile)
+          case contents of
+            Nothing -> pure Map.empty
+            Just text ->
+              Map.fromList . concat
+                <$> traverse (locate dir (sourceDirs text)) (exposedModules text)
+
+    -- A package may list several source directories and the @.cabal@ file
+    -- does not say which one holds which module, so they are tried in turn
+    -- and the first that has the file wins.
+    locate dir dirs m = do
+      found <- filterM doesFileExist [dir </> T.unpack d </> modulePath m | d <- dirs]
+      pure [(m, path) | path <- take 1 found]
+
+    modulePath m = T.unpack (T.replace "." "/" m) <> ".hs"
+
+-- | Read a file, if it is there and is text.
+readFileText :: FilePath -> IO (Maybe Text)
+readFileText path = quietly Nothing $ do
+  there <- doesFileExist path
+  if there
+    then Just . T.decodeUtf8Lenient <$> BS.readFile path
+    else pure Nothing
 
 -- | What a module passes on, as well as what it declares.
 --
@@ -421,44 +491,33 @@ withReexports ::
   Text ->
   -- | The module, already parsed.
   HsModule GhcPs ->
-  -- | What it declares, together with what it re-exports.
-  IO (Map OpName Fixity)
+  -- | What it declares together with what it re-exports, or 'Nothing' if a
+  -- module it passes names on from could not be read.
+  IO (Maybe (Map OpName Fixity))
 withReexports reach visiting modName hsModule =
   case moduleExports hsModule of
-    Nothing -> pure own
+    Nothing -> pure (Just own)
     Just items -> do
-      inherited <- traverse fromItem items
-      pure (Map.union own (Map.unions inherited))
+      visible <-
+        if null (wantedNames items)
+          then pure (Just [])
+          else sequence <$> traverse (fromModule . importModule) (moduleImports hsModule)
+      wholeModules <- sequence <$> traverse fromModule (wantedModules items)
+      pure $ do
+        seen <- visible
+        whole <- wholeModules
+        let passedOn = Map.restrictKeys (Map.unions seen) (Set.fromList (wantedNames items))
+        pure (Map.unions (own : passedOn : whole))
   where
     own = declaredFixities hsModule
-
-    -- The module's own name in a @module M@ export means "everything
-    -- defined here", which is what we already have.
+    defined = declaredNames hsModule
+    wantedNames items = [op | ExportName op <- items, not (Set.member op defined)]
+    wantedModules items =
+      Set.toList (Set.fromList [m | ExportModule m <- items, not (isSelf m)])
     isSelf m = Just m == moduleName hsModule || m == modName
-
-    fromItem = \case
-      ExportName op
-        | Map.member op own -> pure Map.empty
-        | otherwise -> lookupThrough op
-      ExportModule m
-        | isSelf m -> pure Map.empty
-        | otherwise -> fromModule m Nothing
-
-    -- A bare name gives no clue which import it came from, so every import
-    -- of the module is a candidate and whichever declares it wins.
-    lookupThrough op =
-      Map.unions
-        <$> traverse (\i -> fromModule (importModule i) (Just op)) (moduleImports hsModule)
-
-    fromModule m wanted
-      | m `Set.member` visiting = pure Map.empty
-      | otherwise =
-          reach m >>= \case
-            Nothing -> pure Map.empty
-            Just fixities ->
-              pure $ case wanted of
-                Nothing -> fixities
-                Just op -> Map.restrictKeys fixities (Set.singleton op)
+    fromModule m
+      | m `Set.member` visiting = pure (Just Map.empty)
+      | otherwise = reach m
 
 -- | Find a module inside a tarball and decode it.
 readModule :: FilePath -> Text -> IO (Maybe Text)

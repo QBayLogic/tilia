@@ -16,14 +16,10 @@
 -- can observe the second, which is what keeps printing code from having to
 -- reason about emission order.
 module Tilia.Printer.Internal
-  ( -- * Source spans
-    Span (..),
-    mkSpan,
-    spanIsSingleLine,
-
-    -- * Documents
+  ( -- * Documents
     Doc (..),
     Layout (..),
+    Resume (..),
     groupLayout,
 
     -- * Rendering
@@ -33,53 +29,10 @@ module Tilia.Printer.Internal
   )
 where
 
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
-
-----------------------------------------------------------------------------
--- Source spans
-
--- | A region of the input.
---
--- Deliberately not GHC's @RealSrcSpan@. The engine needs to ask exactly one
--- question of a span—did it occupy a single line—and defining our own type
--- keeps this module and everything above it free of a dependency on the
--- parser. Conversion happens once, where the syntax tree is walked.
-data Span = Span
-  { spanStartLine :: !Int,
-    spanStartColumn :: !Int,
-    spanEndLine :: !Int,
-    spanEndColumn :: !Int
-  }
-  deriving (Eq, Show)
-
--- | Build a 'Span' from start and end positions, each a line and a column.
-mkSpan :: (Int, Int) -> (Int, Int) -> Span
-mkSpan (sl, sc) (el, ec) = Span sl sc el ec
-
--- | Did this span occupy a single line of the input?
-spanIsSingleLine :: Span -> Bool
-spanIsSingleLine s = spanStartLine s == spanEndLine s
-
--- | The smallest span covering both arguments.
---
--- Printing code needs this often enough—a construct the syntax tree has no
--- single node for still has to be laid out as a unit—that it is worth
--- having as an instance rather than as a function each caller reimplements.
-instance Semigroup Span where
-  a <> b =
-    Span
-      { spanStartLine = min (spanStartLine a) (spanStartLine b),
-        spanStartColumn = case compare (spanStartLine a) (spanStartLine b) of
-          LT -> spanStartColumn a
-          GT -> spanStartColumn b
-          EQ -> min (spanStartColumn a) (spanStartColumn b),
-        spanEndLine = max (spanEndLine a) (spanEndLine b),
-        spanEndColumn = case compare (spanEndLine a) (spanEndLine b) of
-          GT -> spanEndColumn a
-          LT -> spanEndColumn b
-          EQ -> max (spanEndColumn a) (spanEndColumn b)
-      }
+import Tilia.Span (Span, isSingleLine)
 
 ----------------------------------------------------------------------------
 -- Documents
@@ -108,6 +61,38 @@ data Doc
     -- is all a blank line is; there is deliberately no separate constructor
     -- for one. Further breaks add nothing.
     DHardBreak
+  | -- | Text to be put at the end of the line this position falls on,
+    -- however much of the line is still to be written.
+    --
+    -- For a comment the author wrote at the end of a line. Where it belongs
+    -- is not a position in the document but a position in the /output/: it
+    -- has to come after everything else on its line, including punctuation
+    -- the printer has not emitted yet. Putting it in the document where the
+    -- node it trails happens to sit would push a comma, an arrow or a
+    -- closing bracket onto the next line.
+    --
+    -- One line holds one of these. Two would mean two comments trailing
+    -- what turned out to be a single line of output, and the engine closes
+    -- the line rather than running them together into a comment neither
+    -- author wrote.
+    DHoldBack !Text
+  | -- | Close the line, and let a break that immediately follows know that
+    -- it has nothing left to do.
+    --
+    -- A comment owns the rest of its line, so something has to end that
+    -- line; but whatever the comment was attached to very often ends it
+    -- too, and two breaks in a row are a blank line. This is the break that
+    -- says \"the line is finished\" rather than \"break here\", so the two
+    -- do not add up to an empty line nobody asked for.
+    DCloseLine
+  | -- | A line break between two lines of text that is being reproduced
+    -- rather than laid out.
+    --
+    -- Collapsing nothing and skipping nothing, unlike every other break
+    -- here: the lines either side are the author's, so an empty one among
+    -- them is content and not spacing. Where the next line begins is the
+    -- only thing left to decide, and 'Resume' decides it.
+    DVerbatimBreak !Resume
   | -- | Concatenation. See the 'Semigroup' instance.
     DCat !Doc !Doc
   | -- | Indent the enclosed document by the given number of steps, relative
@@ -124,14 +109,16 @@ data Doc
     -- rather than here so that the engine has no policy in it at all.
     DGroup !Layout !Doc
   | -- | Choose between two documents according to the enclosing group: the
-    -- first when it is flat, the second when it is broken.
+    -- first when it is flat, the second when it is broken. For the
+    -- constructs whose two layouts differ by more than where the breaks
+    -- fall.
     --
-    -- For the constructs whose two layouts differ by more than where the
-    -- breaks fall. Asking which layout is in force is the one question
-    -- printing code genuinely cannot answer for itself, and answering it
-    -- with a constructor rather than by handing printing code a monad is
-    -- what keeps that code free of emission order.
-    DVariant !Doc !Doc
+    -- Both fields are lazy, and that is not an oversight. The engine walks
+    -- one of them and never looks at the other, so the branch not taken
+    -- should cost nothing. Were they strict, building a variant would build
+    -- both layouts of everything inside it; a construct nested @n@ deep
+    -- would be built @2^n@ times.
+    DVariant Doc Doc
   | -- | Record that the enclosed document was produced from the given
     -- region of the input.
     --
@@ -160,6 +147,14 @@ data Layout
   | Broken
   deriving (Eq, Show)
 
+-- | Where the line after a 'DVerbatimBreak' begins.
+data Resume
+  = -- | At the indentation in force, as any other break would.
+    AtIndent
+  | -- | At column zero, whatever the indentation.
+    AtMargin
+  deriving (Eq, Show)
+
 -- | Decide how to lay a group out.
 --
 -- This is the whole of the policy, in one place on purpose. Layout follows
@@ -175,7 +170,7 @@ groupLayout :: Maybe Span -> Layout
 groupLayout = \case
   Nothing -> Flat
   Just s
-    | spanIsSingleLine s -> Flat
+    | isSingleLine s -> Flat
     | otherwise -> Broken
 
 ----------------------------------------------------------------------------
@@ -218,7 +213,14 @@ data Out = Out
     -- | Whether anything has been written to the current line. Indentation
     -- is emitted lazily, when the first fragment arrives, so that a line
     -- with nothing on it stays genuinely empty.
-    outStarted :: !Bool
+    outStarted :: !Bool,
+    -- | Fragments held back until the line ends, in the order they were
+    -- given.
+    outHeldBack :: !(Maybe Text),
+    -- | Whether the line was closed by something that already knew it was
+    -- ending it, so that a break arriving now would add an empty line rather
+    -- than end anything.
+    outClosed :: !Bool
   }
 
 emptyOut :: Out
@@ -227,7 +229,9 @@ emptyOut =
     { outLines = [],
       outCurrent = [],
       outColumn = 0,
-      outStarted = False
+      outStarted = False,
+      outHeldBack = Nothing,
+      outClosed = False
     }
 
 -- | Turn a document into text.
@@ -253,7 +257,10 @@ go env = \case
   DSoftBreak -> case envLayout env of
     Flat -> id
     Broken -> breakLine
+  DHoldBack t -> putHeldBack (envIndent env) t
+  DCloseLine -> closeLine
   DHardBreak -> breakLine
+  DVerbatimBreak resume -> verbatimBreakLine resume
   DCat a b -> go env b . go env a
   DNest n d -> go env {envIndent = envIndent env + n * envIndentStep env} d
   DAlign d -> \out ->
@@ -267,8 +274,8 @@ go env = \case
 -- | Append a fragment, emitting the line's indentation first if this is the
 -- first thing on it.
 putText :: Int -> Text -> Out -> Out
-putText indent t out
-  | T.null t = out
+putText indent t out0
+  | T.null t = out0
   | outStarted out =
       out
         { outCurrent = t : outCurrent out,
@@ -280,6 +287,15 @@ putText indent t out
           outColumn = indent + T.length t,
           outStarted = True
         }
+  where
+    out = out0 {outClosed = False}
+
+-- | Hold a fragment back until the line ends.
+putHeldBack :: Int -> Text -> Out -> Out
+putHeldBack indent t out
+  | isJust (outHeldBack out) = putHeldBack indent t (closeLine out)
+  | outStarted out = out {outHeldBack = Just t, outClosed = False}
+  | otherwise = closeLine (putText indent t out)
 
 -- | Append a space, unless the line has not started or already ends in one.
 putSpace :: Out -> Out
@@ -297,6 +313,17 @@ endsWithSpace out = case outCurrent out of
   (t : _) -> maybe False ((== ' ') . snd) (T.unsnoc t)
   [] -> False
 
+-- | Close the current line, if there is anything on it.
+--
+-- Unlike 'breakLine' this leaves a mark: the next break sees that the line
+-- was already ended on purpose and does nothing, so a comment that ends its
+-- own line and a construct that would have ended it anyway do not between
+-- them leave an empty one.
+closeLine :: Out -> Out
+closeLine out
+  | hasContent out = (breakLine out) {outClosed = True}
+  | otherwise = out
+
 -- | Finish the current line.
 --
 -- Two breaks in a row leave one empty line between the text either side of
@@ -310,33 +337,54 @@ endsWithSpace out = case outCurrent out of
 -- break might be wanted without first working out what it already emitted.
 breakLine :: Out -> Out
 breakLine out
+  | outClosed out = out {outClosed = False}
   | atStart out = out
   | wouldRepeatBlank out =
-      out {outCurrent = [], outColumn = 0, outStarted = False}
+      out {outCurrent = [], outColumn = 0, outStarted = False, outHeldBack = Nothing}
   | otherwise =
       out
         { outLines = currentLine out : outLines out,
           outCurrent = [],
           outColumn = 0,
-          outStarted = False
+          outStarted = False,
+          outHeldBack = Nothing
         }
+
+-- | Finish the current line between two lines of reproduced text.
+verbatimBreakLine :: Resume -> Out -> Out
+verbatimBreakLine resume out =
+  out
+    { outLines = currentLine out : outLines out,
+      outCurrent = [],
+      outColumn = 0,
+      outStarted = resume == AtMargin,
+      outHeldBack = Nothing,
+      outClosed = False
+    }
 
 -- | Would finishing this line put a second empty line in a row?
 wouldRepeatBlank :: Out -> Bool
-wouldRepeatBlank out = case (outStarted out, outLines out) of
+wouldRepeatBlank out = case (hasContent out, outLines out) of
   (False, "" : _) -> True
   _ -> False
 
 -- | Is the output still empty?
 atStart :: Out -> Bool
-atStart out = null (outLines out) && not (outStarted out)
+atStart out = null (outLines out) && not (hasContent out)
+
+-- | Is there anything on the current line, written or held back?
+hasContent :: Out -> Bool
+hasContent out = outStarted out || isJust (outHeldBack out)
 
 -- | The current line, with trailing whitespace removed.
 --
 -- Stripping here, once, is why nothing upstream has to avoid emitting a
 -- space before a line break.
 currentLine :: Out -> Text
-currentLine = T.stripEnd . T.concat . reverse . outCurrent
+currentLine out =
+  T.stripEnd (T.concat (reverse (outCurrent out)) <> heldBack)
+  where
+    heldBack = foldMap (" " <>) (outHeldBack out)
 
 -- | Assemble the final text: one trailing newline, no blank lines at the
 -- end, no trailing whitespace anywhere.

@@ -11,6 +11,7 @@ module Tilia.Fixity
 
     -- * Layer 1: what a module declares
     declaredFixities,
+    declaredNames,
     moduleName,
 
     -- * What a module passes on
@@ -31,8 +32,12 @@ module Tilia.Fixity
   )
 where
 
+import Data.Foldable (toList)
+import Data.Generics.Schemes (listify)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -77,6 +82,77 @@ declaredFixities =
       L _ (SigD _ (FixSig _ (FixitySig _ names fixity))) ->
         [(opName (unLoc n), fromGhcFixity fixity) | n <- names]
       _ -> []
+
+-- | Every name a module defines itself.
+--
+-- Not the same question as 'declaredFixities', which is about @infix@
+-- declarations. This one is asked of an export list: a name a module
+-- exports and also defines needs no chasing, and one it merely passes on
+-- does. Getting the two confused makes a module appear to re-export
+-- everything it exports, and then a single dependency whose source is
+-- missing makes the whole module unanswerable.
+--
+-- Erring towards too few is safe and towards too many is not: a name left
+-- out here is chased when it need not have been, whereas one wrongly
+-- included is a fixity nobody looked for.
+declaredNames :: HsModule GhcPs -> Set OpName
+declaredNames = Set.fromList . concatMap (fromDecl . unLoc) . hsmodDecls
+  where
+    fromDecl = \case
+      ValD _ b -> fromBind b
+      SigD _ sig -> fromSig sig
+      TyClD _ t -> fromTyCl t
+      ForD _ f -> [opName (unLoc (fd_name f))]
+      _ -> []
+
+    fromBind = \case
+      FunBind _ n _ -> [opName (unLoc n)]
+      PatBind _ p _ _ -> boundByPattern p
+      PatSynBind _ (PSB _ n _ _ _) -> [opName (unLoc n)]
+      _ -> []
+
+    fromSig = \case
+      TypeSig _ ns _ -> map (opName . unLoc) ns
+      ClassOpSig _ _ ns _ -> map (opName . unLoc) ns
+      PatSynSig _ ns _ -> map (opName . unLoc) ns
+      FixSig _ (FixitySig _ ns _) -> map (opName . unLoc) ns
+      _ -> []
+
+    fromTyCl = \case
+      FamDecl _ (FamilyDecl {fdLName}) -> [opName (unLoc fdLName)]
+      SynDecl {tcdLName} -> [opName (unLoc tcdLName)]
+      DataDecl {tcdLName, tcdDataDefn} ->
+        opName (unLoc tcdLName) : concatMap (fromCon . unLoc) (consOf (dd_cons tcdDataDefn))
+      ClassDecl {tcdLName, tcdSigs} ->
+        opName (unLoc tcdLName) : concatMap (fromSig . unLoc) tcdSigs
+
+    consOf :: DataDefnCons (LConDecl GhcPs) -> [LConDecl GhcPs]
+    consOf = toList
+
+    fromCon :: ConDecl GhcPs -> [OpName]
+    fromCon = \case
+      ConDeclGADT {con_names} -> map (opName . unLoc) (toList con_names)
+      ConDeclH98 {con_name, con_args} ->
+        opName (unLoc con_name) : fieldNames con_args
+
+    -- A record field is a name the module defines too, and it may be an
+    -- operator.
+    fieldNames :: HsConDeclH98Details GhcPs -> [OpName]
+    fieldNames = \case
+      RecCon fields ->
+        [ opName (unLoc (foLabel (unLoc n)))
+        | f <- unLoc fields,
+          n <- cdrf_names (unLoc f)
+        ]
+      _ -> []
+
+    -- A pattern binding brings in whatever its variables name.
+    boundByPattern p =
+      [opName n | VarPat _ (L _ n) <- listify isVarPat p]
+    isVarPat :: Pat GhcPs -> Bool
+    isVarPat = \case
+      VarPat {} -> True
+      _ -> False
 
 -- | Render a parsed name as an operator name.
 opName :: RdrName -> OpName
@@ -147,9 +223,28 @@ data Import = Import
   deriving (Eq, Show)
 
 -- | The imports of a module.
+--
+-- @Prelude@ is added when the module does not name it itself. It is where
+-- @($)@, @(.)@ and most of what an operator chain is made of are declared,
+-- and a module that does not mention it still sees all of them. A module
+-- compiled with @NoImplicitPrelude@ does not, but the extensions are not
+-- visible here, and the cost of the mistake is one extra module consulted
+-- for names the module is not using.
 moduleImports :: HsModule GhcPs -> [Import]
-moduleImports = map (fromDecl . unLoc) . hsmodImports
+moduleImports hsModule = implicitPrelude <> written
   where
+    written = map (fromDecl . unLoc) (hsmodImports hsModule)
+    implicitPrelude
+      | any ((== "Prelude") . importModule) written = []
+      | otherwise =
+          [ Import
+              { importModule = "Prelude",
+                importQualified = False,
+                importAlias = "Prelude",
+                importNames = Nothing
+              }
+          ]
+
     fromDecl d =
       Import
         { importModule = modName (unLoc (ideclName d)),

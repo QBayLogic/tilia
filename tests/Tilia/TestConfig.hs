@@ -1,0 +1,137 @@
+{-# LANGUAGE OverloadedStrings #-}
+
+-- | The settings every corpus example is formatted with.
+module Tilia.TestConfig
+  ( exampleSettings,
+  )
+where
+
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
+import Data.Text (Text)
+import GHC.Hs (HsModule)
+import GHC.Hs.Extension (GhcPs)
+import Tilia.Fixity
+  ( Direction (..),
+    Fixity (..),
+    OpName (..),
+    resolveScope,
+  )
+import Tilia.Fixity.Builtin (builtinFixities)
+import Tilia.Parser (sourceExtensions)
+import Tilia.Render (Settings (..), defaultSettings)
+
+-- | How to format one corpus example.
+exampleSettings :: Text -> HsModule GhcPs -> Settings
+exampleSettings source hsModule =
+  defaultSettings
+    { setExtensions = Set.fromList (sourceExtensions source),
+      setScope = Just (resolveScope exportsOf hsModule)
+    }
+
+-- | What a module in scope exports, as far as the corpus is concerned.
+exportsOf :: Text -> Maybe (Map OpName Fixity)
+exportsOf name = Just (Map.union ours elsewhere)
+  where
+    ours = case Map.lookup name builtinFixities of
+      Just exact -> exact
+      Nothing -> everythingKnown
+
+-- | Every operator any boot module exports.
+everythingKnown :: Map OpName Fixity
+everythingKnown = Map.unions (Map.elems builtinFixities)
+
+-- | Operators the examples use that no boot package exports.
+--
+-- The same list Ormolu's test suite carries, for the same reason: these
+-- turn up in the examples, their fixities are not discoverable from
+-- anything to hand, and without them those examples are laid out as though
+-- every one of these were @infixl 9@.
+elsewhere :: Map OpName Fixity
+elsewhere =
+  Map.fromList $
+    concat
+      [ ormoluOverrides,
+        lens,
+        esqueleto,
+        servant,
+        hspec,
+        preludeInfix
+      ]
+  where
+    infixL p ops = [(OpName o, Fixity LeftAssoc p) | o <- ops]
+    infixR p ops = [(OpName o, Fixity RightAssoc p) | o <- ops]
+    infixN p ops = [(OpName o, Fixity NoAssoc p) | o <- ops]
+
+    -- The five Ormolu's own test suite carries. Two of them disagree with
+    -- the package the operator really comes from—@.=@ is @infix 4@ in lens
+    -- and @#@ is @infixr 8@ in it too—and the overrides win, because the
+    -- expected outputs were produced with them.
+    ormoluOverrides =
+      infixR 8 [".="]
+        <> infixR 5 ["#"]
+        -- Ormolu gives these 3, 3.3 and 3.7, which it can because its
+        -- precedences are fractional and ours are whole numbers. Only their
+        -- order relative to one another is ever exercised, and that is kept.
+        <> infixR 3 [">~<"]
+        <> infixR 4 ["|~|"]
+        <> infixR 5 ["<~>"]
+
+    -- @lens@, and the packages that copy its spelling.
+    lens =
+      infixL 8 ["^.", "^..", "^?", "^?!", "^@.", "^@..", "^@?"]
+        <> infixR 4
+          [ ".~",
+            "%~",
+            "?~",
+            "+~",
+            "-~",
+            "*~",
+            "//~",
+            "^~",
+            "^^~",
+            "**~",
+            "||~",
+            "&&~",
+            "<>~",
+            "<.~",
+            "<?~"
+          ]
+        <> infixN 4 ["%=", "?=", "+=", "-=", "*=", "//=", "<>=", ".~=", "%%="]
+        <> infixR 9 ["<.", ".>", "<.>"]
+
+    -- @esqueleto@, whose comparisons are the SQL ones with a dot on the end.
+    esqueleto =
+      infixL 9 ["?."]
+        <> infixN 4 ["==.", "!=.", ">=.", ">.", "<=.", "like", "%."]
+        <> infixR 3 ["&&."]
+        <> infixR 2 ["||."]
+        <> infixL 6 ["+.", "-."]
+        <> infixL 7 ["*.", "/."]
+        <> infixL 2 [":&"]
+
+    -- @servant@'s way of spelling an API.
+    servant = infixR 4 [":>"] <> infixR 3 [":<|>"]
+
+    -- @hspec@ writes its expectations infix, and they are meant to be the
+    -- loosest thing on the line.
+    hspec =
+      infixN 1
+        [ "shouldBe",
+          "shouldNotBe",
+          "shouldSatisfy",
+          "shouldNotSatisfy",
+          "shouldContain",
+          "shouldNotContain",
+          "shouldMatchList",
+          "shouldReturn",
+          "shouldNotReturn",
+          "shouldThrow",
+          "shouldStartWith",
+          "shouldEndWith"
+        ]
+
+    -- Functions written infix often enough to be worth knowing the fixity
+    -- of, and which the list of module exports does not carry.
+    preludeInfix = infixR 0 ["seq"] <> infixL 0 ["on"]

@@ -6,6 +6,7 @@ module Tilia.Parser
   ( -- * Parsing
     ParsedModule (..),
     ParseError (..),
+    describeParseError,
     parseText,
 
     -- * Options
@@ -15,9 +16,11 @@ module Tilia.Parser
   )
 where
 
+import Data.List (nub)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
+import GHC.Driver.Session qualified as GHC
 import Data.Text qualified as T
 import GHC.Data.EnumSet qualified as EnumSet
 import GHC.Data.FastString (mkFastString)
@@ -33,7 +36,8 @@ import GHC.Unit.Module.Warnings (emptyWarningCategorySet)
 import GHC.Utils.Error qualified as GHC
 import GHC.Utils.Outputable qualified as GHC
 import Tilia.Comments (Comment, commentsOf)
-import Tilia.Printer.Combinators (Span (..), mkSpan)
+import Tilia.Span (Span (..))
+import Tilia.Span.Ghc (spanOfReal)
 
 -- | A module that parsed, together with the comments found in it.
 data ParsedModule = ParsedModule
@@ -62,6 +66,14 @@ newtype ParseError = ParseError
     peSpan :: GHC.SrcSpan
   }
 
+-- | Where the parser gave up, in a form fit to show.
+--
+-- Callers should not have to depend on the compiler's libraries merely to
+-- report that a file did not parse, which is what turning the span into
+-- text here is for.
+describeParseError :: ParseError -> Text
+describeParseError = T.pack . GHC.showSDocUnsafe . GHC.ppr . peSpan
+
 -- | What the parser is allowed to accept.
 newtype ParserConfig = ParserConfig
   { -- | Extensions to enable before parsing.
@@ -73,8 +85,14 @@ newtype ParserConfig = ParserConfig
   }
 
 -- | No extensions beyond whatever @GHC2021@ implies.
+--
+-- The edition has to be asked for explicitly: the parser is told a set of
+-- extensions and knows nothing about editions, so a module relying on one
+-- being in force—@foreign import@, say, which @ForeignFunctionInterface@
+-- allows and nothing else does—would not parse without this.
 defaultParserConfig :: ParserConfig
-defaultParserConfig = ParserConfig {pcExtensions = []}
+defaultParserConfig =
+  ParserConfig {pcExtensions = GHC.languageExtensions (Just GHC.GHC2021)}
 
 -- | Parse a module.
 parseText ::
@@ -88,25 +106,43 @@ parseText config path source =
   case GHC.unP GHC.parseModule initialState of
     GHC.PFailed pstate ->
       Left (ParseError {peSpan = GHC.mkSrcSpanPs (GHC.last_loc pstate)})
-    GHC.POk _ (GHC.L _ hsModule) ->
-      Right
-        ParsedModule
-          { pmModule = hsModule,
-            pmComments = commentsOf source hsModule,
-            pmHeaderEnd = headerEndOf hsModule
-          }
+    GHC.POk pstate (GHC.L _ hsModule)
+      | not (GHC.isEmptyMessages (GHC.getPsErrorMessages pstate)) ->
+          Left (ParseError {peSpan = GHC.mkSrcSpanPs (GHC.last_loc pstate)})
+      | otherwise ->
+          Right
+            ParsedModule
+              { pmModule = hsModule,
+                pmComments = commentsOf source hsModule,
+                pmHeaderEnd = headerEndOf hsModule
+              }
   where
-    -- The module's own pragmas are added to whatever the caller asked for.
-    -- GHC's parser has to be told its extensions before it starts, and a
-    -- module that says @{-# LANGUAGE BangPatterns #-}@ will not parse
-    -- without them, so reading the header first is not optional.
-    config' = config {pcExtensions = pcExtensions config <> sourceExtensions source}
+    config' =
+      config
+        { pcExtensions = withImplied (pcExtensions config <> sourceExtensions source)
+        }
 
     initialState =
       GHC.initParserState
         (parserOpts config')
         (GHC.stringToStringBuffer (T.unpack source))
         (GHC.mkRealSrcLoc (mkFastString path) 1 1)
+
+-- | Close a set of extensions under what they imply.
+--
+-- @TemplateHaskell@ turns @TemplateHaskellQuotes@ on, and the lexer
+-- consults the second rather than the first, so a module that asks only for
+-- the first would not lex its own quotations. Implications that turn
+-- something /off/ are ignored: a formatter wants to accept as much as it
+-- can, and an extension left on that the compiler would have switched off
+-- costs nothing here.
+withImplied :: [Extension] -> [Extension]
+withImplied = settle . nub
+  where
+    settle es =
+      let es' = nub (es <> concatMap implied es)
+       in if length es' == length es then es else settle es'
+    implied e = [to | (from, GHC.On to) <- GHC.impliedXFlags, from == e]
 
 -- | Options to parse with.
 parserOpts :: ParserConfig -> GHC.ParserOpts
@@ -147,18 +183,11 @@ headerEndOf hsModule =
     earliest acc l = case GHC.srcSpanToRealSrcSpan l of
       Nothing -> acc
       Just s ->
-        let this = toSpan s
+        let this = spanOfReal s
          in Just (maybe this (keepEarlier this) acc)
     keepEarlier a b
       | (spanStartLine a, spanStartColumn a) <= (spanStartLine b, spanStartColumn b) = a
       | otherwise = b
-
--- | Convert a GHC span to the printer's.
-toSpan :: GHC.RealSrcSpan -> Span
-toSpan s =
-  mkSpan
-    (GHC.srcSpanStartLine s, GHC.srcSpanStartCol s)
-    (GHC.srcSpanEndLine s, GHC.srcSpanEndCol s)
 
 ----------------------------------------------------------------------------
 -- Language pragmas
@@ -180,13 +209,7 @@ sourceExtensions = foldl' apply [] . concatMap pragmaNames . headerLines
       Nothing -> case lookupExtension name of
         Just on | on `notElem` acc -> acc <> [on]
         _ -> acc
-
-    -- Pragmas may only appear before the module body, but finding where
-    -- that ends needs a parse, and this runs before one. Scanning the whole
-    -- file is safe: a @{-# LANGUAGE #-}@ further down is a warning from GHC
-    -- and enabling it early changes nothing that would otherwise parse.
     headerLines = T.lines
-
     pragmaNames l = case T.stripPrefix "{-#" (T.stripStart l) of
       Nothing -> []
       Just rest ->

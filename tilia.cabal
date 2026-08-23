@@ -39,12 +39,33 @@ library
     Tilia.Fixity.Cache
     Tilia.Fixity.PackageDb
     Tilia.Fixity.Plan
+    Tilia.Format
+    Tilia.Imports
     Tilia.Parser
     Tilia.Project
     Tilia.Printer
     Tilia.Printer.Body
     Tilia.Printer.Combinators
     Tilia.Printer.Internal
+    Tilia.Render
+    Tilia.Render.Body
+    Tilia.Render.Class
+    Tilia.Render.Context
+    Tilia.Render.Data
+    Tilia.Render.Declaration
+    Tilia.Render.Expression
+    Tilia.Render.Haddock
+    Tilia.Render.Header
+    Tilia.Render.Layout
+    Tilia.Render.Literal
+    Tilia.Render.Name
+    Tilia.Render.Operator
+    Tilia.Render.Pattern
+    Tilia.Render.Pragma
+    Tilia.Render.Signature
+    Tilia.Render.Type
+    Tilia.Span
+    Tilia.Span.Ghc
 
   hs-source-dirs: src
   default-language: GHC2021
@@ -116,6 +137,10 @@ test-suite tests
   hs-source-dirs: tests
   other-modules:
     Tilia.CommentsSpec
+    Tilia.Corpus
+    Tilia.CorpusSpec
+    Tilia.Diff
+    Tilia.Equivalence
     Tilia.Fixity.CabalSpec
     Tilia.Fixity.CacheSpec
     Tilia.Fixity.PlanSpec
@@ -126,20 +151,36 @@ test-suite tests
     Tilia.Printer.InternalSpec
     Tilia.Printer.PropertiesSpec
     Tilia.ProjectSpec
-    TiliaSpec
+    Tilia.Render.OperatorSpec
+    Tilia.RenderSpec
+    Tilia.TestConfig
 
   default-language: GHC2021
   build-depends:
+    Diff >=0.4 && <2,
     QuickCheck >=2.14 && <3,
     base >=4.14 && <5,
+    bytestring >=0.11 && <0.13,
     containers >=0.5 && <0.9,
     directory ^>=1.3,
     filepath >=1.4 && <1.6,
     ghc-lib-parser >=9.14 && <9.15,
     hspec >=2 && <3,
+    http-client >=0.7 && <0.8,
+    req >=3.13 && <4,
+    tar >=0.6 && <0.7,
     tilia,
     temporary ^>=1.3,
     text >=2.1 && <3,
+    zlib >=0.6 && <0.8,
+
+  -- A corpus example that will not stop is caught by a timeout, but one
+  -- that allocates without bound is not: it takes the machine down before
+  -- any limit expressed in seconds comes due. The cap makes that a heap
+  -- overflow reported against the run rather than a wedged machine.
+  ghc-options:
+    -rtsopts
+    "-with-rtsopts=-M8G"
 
   if flag(dev)
     ghc-options:

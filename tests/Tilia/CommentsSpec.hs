@@ -13,6 +13,7 @@ import Tilia.Comments.Attach
 import Tilia.Parser
 import Tilia.Printer
 import Tilia.Printer.Combinators
+import Tilia.Span
 
 spec :: Spec
 spec = do

@@ -17,6 +17,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Test.QuickCheck
 import Tilia.Printer.Internal
+import Tilia.Span
 
 ----------------------------------------------------------------------------
 -- Spans
@@ -143,6 +144,9 @@ shrinkDoc = \case
   DBreak -> [DEmpty, DSpace]
   DSoftBreak -> [DEmpty]
   DHardBreak -> [DEmpty]
+  DVerbatimBreak _ -> [DEmpty]
+  DCloseLine -> [DEmpty]
+  DHoldBack t -> DHoldBack <$> filter (not . T.null) (T.inits t)
   DCat a b -> [DEmpty, a, b] <> [DCat a' b | a' <- shrinkDoc a] <> [DCat a b' | b' <- shrinkDoc b]
   DNest n d -> [DEmpty, d] <> [DNest n d' | d' <- shrinkDoc d]
   DAlign d -> [DEmpty, d] <> [DAlign d' | d' <- shrinkDoc d]
@@ -163,6 +167,9 @@ docTexts = \case
   DBreak -> []
   DSoftBreak -> []
   DHardBreak -> []
+  DVerbatimBreak _ -> []
+  DCloseLine -> []
+  DHoldBack t -> [t]
   DCat a b -> docTexts a <> docTexts b
   DNest _ d -> docTexts d
   DAlign d -> docTexts d

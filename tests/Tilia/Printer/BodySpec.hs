@@ -9,6 +9,7 @@ import Test.Hspec
 import Tilia.Printer
 import Tilia.Printer.Body
 import Tilia.Printer.Combinators
+import Tilia.Span
 
 -- | A stand-in for a real body type, enough to exercise the class: one
 -- construct that hangs, one that does not, and one that takes its answer
