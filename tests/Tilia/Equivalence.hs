@@ -30,7 +30,7 @@ import GHC.Hs.DocString
     HsDocStringDecorator (..),
   )
 import GHC.Hs.Extension (GhcPs)
-import GHC.Hs.Type (LHsContext, LHsSigType, LHsType)
+import GHC.Hs.Type (HsType (..), LHsContext, LHsSigType)
 import GHC.Types.Name (Name)
 import GHC.Types.SrcLoc (unLoc)
 import GHC.Types.Name.Occurrence (OccName)
@@ -217,19 +217,35 @@ asImports path x y = case (cast x, cast y) of
           Just (describe path "the module imports a different set of modules")
       | otherwise = firstOf (zipWith (differ path) before after)
 
--- | A context, with an empty one and none at all treated alike.
+-- | A context, compared for the constraints it holds.
 --
--- @class () => Foo a@ and @class Foo a@ say the same thing, and the
--- formatter writes the second. The tree keeps them apart because one has
--- brackets in it, so they are levelled before comparing.
+-- Two things are levelled. @class () => Foo a@ and @class Foo a@ say the
+-- same thing, and the formatter writes the second; the tree keeps them
+-- apart because one has brackets in it. And a constraint may be written
+-- bracketed or bare—@(Show a) =>@ against @Show a =>@—where the brackets
+-- are the context's own punctuation rather than part of the constraint, so
+-- the formatter writes them whether or not the author did.
+--
+-- Only the brackets directly around a constraint are dropped. Brackets
+-- inside one group a type and are compared like any others.
 asContext :: (Data a) => [Text] -> a -> a -> Maybe (Maybe Text)
 asContext path x y = case (cast x, cast y) of
   (Just before, Just after) ->
-    Just (differ path (levelled before) (levelled after))
-  _ -> Nothing
+    Just (differ path (constraints before) (constraints after))
+  _ -> case (cast x, cast y) of
+    (Just before, Just after) ->
+      Just (differ path (bare before) (bare after))
+    _ -> Nothing
   where
-    levelled :: Maybe (LHsContext GhcPs) -> [LHsType GhcPs]
-    levelled = maybe [] unLoc
+    constraints :: Maybe (LHsContext GhcPs) -> [HsType GhcPs]
+    constraints = maybe [] bare
+
+    bare :: LHsContext GhcPs -> [HsType GhcPs]
+    bare = map (unbracket . unLoc) . unLoc
+
+    unbracket = \case
+      HsParTy _ t -> unbracket (unLoc t)
+      t -> t
 
 -- | A Haddock, compared for what it documents.
 --

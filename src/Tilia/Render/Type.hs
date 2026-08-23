@@ -263,16 +263,28 @@ spine t = t : case t of
 
 -- | A class context, as it appears before a @=>@.
 context :: Ctx -> LHsContext GhcPs -> Doc
-context ctx = at_ ctx (contextOf (hsType ctx))
+context ctx = at_ ctx (contextOf (hsType ctx) . map unbracket)
+
+-- | A constraint without the brackets a context puts around it anyway.
+--
+-- Stripped before the context writes its own, or formatting would add a
+-- layer every time it ran.
+unbracket :: LHsType GhcPs -> LHsType GhcPs
+unbracket t = case unLoc t of
+  HsParTy _ inner -> unbracket inner
+  _ -> t
 
 -- | A context over anything that can stand as a constraint.
 --
+-- Always bracketed, even around a single constraint. The brackets are
+-- optional there and the author may not have written them, but a context is
+-- one thing however many constraints it holds, and writing it the same way
+-- each time is what lets a reader see where it ends without counting @=>@s.
+--
 -- Constraints also appear in expressions, since a quoted constraint is an
--- expression until it is elaborated, and both spell the empty context @()@
--- and put no brackets around a single one.
+-- expression until it is elaborated, and both spell the empty context @()@.
 contextOf :: (a -> Doc) -> [a] -> Doc
 contextOf _ [] = txt "()"
-contextOf render [x] = render x
 contextOf render xs = parens (commaSep (map (align . render) xs))
 
 ----------------------------------------------------------------------------

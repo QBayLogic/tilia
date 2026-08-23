@@ -234,7 +234,7 @@ exprBody ctx site here = \case
   -- signature is an expression until it is elaborated.
   HsForAll _ tele e -> forallTelescope ctx tele <> breakOrSpace <> hsExpr ctx e
   HsQual _ qs e ->
-    at ctx qs (contextOf (hsExpr ctx))
+    at ctx qs (contextOf (hsExpr ctx) . map unbracketed)
       <> space
       <> txt "=>"
       <> breakOrSpace
@@ -477,6 +477,13 @@ chainPlacement placer firstOne lastOne = case lastOne of
       case (chainSpan spanOf firstOne, chainSpan spanOf lastOne) of
         (Just a, Just b) -> spanStartLine a == spanStartLine b
         _ -> False
+
+-- | A quoted constraint without the brackets a context puts around it
+-- anyway, so that formatting does not add a layer every time it runs.
+unbracketed :: LHsExpr GhcPs -> LHsExpr GhcPs
+unbracketed e = case unLoc e of
+  HsPar _ inner -> unbracketed inner
+  _ -> e
 
 -- | The name of an operator, when the expression standing as one is a name.
 operatorName :: LHsExpr GhcPs -> Maybe RdrName
