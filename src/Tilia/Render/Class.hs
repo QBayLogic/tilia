@@ -30,7 +30,7 @@ import GHC.Hs
 import GHC.Types.Fixity (LexicalFixity (..))
 import GHC.Types.Name.Reader (RdrName)
 import GHC.Types.SrcLoc (GenLocated (..), leftmost_smallest, unLoc)
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Render.Data (dataDecl)
 import Tilia.Render.Name

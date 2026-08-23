@@ -1,13 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | The span algebra and the rendering engine's primitives.
-module Tilia.Printer.InternalSpec (spec) where
+module Tilia.Doc.InternalSpec (spec) where
 
 import Data.Text (Text)
 import Test.Hspec
-import Tilia.Printer
-import Tilia.Printer.Combinators
-import Tilia.Printer.Internal (groupLayout)
+import Tilia.Doc
+import Tilia.Doc.Combinators
+import Tilia.Doc.Internal (groupLayout)
 import Tilia.Span
 
 spec :: Spec

@@ -19,7 +19,7 @@ import GHC.LanguageExtensions.Type (Extension (..))
 import GHC.Types.Basic (Arity, Boxity (..), ConTag)
 import GHC.Types.Name.Reader (RdrName)
 import GHC.Types.SrcLoc (GenLocated (..))
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Render.Layout
 import Tilia.Render.Name

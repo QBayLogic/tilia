@@ -1,5 +1,5 @@
 -- | Turning a printed document into source text.
-module Tilia.Printer
+module Tilia.Doc
   ( -- * Documents
     Doc,
 
@@ -11,7 +11,7 @@ module Tilia.Printer
 where
 
 import Data.Text (Text)
-import Tilia.Printer.Internal
+import Tilia.Doc.Internal
   ( Doc,
     RenderOptions (..),
     defaultRenderOptions,

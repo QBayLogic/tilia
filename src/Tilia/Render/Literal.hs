@@ -17,7 +17,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Data.FastString (FastString, unpackFS)
 import GHC.Parser.CharClass (is_space)
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 import Tilia.Render.Layout (Place (..), places)
 
 -- | A string literal, from the text the author wrote.

@@ -52,7 +52,7 @@ import GHC.Types.Name.Reader (RdrName)
 import GHC.Types.SourceText
 import GHC.Types.SrcLoc (GenLocated (..), getLoc, unLoc)
 import GHC.Types.Var (Specificity (..))
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Render.Haddock
 import Tilia.Render.Literal (stringLiteral)

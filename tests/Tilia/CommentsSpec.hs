@@ -11,8 +11,8 @@ import Test.Hspec
 import Tilia.Comments
 import Tilia.Comments.Attach
 import Tilia.Parser
-import Tilia.Printer
-import Tilia.Printer.Combinators
+import Tilia.Doc
+import Tilia.Doc.Combinators
 import Tilia.Span
 
 spec :: Spec

@@ -4,7 +4,7 @@
 --
 -- A body is a node together with the site it stands at, and the one question
 -- an enclosing construct has to ask of it is where to put it: on the line it
--- has already started, or on the next one indented. "Tilia.Printer.Body"
+-- has already started, or on the next one indented. "Tilia.Doc.Body"
 -- states that question as a class; this module answers it, for the two kinds
 -- of node that can stand as a body.
 --
@@ -31,8 +31,8 @@ import GHC.Hs
 import GHC.Types.Name.Occurrence (occNameString)
 import GHC.Types.Name.Reader (RdrName, rdrNameOcc)
 import GHC.Types.SrcLoc (GenLocated (..), unLoc)
-import Tilia.Printer.Body
-import Tilia.Printer.Combinators
+import Tilia.Doc.Body
+import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Span
 import Tilia.Span.Ghc

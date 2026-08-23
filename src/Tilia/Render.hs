@@ -23,7 +23,7 @@ import Tilia.Comments (Comment (..), CommentStyle (..))
 import Tilia.Comments.Attach (attachComments)
 import Tilia.Fixity (Scope)
 import Tilia.Parser (ParsedModule (..))
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Render.Declaration (decls, declsKeepingGroups)
 import Tilia.Render.Expression (hsCmd, hsExprIn, untypedSplice)

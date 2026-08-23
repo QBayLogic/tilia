@@ -76,7 +76,7 @@ import Tilia.Fixity
   )
 import Tilia.Span
 import Tilia.Span.Ghc
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 import Tilia.Render.Layout (Bracing (..))
 
 ----------------------------------------------------------------------------

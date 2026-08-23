@@ -25,7 +25,7 @@ import GHC.Types.Fixity (LexicalFixity (..))
 import GHC.Types.ForeignCall (CType (..), Header (..))
 import GHC.Types.Name.Reader (RdrName)
 import GHC.Types.SrcLoc (GenLocated (..), unLoc)
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Render.Haddock
 import Tilia.Render.Layout

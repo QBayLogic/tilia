@@ -17,7 +17,7 @@ import Tilia.Parser
     parseText,
     sourceExtensions,
   )
-import Tilia.Printer (defaultRenderOptions, printDoc)
+import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Render (Settings (..), defaultSettings, renderModule)
 
 -- | Format a Haskell module, reporting where it failed to parse.

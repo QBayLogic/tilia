@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | The vocabulary printing code is written in.
-module Tilia.Printer.CombinatorsSpec (spec) where
+module Tilia.Doc.CombinatorsSpec (spec) where
 
 import Data.Text (Text)
 import Test.Hspec
-import Tilia.Printer
-import Tilia.Printer.Combinators
+import Tilia.Doc
+import Tilia.Doc.Combinators
 import Tilia.Span
 
 spec :: Spec

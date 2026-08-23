@@ -31,7 +31,7 @@ import GHC.Types.Name.Reader
 import GHC.Types.SourceText
 import GHC.Types.SrcLoc (getLoc)
 import GHC.Utils.Outputable (Outputable, ppr, showSDocUnsafe)
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Span
 import Tilia.Span.Ghc

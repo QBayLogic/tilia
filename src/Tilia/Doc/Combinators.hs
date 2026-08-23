@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | The vocabulary for writing printing code.
-module Tilia.Printer.Combinators
+module Tilia.Doc.Combinators
   ( -- * Documents
     Doc,
 
@@ -77,7 +77,7 @@ import Data.List (intersperse)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Tilia.Span (Span, isSingleLine)
-import Tilia.Printer.Internal
+import Tilia.Doc.Internal
   ( Doc (..),
     Layout (..),
     Resume (..),

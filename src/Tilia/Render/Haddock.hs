@@ -38,7 +38,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Hs
 import GHC.Types.SrcLoc (GenLocated (..), getLoc, unLoc)
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Span
 import Tilia.Span.Ghc

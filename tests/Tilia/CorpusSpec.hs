@@ -26,7 +26,7 @@ import Tilia.Parser
     defaultParserConfig,
     parseText,
   )
-import Tilia.Printer (defaultRenderOptions, printDoc)
+import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Render (renderModule)
 import Tilia.TestConfig (exampleSettings)
 

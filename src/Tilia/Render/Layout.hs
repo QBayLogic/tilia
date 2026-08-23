@@ -16,7 +16,7 @@ module Tilia.Render.Layout
   )
 where
 
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 import Tilia.Span
 
 ----------------------------------------------------------------------------

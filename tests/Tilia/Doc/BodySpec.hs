@@ -2,13 +2,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Placement, attachment, and the 'Body' class.
-module Tilia.Printer.BodySpec (spec) where
+module Tilia.Doc.BodySpec (spec) where
 
 import Data.Text (Text)
 import Test.Hspec
-import Tilia.Printer
-import Tilia.Printer.Body
-import Tilia.Printer.Combinators
+import Tilia.Doc
+import Tilia.Doc.Body
+import Tilia.Doc.Combinators
 import Tilia.Span
 
 -- | A stand-in for a real body type, enough to exercise the class: one

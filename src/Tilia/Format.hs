@@ -23,7 +23,7 @@ import Tilia.Parser
     pmModule,
     sourceExtensions,
   )
-import Tilia.Printer (defaultRenderOptions, printDoc)
+import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Project (ProjectRoot (..), findProjectRoot)
 import Tilia.Render (Settings (..), defaultSettings, renderModule)
 

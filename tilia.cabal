@@ -33,6 +33,10 @@ library
     Tilia
     Tilia.Comments
     Tilia.Comments.Attach
+    Tilia.Doc
+    Tilia.Doc.Body
+    Tilia.Doc.Combinators
+    Tilia.Doc.Internal
     Tilia.Fixity
     Tilia.Fixity.Builtin
     Tilia.Fixity.Cabal
@@ -43,10 +47,6 @@ library
     Tilia.Imports
     Tilia.Parser
     Tilia.Project
-    Tilia.Printer
-    Tilia.Printer.Body
-    Tilia.Printer.Combinators
-    Tilia.Printer.Internal
     Tilia.Render
     Tilia.Render.Body
     Tilia.Render.Class
@@ -140,16 +140,16 @@ test-suite tests
     Tilia.Corpus
     Tilia.CorpusSpec
     Tilia.Diff
+    Tilia.Doc.BodySpec
+    Tilia.Doc.CombinatorsSpec
+    Tilia.Doc.InternalSpec
+    Tilia.Doc.PropertiesSpec
     Tilia.Equivalence
     Tilia.Fixity.CabalSpec
     Tilia.Fixity.CacheSpec
     Tilia.Fixity.PlanSpec
     Tilia.FixitySpec
     Tilia.Gen
-    Tilia.Printer.BodySpec
-    Tilia.Printer.CombinatorsSpec
-    Tilia.Printer.InternalSpec
-    Tilia.Printer.PropertiesSpec
     Tilia.ProjectSpec
     Tilia.Render.OperatorSpec
     Tilia.RenderSpec

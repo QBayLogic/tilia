@@ -1,11 +1,11 @@
 -- | Constructs that can stand as the body of an enclosing one.
-module Tilia.Printer.Body
+module Tilia.Doc.Body
   ( Body (..),
     attachBody,
   )
 where
 
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 
 -- | Something that can appear as the body of an enclosing construct.
 class Body a where

@@ -65,8 +65,8 @@ import GHC.Types.SrcLoc
   )
 import Language.Haskell.Syntax.Basic (field_label)
 import Tilia.Fixity (Fixity)
-import Tilia.Printer.Body
-import Tilia.Printer.Combinators
+import Tilia.Doc.Body
+import Tilia.Doc.Combinators
 import Tilia.Render.Body
 import Tilia.Render.Context
 import Tilia.Render.Layout
@@ -113,7 +113,7 @@ hsExprIn ctx site l = at ctx l (exprBody ctx site (spanOf l))
 -- Neither the site nor the placement is known when the body is passed in:
 -- the site depends on the layout the group of equations settles on, and the
 -- placement is the body's own business. So what travels is a way of making
--- a body from a site, and 'Tilia.Printer.Body.Body' answers the rest.
+-- a body from a site, and 'Tilia.Doc.Body.Body' answers the rest.
 type BodyOf body b = Site -> LocatedA body -> b
 
 -- | A body standing on its own, with the given bracing.

@@ -15,7 +15,7 @@ import Tilia.Fixity
     Scope (..),
   )
 import Tilia.Parser (defaultParserConfig, parseText)
-import Tilia.Printer (defaultRenderOptions, printDoc)
+import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Render
 
 spec :: Spec

@@ -4,7 +4,7 @@
 -- | The document representation and the engine that turns it into text.
 --
 -- Printing code should not import this module; import
--- "Tilia.Printer.Combinators" instead, which exposes 'Doc' abstractly
+-- "Tilia.Doc.Combinators" instead, which exposes 'Doc' abstractly
 -- along with the vocabulary for building one. This module is for the engine
 -- itself and for tests that need to look inside a document.
 --
@@ -15,7 +15,7 @@
 -- learns them by walking the finished document. Nothing in the first half
 -- can observe the second, which is what keeps printing code from having to
 -- reason about emission order.
-module Tilia.Printer.Internal
+module Tilia.Doc.Internal
   ( -- * Documents
     Doc (..),
     Layout (..),

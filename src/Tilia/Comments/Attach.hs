@@ -16,8 +16,8 @@ import Data.Bifunctor (first)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.List.NonEmpty qualified as NE
 import Tilia.Comments
-import Tilia.Printer.Combinators
-import Tilia.Printer.Internal (Doc (..))
+import Tilia.Doc.Combinators
+import Tilia.Doc.Internal (Doc (..))
 import Tilia.Span
 
 -- | Put every comment into the document.

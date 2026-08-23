@@ -37,7 +37,7 @@ import GHC.Types.Basic hiding (overlapMode)
 import GHC.Types.SourceText
 import GHC.Types.SrcLoc (unLoc)
 import GHC.Unit.Module.Warnings
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Render.Name
 import Tilia.Span.Ghc

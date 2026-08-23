@@ -33,7 +33,7 @@ import GHC.Hs
 import GHC.Types.PkgQual (RawPkgQual (..))
 import GHC.Types.SrcLoc (GenLocated (..), unLoc)
 import Tilia.Comments (Comment (..), CommentStyle (..), Pragma (..), commentPragma)
-import Tilia.Printer.Combinators
+import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Render.Declaration (decls)
 import Tilia.Render.Haddock

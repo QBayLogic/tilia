@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Properties that should hold of every document the engine renders.
-module Tilia.Printer.PropertiesSpec (spec) where
+module Tilia.Doc.PropertiesSpec (spec) where
 
 import Data.Char (isSpace)
 import Data.Text (Text)
@@ -9,8 +9,8 @@ import Data.Text qualified as T
 import Test.Hspec
 import Test.QuickCheck
 import Tilia.Gen
-import Tilia.Printer
-import Tilia.Printer.Combinators
+import Tilia.Doc
+import Tilia.Doc.Combinators
 import Tilia.Span
 
 spec :: Spec
