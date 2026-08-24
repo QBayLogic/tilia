@@ -34,7 +34,7 @@ import Tilia.Render.Name
 import Tilia.Render.Pragma
 import Tilia.Render.Type
 import Tilia.Span (startOf)
-import Tilia.Span.Ghc (spanOfSrcSpan)
+import Tilia.Span.Ghc (tokenSpan)
 
 -- | A signature declaration.
 sigDecl :: Ctx -> Sig GhcPs -> Doc
@@ -245,7 +245,7 @@ ruleDecls :: Ctx -> RuleDecls GhcPs -> Doc
 ruleDecls ctx (HsRules ((_, close), _) rules) =
   pragma "RULES" $
     sepBy breakOrSpace (map (align . at_ ctx (ruleDecl ctx)) rules)
-      <> foldMap (emptyAnchor . startOf) (spanOfSrcSpan (getEpTokenSrcSpan close))
+      <> foldMap (emptyAnchor . startOf) (tokenSpan close)
 
 ruleDecl :: Ctx -> RuleDecl GhcPs -> Doc
 ruleDecl ctx (HsRule _ ruleName phase binders lhs rhs) =

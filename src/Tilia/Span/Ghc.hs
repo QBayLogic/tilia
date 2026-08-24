@@ -4,11 +4,12 @@ module Tilia.Span.Ghc
     spanOfSrcSpan,
     spanOf,
     spansOf,
+    tokenSpan,
   )
 where
 
 import Data.Maybe (mapMaybe)
-import GHC.Parser.Annotation (HasLoc, getHasLoc)
+import GHC.Parser.Annotation (EpToken, HasLoc, getEpTokenSrcSpan, getHasLoc)
 import GHC.Types.SrcLoc (GenLocated)
 import GHC.Types.SrcLoc qualified as GHC
 import Tilia.Span (Span, mkSpan)
@@ -27,6 +28,10 @@ spanOfSrcSpan = fmap spanOfReal . GHC.srcSpanToRealSrcSpan
 -- | The span of a located thing.
 spanOf :: (HasLoc l) => GenLocated l a -> Maybe Span
 spanOf = spanOfSrcSpan . getHasLoc
+
+-- | Where a keyword or a piece of punctuation was written.
+tokenSpan :: EpToken sym -> Maybe Span
+tokenSpan = spanOfSrcSpan . getEpTokenSrcSpan
 
 -- | The span covering every located thing in the list.
 spansOf :: (HasLoc l) => [GenLocated l a] -> Maybe Span

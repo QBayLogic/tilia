@@ -822,18 +822,18 @@ ifThenElse ctx bodyOf AnnsIf {aiThen, aiElse} condition thenBody elseBody =
           <> branch (locA aiElse) "else" elseBody
       )
   where
-    branch tokenSpan keyword body =
-      atSpan ctx (spanOfSrcSpan tokenSpan) (txt keyword)
+    branch written keyword body =
+      atSpan ctx keywordSpan (txt keyword)
         <> space
         <> layoutFrom
           ctx
-          (spanOfSrcSpan tokenSpan <> spanOf body)
-          (attach (placement tokenSpan body) (printBody (bodyOf body)))
-    -- A comment between the keyword and its branch means the branch cannot
-    -- hang: the comment ends the line first.
-    placement tokenSpan body
-      | commentBetween ctx (spanOfSrcSpan tokenSpan) (spanOf body) = Normal
-      | otherwise = bodyPlacement (bodyOf body)
+          (keywordSpan <> spanOf body)
+          (attach placement (printBody (bodyOf body)))
+      where
+        keywordSpan = spanOfSrcSpan written
+        placement
+          | commentBetween ctx keywordSpan (spanOf body) = Normal
+          | otherwise = bodyPlacement (bodyOf body)
 
 -- | A @let@ expression or command.
 --

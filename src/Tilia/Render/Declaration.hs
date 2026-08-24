@@ -304,9 +304,10 @@ tyClDecl ctx style = \case
       tcdFixity
       mempty
       tcdDataDefn
-  ClassDecl {..} ->
+  ClassDecl {tcdCExt = (anns, _, _), ..} ->
     classDecl
       ctx
+      anns
       tcdCtxt
       tcdLName
       tcdTyVars

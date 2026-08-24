@@ -44,6 +44,7 @@ import Tilia.Span.Ghc
 -- | A type class declaration.
 classDecl ::
   Ctx ->
+  AnnClassDecl ->
   Maybe (LHsContext GhcPs) ->
   LocatedN RdrName ->
   LHsQTyVars GhcPs ->
@@ -55,10 +56,11 @@ classDecl ::
   [LTyFamDefltDecl GhcPs] ->
   [LDocDecl GhcPs] ->
   Doc
-classDecl ctx ctxt tyCon HsQTvs {..} fixity fdeps sigs binds families defaults docs =
+classDecl ctx anns ctxt tyCon HsQTvs {..} fixity fdeps sigs binds families defaults docs =
   txt "class" <> layoutFrom ctx wholeHeadSpan head' <> body
   where
     headSpan = spanOf tyCon <> spansOf hsq_explicit
+    whereSpan = tokenSpan (acd_where anns)
     wholeHeadSpan = foldMap spanOf ctxt <> headSpan <> spansOf fdeps
 
     head' =
@@ -75,7 +77,9 @@ classDecl ctx ctxt tyCon HsQTvs {..} fixity fdeps sigs binds families defaults d
                     (map (at_ ctx (tyVarBndr ctx)) hsq_explicit)
                 )
               <> indent (funDeps ctx fdeps)
-              <> includeUnless (null members) (breakOrSpace <> txt "where")
+              <> includeUnless
+                (null members)
+                (breakOrSpace <> atSpan ctx whereSpan (txt "where"))
           )
 
     body =
@@ -120,10 +124,11 @@ funDep ctx (FunDep _ before after) =
 
 -- | A class instance.
 clsInstDecl :: Ctx -> ClsInstDecl GhcPs -> Doc
-clsInstDecl ctx ClsInstDecl {cid_ext = (warning, _, _), ..} =
+clsInstDecl ctx ClsInstDecl {cid_ext = (warning, anns, _), ..} =
   txt "instance" <> layoutFrom ctx headSpan head' <> body
   where
     headSpan = foldMap spanOf warning <> spanOf cid_poly_ty
+    whereSpan = tokenSpan (acid_where anns)
 
     head' =
       foldMap (\w -> breakOrSpace <> at ctx w warningTxt) warning
@@ -135,7 +140,9 @@ clsInstDecl ctx ClsInstDecl {cid_ext = (warning, _, _), ..} =
               indent $
                 foldMap (<> breakOrSpace) (overlapMode cid_overlap_mode)
                   <> hsSigTypeBody ctx sigTy
-                  <> includeUnless (null members) (breakOrSpace <> txt "where")
+                  <> includeUnless
+                    (null members)
+                    (breakOrSpace <> atSpan ctx whereSpan (txt "where"))
           )
 
     body =
