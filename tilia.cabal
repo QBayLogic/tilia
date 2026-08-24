@@ -152,6 +152,7 @@ test-suite tests
     Tilia.Fixity.PlanSpec
     Tilia.FixitySpec
     Tilia.Gen
+    Tilia.ParserSpec
     Tilia.ProjectSpec
     Tilia.Render.OperatorSpec
     Tilia.RenderSpec

@@ -7,9 +7,14 @@ import Data.Text.IO qualified as T
 import Data.Version (showVersion)
 import Options.Applicative
 import Paths_tilia (version)
-import System.Exit (exitFailure)
+import System.Exit (ExitCode (..), exitWith)
 import System.IO (stderr)
-import Tilia.Format (describeFormatError, formatFile, formatIn)
+import Tilia.Format
+  ( describeFormatError,
+    formatErrorExitCode,
+    formatFile,
+    formatIn,
+  )
 
 main :: IO ()
 main = do
@@ -20,7 +25,7 @@ main = do
   case result of
     Left e -> do
       T.hPutStrLn stderr ("tilia: " <> describeFormatError e)
-      exitFailure
+      exitWith (ExitFailure (formatErrorExitCode e))
     Right output -> T.putStr output
 
 ----------------------------------------------------------------------------

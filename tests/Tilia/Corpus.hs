@@ -77,7 +77,9 @@ data Corpus = Corpus
     -- | Examples to leave alone, named relative to the root of the corpus.
     -- A name with no extension stands for a directory and takes everything
     -- under it.
-    corpusSkip :: [FilePath]
+    corpusSkip :: [FilePath],
+    -- | Examples the formatter is supposed to refuse, named in full.
+    corpusDeclined :: [FilePath]
   }
 
 -- | Our own examples.
@@ -87,7 +89,8 @@ vendoredExamples =
     { corpusName = "tilia",
       corpusSource = Vendored "vendored-corpus",
       corpusReference = ReferenceSuffix "-out.hs",
-      corpusSkip = []
+      corpusSkip = [],
+      corpusDeclined = ["other" </> "position-pragmas.hs"]
     }
 
 -- | Ormolu's examples.
@@ -126,7 +129,8 @@ ormoluExamples =
           "declaration" </> "value" </> "function" </> "record" </> "wildcard-comments-0.hs",
           "declaration" </> "value" </> "function" </> "record" </> "wildcard-comments-1.hs",
           "other" </> "pragma-comments-after.hs"
-        ]
+        ],
+      corpusDeclined = []
     }
 
 -- | GHC's test suite.
@@ -149,6 +153,14 @@ ghcTestSuite =
       corpusReference = NoReference,
       corpusSkip =
         [ "perf" </> "compiler" </> "parsing001.hs"
+        ],
+      corpusDeclined =
+        [ "ghci.debugger" </> "HappyTest.hs",
+          "parser" </> "should_compile" </> "ColumnPragma.hs",
+          "parser" </> "should_compile" </> "T7118.hs",
+          "perf" </> "compiler" </> "T20261.hs",
+          "perf" </> "compiler" </> "T5631.hs",
+          "programs" </> "joao-circular" </> "Funcs_Parser_Lazy.hs"
         ]
     }
 

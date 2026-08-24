@@ -14,6 +14,9 @@ module Tilia.Parser
     defaultParserConfig,
     sourceExtensions,
     effectiveExtensions,
+
+    -- * Pragmas that move the positions
+    movesPositions,
   )
 where
 
@@ -249,6 +252,16 @@ pragmaBodies source = case T.breakOn "{-#" source of
     | otherwise -> case T.breakOn "#-}" (T.drop 3 rest) of
         (_, after) | T.null after -> []
         (inner, after) -> T.unwords (T.words inner) : pragmaBodies (T.drop 3 after)
+
+----------------------------------------------------------------------------
+-- Pragmas that move the positions
+
+-- | Does this module pin its positions to somewhere else?
+movesPositions :: Text -> Bool
+movesPositions = any positional . pragmaBodies
+  where
+    positional body =
+      T.toUpper (T.takeWhile (/= ' ') body) `elem` ["LINE", "COLUMN"]
 
 lookupExtension :: Text -> Maybe Extension
 lookupExtension name = Map.lookup name extensionsByName

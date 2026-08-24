@@ -11,6 +11,7 @@ import Control.Monad (join)
 import Data.ByteString qualified as BS
 import Data.Foldable (for_)
 import Data.IORef
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8')
@@ -25,6 +26,7 @@ import Tilia.Parser
   ( ParsedModule (..),
     defaultParserConfig,
     parseText,
+    movesPositions,
   )
 import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Render (renderModule)
@@ -48,13 +50,13 @@ corpusSpec corpus =
         limit <- runIO exampleTimeout
         colours <- runIO coloursFor
 
+        let declines = Set.fromList (corpusDeclined corpus)
         for_ examples $ \example ->
           it (exampleName example) $ do
             result <- check colours limit example
             modifyIORef' tally (<> record result)
-            case result of
-              Broken why -> expectationFailure (T.unpack why)
-              _ -> pure ()
+            for_ (complaint (Set.member (exampleName example) declines) result) $
+              expectationFailure . T.unpack
 
         summarise (length examples) tally
 
@@ -73,18 +75,21 @@ data Tally = Tally
   { -- | Examples we could read and format.
     tallyChecked :: !Int,
     -- | Examples that are not Haskell we can read.
-    tallySkipped :: !Int
+    tallySkipped :: !Int,
+    -- | Examples the formatter refuses to rewrite.
+    tallyDeclined :: !Int
   }
 
 instance Semigroup Tally where
   a <> b =
     Tally
       { tallyChecked = tallyChecked a + tallyChecked b,
-        tallySkipped = tallySkipped a + tallySkipped b
+        tallySkipped = tallySkipped a + tallySkipped b,
+        tallyDeclined = tallyDeclined a + tallyDeclined b
       }
 
 instance Monoid Tally where
-  mempty = Tally 0 0
+  mempty = Tally 0 0 0
 
 -- | What one result contributes.
 --
@@ -93,6 +98,7 @@ instance Monoid Tally where
 record :: Result -> Tally
 record = \case
   Skipped -> mempty {tallySkipped = 1}
+  Declined -> mempty {tallyDeclined = 1}
   Broken _ -> mempty {tallyChecked = 1}
   Formatted -> mempty {tallyChecked = 1}
 
@@ -106,7 +112,7 @@ summarise total tally = do
     Tally {..} <- readIORef tally
     -- Under a selection there may legitimately be nothing here; it is the
     -- whole corpus formatting nothing that would mean the wiring is broken.
-    if tallyChecked + tallySkipped < total
+    if tallyChecked + tallySkipped + tallyDeclined < total
       then pure ()
       else tallyChecked `shouldSatisfy` (> 0)
 
@@ -116,7 +122,9 @@ summarise total tally = do
       show tallyChecked
         <> " examples formatted, "
         <> show tallySkipped
-        <> " skipped as not parseable by us"
+        <> " skipped as not parseable by us, "
+        <> show tallyDeclined
+        <> " declined"
 
 ----------------------------------------------------------------------------
 -- Checking one example
@@ -128,10 +136,27 @@ data Result
     -- files that are meant not to compile, and of CPP that we do not
     -- expand.
     Skipped
+  | -- | The input is Haskell, and the formatter refuses to rewrite it.
+    Declined
   | -- | A property does not hold.
     Broken Text
   | -- | Nothing was found wrong with it.
     Formatted
+
+-- | What is wrong with what one example produced, if anything.
+complaint ::
+  -- | Does the corpus say this one should be declined?
+  Bool ->
+  Result ->
+  Maybe Text
+complaint declines = \case
+  Broken why -> Just why
+  Declined
+    | declines -> Nothing
+    | otherwise -> Just "the formatter declined this, and the corpus does not say it should"
+  _
+    | declines -> Just "the corpus says this should be declined, and it was not"
+    | otherwise -> Nothing
 
 check :: Colours -> Int -> Example -> IO Result
 check colours limit example = do
@@ -169,6 +194,7 @@ guarded limit result =
   where
     forced = \case
       Skipped -> Skipped
+      Declined -> Declined
       Broken why -> T.length why `seq` Broken why
       Formatted -> Formatted
     firstLine = T.strip . T.takeWhile (/= '\n')
@@ -184,54 +210,56 @@ guarded limit result =
 -- is the fixed point it was supposed to have reached and everything they
 -- agree on is beside the point.
 checkPure :: Colours -> Text -> Maybe Text -> Result
-checkPure colours source expected = case parse source of
-  Nothing -> Skipped
-  Just before ->
-    let formatted = render before
-        against name = diff colours ("input", name) source formatted
-     in case parse formatted of
-          Nothing ->
-            Broken
-              ( "the formatted output does not parse\n"
-                  <> against "output (does not parse)"
-              )
-          Just after
-            | Just difference <- syntaxDifference (pmModule before) (pmModule after) ->
+checkPure colours source expected
+  | movesPositions source = Declined
+  | otherwise = case parse source of
+      Nothing -> Skipped
+      Just before ->
+        let formatted = render before
+            against name = diff colours ("input", name) source formatted
+         in case parse formatted of
+              Nothing ->
                 Broken
-                  ( "a different program: "
-                      <> difference
-                      <> "\n"
-                      <> against "output"
+                  ( "the formatted output does not parse\n"
+                      <> against "output (does not parse)"
                   )
-            | Just difference <-
-                commentDifference
-                  (pmModule before, pmModule after)
-                  (pmComments before)
-                  (pmComments after) ->
-                Broken
-                  ( "comments: "
-                      <> difference
-                      <> "\n"
-                      <> against "output"
-                  )
-            | settled <- render after,
-              settled /= formatted ->
-                Broken
-                  ( "formatting is non-idempotent\n"
-                      <> diff colours ("first pass", "second pass") formatted settled
-                  )
-            -- A corpus that says what the answer should be is believed.
-            -- There is no tolerance to spend: an example we lay out
-            -- differently is one we have not finished with, whatever the
-            -- reason, and a proportion of them being right says nothing
-            -- about any particular one.
-            | Just reference <- expected,
-              reference /= formatted ->
-                Broken
-                  ( "does not match the corpus's expected output\n"
-                      <> diff colours ("expected", "ours") reference formatted
-                  )
-            | otherwise -> Formatted
+              Just after
+                | Just difference <- syntaxDifference (pmModule before) (pmModule after) ->
+                    Broken
+                      ( "a different program: "
+                          <> difference
+                          <> "\n"
+                          <> against "output"
+                      )
+                | Just difference <-
+                    commentDifference
+                      (pmModule before, pmModule after)
+                      (pmComments before)
+                      (pmComments after) ->
+                    Broken
+                      ( "comments: "
+                          <> difference
+                          <> "\n"
+                          <> against "output"
+                      )
+                | settled <- render after,
+                  settled /= formatted ->
+                    Broken
+                      ( "formatting is non-idempotent\n"
+                          <> diff colours ("first pass", "second pass") formatted settled
+                      )
+                -- A corpus that says what the answer should be is believed.
+                -- There is no tolerance to spend: an example we lay out
+                -- differently is one we have not finished with, whatever the
+                -- reason, and a proportion of them being right says nothing
+                -- about any particular one.
+                | Just reference <- expected,
+                  reference /= formatted ->
+                    Broken
+                      ( "does not match the corpus's expected output\n"
+                          <> diff colours ("expected", "ours") reference formatted
+                      )
+                | otherwise -> Formatted
   where
     parse = either (const Nothing) Just . parseText defaultParserConfig "<corpus>"
 
