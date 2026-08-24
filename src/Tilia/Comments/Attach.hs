@@ -49,7 +49,8 @@ walk = go
       DLocated s d ->
         let (mine, p') = takePlaced s p
             (d', p'') = go p' d
-         in (only Above mine <> DLocated s d' <> only Trailing mine, p'')
+            only' = only (endOfAConstruct s) mine
+         in (only' Above <> DLocated s d' <> only' Trailing, p'')
       DNest n d -> first (DNest n) (go p d)
       DAlign d -> first DAlign (go p d)
       DGroup l d -> first (DGroup l) (go p d)
@@ -59,15 +60,25 @@ walk = go
          in (DVariant a' b', p')
       d -> (d, p)
 
-    only position mine =
-      foldMap (writtenAs position) [c | (q, c) <- mine, q == position]
+    only atTheEnd mine position =
+      foldMap (writtenAs atTheEnd position) [c | (q, c) <- mine, q == position]
+
+-- | Does this region stand for where a construct stops rather than for
+-- anything written?
+endOfAConstruct :: Span -> Bool
+endOfAConstruct s = startPoint s == endPoint s
 
 ----------------------------------------------------------------------------
 -- What a comment looks like
 
 -- | One comment, written where it was placed.
-writtenAs :: Position -> Comment -> Doc
-writtenAs position c = case position of
+writtenAs ::
+  -- | Does what follows only mark where the construct ends?
+  Bool ->
+  Position ->
+  Comment ->
+  Doc
+writtenAs atTheEnd position c = case position of
   Above
     | closesItself c && commentFollowed c -> commentDoc c <> space
     | commentTrailing c -> space <> commentDoc c <> closeLine
@@ -79,7 +90,7 @@ writtenAs position c = case position of
   where
     onItsOwnLine = closeLine <> commentDoc c <> closeLine
     gapAbove = includeWhen (commentAfterGap c) (closeLine <> blankLine)
-    gapBelow = includeWhen (commentBeforeGap c) blankLine
+    gapBelow = includeWhen (commentBeforeGap c && not atTheEnd) blankLine
 
 -- | A comment nothing came to collect, written after everything.
 atEnd :: Comment -> Doc

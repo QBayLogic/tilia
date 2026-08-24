@@ -16,6 +16,8 @@ import Control.Applicative ((<|>))
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Data
+import Data.Generics.Aliases (mkT)
+import Data.Generics.Schemes (everywhere)
 import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.List.NonEmpty qualified as NE
@@ -26,9 +28,12 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Data.FastString (FastString)
 import GHC.Hs (HsModule (..), XModulePs (..))
-import GHC.Hs.Decls (DerivClauseTys (..))
+import GHC.Hs.Doc (LHsDoc, WithHsDocIdentifiers (..))
+import GHC.Hs.Decls (DerivClauseTys (..), DocDecl (..), HsDecl (..), LHsDecl)
 import GHC.Hs.ImpExp
   ( ImportDeclQualifiedStyle,
+    IE (..),
+    LIE,
     LImportDecl,
     isImportDeclQualified,
   )
@@ -74,7 +79,29 @@ import Tilia.Span.Ghc (spanOf, spansOf)
 -- corpus worth running is being able to see that six hundred failures are
 -- four causes.
 syntaxDifference :: (Data a) => a -> a -> Maybe Text
-syntaxDifference = differ []
+syntaxDifference x y = differ [] (withoutEmptyDocs x) (withoutEmptyDocs y)
+
+-- | Forget the doc comments that say nothing.
+withoutEmptyDocs :: (Data a) => a -> a
+withoutEmptyDocs =
+  everywhere (mkT amongDecls . mkT amongExports . mkT onItsOwn)
+  where
+    onItsOwn :: Maybe (LHsDoc GhcPs) -> Maybe (LHsDoc GhcPs)
+    onItsOwn d = if any (saysNothing . unLoc) d then Nothing else d
+    amongExports :: [LIE GhcPs] -> [LIE GhcPs]
+    amongExports = filter (not . emptyExport . unLoc)
+    emptyExport = \case
+      IEDoc _ doc -> saysNothing (unLoc doc)
+      _ -> False
+    amongDecls :: [LHsDecl GhcPs] -> [LHsDecl GhcPs]
+    amongDecls = filter (not . emptyDecl . unLoc)
+    emptyDecl = \case
+      DocD _ d -> case d of
+        DocCommentNext doc -> saysNothing (unLoc doc)
+        DocCommentPrev doc -> saysNothing (unLoc doc)
+        _ -> False
+      _ -> False
+    saysNothing = null . docWords . hsDocString
 
 differ :: forall a. (Data a) => [Text] -> a -> a -> Maybe Text
 differ path x y
@@ -304,7 +331,7 @@ asDocString path x y = case (cast x, cast y) of
   _ -> Nothing
   where
     summarised :: HsDocString -> (Text, [ByteString])
-    summarised d = (kindOf d, wordsOf d)
+    summarised d = (kindOf d, docWords d)
 
     kindOf = \case
       MultiLineDocString dec _ -> decorator dec
@@ -317,11 +344,13 @@ asDocString path x y = case (cast x, cast y) of
       HsDocStringNamed n -> "named " <> T.pack n
       HsDocStringGroup n -> "group " <> T.pack (show n)
 
-    wordsOf = concatMap chunkWords . \case
-      MultiLineDocString _ cs -> map unLoc (NE.toList cs)
-      NestedDocString _ c -> [unLoc c]
-      GeneratedDocString c -> [c]
-
+-- | What a doc string says, with the whitespace thrown away.
+docWords :: HsDocString -> [ByteString]
+docWords = concatMap chunkWords . \case
+  MultiLineDocString _ cs -> map unLoc (NE.toList cs)
+  NestedDocString _ c -> [unLoc c]
+  GeneratedDocString c -> [c]
+  where
     chunkWords (HsDocStringChunk bytes) =
       filter (not . BS.null) (BS.splitWith isAsciiSpace bytes)
     isAsciiSpace w = w == 32 || w == 9 || w == 10 || w == 13

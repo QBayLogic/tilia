@@ -19,7 +19,13 @@ import Data.Text (Text)
 import GHC.Hs (HsModule (..))
 import GHC.Hs.Extension (GhcPs)
 import GHC.LanguageExtensions.Type (Extension (..))
-import Tilia.Comments (Comment (..), closesItself, escapeTrigger, widenTrigger)
+import Tilia.Comments
+  ( Comment (..),
+    closesItself,
+    documentsNothing,
+    escapeTrigger,
+    widenTrigger,
+  )
 import Tilia.Comments.Attach (attachComments)
 import Tilia.Fixity (Scope)
 import Tilia.Imports (normalizeImports)
@@ -166,7 +172,8 @@ splitHaddocks hsMod = foldr sort' ([], [])
   where
     inTree = Set.fromList (map startPoint (haddockSpans hsMod))
     sort' c (docs, rest)
-      | startPoint (commentSpan c) `Set.member` inTree =
+      | startPoint (commentSpan c) `Set.member` inTree,
+        not (documentsNothing c) =
           (widenTrigger c : docs, rest)
       | otherwise = (docs, escapeTrigger c : rest)
 

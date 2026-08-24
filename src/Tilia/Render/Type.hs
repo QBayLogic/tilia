@@ -397,9 +397,13 @@ hsSigTypeBody ctx HsSig {..} =
   outerBndrs ctx sig_bndrs
     <> ( case sig_bndrs of
            HsOuterImplicit {} -> mempty
-           HsOuterExplicit {} -> breakOrSpace
+           HsOuterExplicit {} -> afterBinders
        )
     <> hsType ctx sig_body
+  where
+    afterBinders
+      | typeIsDocumented (unLoc sig_body) = hardBreak
+      | otherwise = breakOrSpace
 
 -- | The @:: t@ that follows a name.
 --

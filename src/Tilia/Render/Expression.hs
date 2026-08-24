@@ -134,8 +134,15 @@ exprBody ctx site here = \case
     other -> outputable other
   HsLam _ variant' mg -> lambda ctx site variant' (ExprBody ctx) mg
   HsApp _ f x -> application ctx site f x
-  HsAppType _ e a ->
-    hsExpr ctx e <> breakOrSpace <> indent (txt "@" <> hsType ctx (hswc_body a))
+  HsAppType at' e a ->
+    hsExpr ctx e
+      <> breakOrSpace
+      <> indent
+        ( atSpan
+            ctx
+            (tokenSpan at' <> spanOf (hswc_body a))
+            (txt "@" <> hsTypeBody ctx (spanOf (hswc_body a)) (unLoc (hswc_body a)))
+        )
   OpApp _ x op y -> exprChain ctx site x op y
   NegApp _ e _ -> txt "-" <> negationGap ctx e <> hsExpr ctx e
   HsPar _ e ->
@@ -901,22 +908,24 @@ matchGroup ::
   MatchGroup GhcPs (LocatedA body) ->
   Doc
 matchGroup ctx bracing mkBody style MG {..} =
-  items blockBracing (map (at_ ctx renderMatch) (unLoc mg_alts))
+  items blockBracing (map rendered (places (unLoc mg_alts)))
   where
-    -- Only the alternatives of a @case@ need braces of their own; everywhere
-    -- else the enclosing construct already says where the group ends. A
-    -- group with no alternatives needs them regardless, @{}@ being the only
-    -- way to write one.
     blockBracing = case style of
       CaseStyle -> ifEmpty
       LambdaCaseStyle -> ifEmpty
       _ -> NoBrace
     ifEmpty = if null (unLoc mg_alts) then MayBrace else bracing
+    rendered (place, m) = case place of
+      Last -> written bracing
+      Only -> written bracing
+      _ -> whenFlat bracing written
+      where
+        written b = at_ ctx (renderMatch b) m
 
-    renderMatch m@Match {..} =
+    renderMatch b m@Match {..} =
       match
         ctx
-        bracing
+        b
         mkBody
         (adjustStyle m style)
         (isInfixMatch m)

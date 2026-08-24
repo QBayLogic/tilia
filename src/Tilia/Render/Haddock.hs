@@ -65,7 +65,9 @@ data Ending
 
 -- | Print a Haddock.
 haddock :: Ctx -> DocStyle -> Ending -> LHsDoc GhcPs -> Doc
-haddock ctx style ending doc = fst (docBody ctx style doc) <> close
+haddock ctx style ending doc = case docBody ctx style doc of
+  Nothing -> mempty
+  Just (body, _) -> body <> close
   where
     close = case ending of
       Open -> mempty
@@ -77,21 +79,24 @@ haddock ctx style ending doc = fst (docBody ctx style doc) <> close
 -- left as written. A @--@ Haddock owns the rest of its line and still has to
 -- end it.
 haddockInline :: Ctx -> DocStyle -> LHsDoc GhcPs -> Doc
-haddockInline ctx style doc = body <> close
-  where
-    (body, isSelfClosing) = docBody ctx style doc
-    close = if isSelfClosing then breakOrSpace else hardBreak
+haddockInline ctx style doc = case docBody ctx style doc of
+  Nothing -> mempty
+  Just (body, isSelfClosing) ->
+    body <> (if isSelfClosing then breakOrSpace else hardBreak)
 
 -- | The Haddock itself, and whether the form it took delimits itself.
-docBody :: Ctx -> DocStyle -> LHsDoc GhcPs -> (Doc, Bool)
+docBody :: Ctx -> DocStyle -> LHsDoc GhcPs -> Maybe (Doc, Bool)
 docBody ctx style doc@(L l str) =
   case reusableText ctx style doc of
     Just written ->
-      ( maybe id located (spanOfSrcSpan l) $
-          align (sepBy (verbatimBreak AtIndent) (map txt (NE.toList written))),
-        isBlockForm written
-      )
-    Nothing -> (rebuilt, False)
+      Just
+        ( maybe id located (spanOfSrcSpan l) $
+            align (sepBy (verbatimBreak AtIndent) (map txt (NE.toList written))),
+          isBlockForm written
+        )
+    Nothing
+      | null (docLines str) -> Nothing
+      | otherwise -> Just (rebuilt, False)
   where
     rebuilt =
       maybe id located (spanOfSrcSpan l) $
@@ -174,12 +179,12 @@ brokenIfDocumented ctx x d
 -- whether the author's text can be reused.
 printsWholeLineDocs :: (Data a) => Ctx -> a -> Bool
 printsWholeLineDocs ctx x = case docsIn x of
-  -- A doc string not reachable as an 'LHsDoc' cannot be looked up, so assume
-  -- the worst rather than produce something that will not parse.
   [] -> not (null (docStringsIn x))
-  docs -> any (not . selfClosing) docs
+  docs -> any takesWholeLines docs
   where
-    selfClosing doc = maybe False isBlockForm (reusableText ctx Pipe doc)
+    takesWholeLines doc = case reusableText ctx Pipe doc of
+      Just written -> not (isBlockForm written)
+      Nothing -> not (null (docLines (unLoc doc)))
 
 -- | The spans of every Haddock in a fragment.
 --
@@ -215,7 +220,7 @@ docStringsIn = listify (const True :: HsDocString -> Bool)
 -- | The lines of a doc string, normalised the way Haddock reads them.
 docLines :: WithHsDocIdentifiers HsDocString GhcPs -> [Text]
 docLines str
-  | null body = [""]
+  | null body = []
   | otherwise = map (guardDollar . unpad) body
   where
     body =

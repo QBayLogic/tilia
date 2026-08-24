@@ -253,13 +253,13 @@ go env = \case
   DSpace -> putSpace
   DBreak -> case envLayout env of
     Flat -> putSpace
-    Broken -> breakLine
+    Broken -> breakLine (envIndent env)
   DSoftBreak -> case envLayout env of
     Flat -> id
-    Broken -> breakLine
+    Broken -> breakLine (envIndent env)
   DHoldBack t -> putHeldBack (envIndent env) t
-  DCloseLine -> closeLine
-  DHardBreak -> breakLine
+  DCloseLine -> closeLine (envIndent env)
+  DHardBreak -> breakLine (envIndent env)
   DVerbatimBreak resume -> verbatimBreakLine resume
   DCat a b -> go env b . go env a
   DNest n d -> go env {envIndent = envIndent env + n * envIndentStep env} d
@@ -293,9 +293,9 @@ putText indent t out0
 -- | Hold a fragment back until the line ends.
 putHeldBack :: Int -> Text -> Out -> Out
 putHeldBack indent t out
-  | isJust (outHeldBack out) = putHeldBack indent t (closeLine out)
+  | isJust (outHeldBack out) = putHeldBack indent t (closeLine indent out)
   | outStarted out = out {outHeldBack = Just t, outClosed = False}
-  | otherwise = closeLine (putText indent t out)
+  | otherwise = closeLine indent (putText indent t out)
 
 -- | Append a space, unless the line has not started or already ends in one.
 putSpace :: Out -> Out
@@ -319,9 +319,13 @@ endsWithSpace out = case outCurrent out of
 -- was already ended on purpose and does nothing, so a comment that ends its
 -- own line and a construct that would have ended it anyway do not between
 -- them leave an empty one.
-closeLine :: Out -> Out
-closeLine out
-  | hasContent out = (breakLine out) {outClosed = True}
+closeLine ::
+  -- | Where the line after this one begins
+  Int ->
+  Out ->
+  Out
+closeLine indent out
+  | hasContent out = (breakLine indent out) {outClosed = True}
   | otherwise = out
 
 -- | Finish the current line.
@@ -331,24 +335,30 @@ closeLine out
 -- nothing: the output never carries two blank lines in a row, however many
 -- times printing code breaks. Breaking before anything has been written is
 -- dropped for the same reason, since 'finish' strips empty lines only from
--- the end.
+-- the end. Nor is an empty line written at the top of a block, where there
+-- is nothing above it to be held off.
 --
--- Between them these two rules mean printing code may break wherever a
--- break might be wanted without first working out what it already emitted.
-breakLine :: Out -> Out
-breakLine out
+-- Between them these rules mean printing code may break wherever a break
+-- might be wanted without first working out what it already emitted.
+breakLine ::
+  -- | Where the line after this one begins
+  Int ->
+  Out ->
+  Out
+breakLine indent out
   | outClosed out = out {outClosed = False}
   | atStart out = out
-  | wouldRepeatBlank out =
+  | not (hasContent out), repeatsBlank out || opensABlock indent out = discarded
+  | otherwise = discarded {outLines = currentLine out : outLines out}
+  where
+    discarded =
       out {outCurrent = [], outColumn = 0, outStarted = False, outHeldBack = Nothing}
-  | otherwise =
-      out
-        { outLines = currentLine out : outLines out,
-          outCurrent = [],
-          outColumn = 0,
-          outStarted = False,
-          outHeldBack = Nothing
-        }
+
+-- | Would an empty line here be the first thing inside a block?
+opensABlock :: Int -> Out -> Bool
+opensABlock indent out = case outLines out of
+  (l : _) -> T.length l <= indent
+  [] -> False
 
 -- | Finish the current line between two lines of reproduced text.
 verbatimBreakLine :: Resume -> Out -> Out
@@ -362,10 +372,10 @@ verbatimBreakLine resume out =
       outClosed = False
     }
 
--- | Would finishing this line put a second empty line in a row?
-wouldRepeatBlank :: Out -> Bool
-wouldRepeatBlank out = case (hasContent out, outLines out) of
-  (False, "" : _) -> True
+-- | Would this empty line be a second one in a row?
+repeatsBlank :: Out -> Bool
+repeatsBlank out = case outLines out of
+  ("" : _) -> True
   _ -> False
 
 -- | Is the output still empty?
@@ -391,6 +401,6 @@ currentLine out
 -- end, no trailing whitespace anywhere.
 finish :: Out -> Text
 finish out =
-  case dropWhile T.null (outLines (breakLine out)) of
+  case dropWhile T.null (outLines (breakLine 0 out)) of
     [] -> ""
     ls -> T.unlines (reverse ls)

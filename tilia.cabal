@@ -170,6 +170,7 @@ test-suite tests
     hspec >=2 && <3,
     http-client >=0.7 && <0.8,
     req >=3.13 && <4,
+    syb >=0.7 && <0.8,
     tar >=0.6 && <0.7,
     tilia,
     temporary ^>=1.3,
