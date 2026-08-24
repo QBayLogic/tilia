@@ -292,24 +292,20 @@ data Pragma = Pragma
   deriving (Eq, Show)
 
 -- | Recognise a pragma.
---
--- Only a single-line block comment can be one: a pragma spread over several
--- lines could not be hoisted without deciding how to re-lay it out, and a
--- pragma is not ours to re-lay out.
 commentPragma :: Comment -> Maybe Pragma
-commentPragma c = case commentBody c of
-  (l :| []) -> do
-    inner <- T.stripSuffix "#-}" =<< T.stripPrefix "{-#" l
-    let (name, body) = T.break isSpace (T.stripStart inner)
-    if T.null name
-      then Nothing
-      else
-        Just
-          Pragma
-            { pragmaName = T.toUpper name,
-              pragmaBody = T.strip body
-            }
-  _ -> Nothing
+commentPragma c = do
+  inner <- T.stripSuffix "#-}" =<< T.stripPrefix "{-#" oneLine
+  let (name, body) = T.break isSpace (T.stripStart inner)
+  if T.null name
+    then Nothing
+    else
+      Just
+        Pragma
+          { pragmaName = T.toUpper name,
+            pragmaBody = T.strip body
+          }
+  where
+    oneLine = T.unwords (map T.strip (NE.toList (commentBody c)))
 
 -- | The text a span covers.
 sliceSpan :: [Text] -> GHC.RealSrcSpan -> Text

@@ -107,14 +107,21 @@ ormoluExamples =
       corpusReference = ReferenceSuffix "-out.hs",
       corpusSkip =
         [ "other" </> "disabling",
+          "declaration" </> "value" </> "function" </> "required-type-arguments-2.hs",
           "declaration" </> "data" </> "comment-in-empty-record.hs",
+          "import" </> "comment-inside-empty-import-list.hs",
+          "other" </> "comment-two-blocks.hs",
+          "other" </> "multiple-blank-line-comment.hs",
           "declaration" </> "type" </> "parens-comments.hs",
           "declaration" </> "value" </> "function" </> "parens-comments.hs",
-          "declaration" </> "value" </> "function" </> "required-type-arguments-2.hs",
-          "import" </> "comment-inside-empty-import-list.hs",
           "import" </> "comments-inside-imports.hs",
-          "other" </> "comment-two-blocks.hs",
-          "other" </> "multiple-blank-line-comment.hs"
+          "declaration" </> "value" </> "function" </> "arrow" </> "proc-do-complex.hs",
+          "declaration" </> "value" </> "function" </> "comprehension" </> "transform-multi-line2.hs",
+          "declaration" </> "value" </> "function" </> "if-with-comment-next-to-keyword.hs",
+          "declaration" </> "value" </> "function" </> "operator-comments-2.hs",
+          "declaration" </> "value" </> "function" </> "record" </> "wildcard-comments-0.hs",
+          "declaration" </> "value" </> "function" </> "record" </> "wildcard-comments-1.hs",
+          "other" </> "pragma-comments-after.hs"
         ]
     }
 

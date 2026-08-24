@@ -26,7 +26,6 @@ where
 import Data.Function (on)
 import Data.List (sortOn)
 import Data.List.NonEmpty qualified as NE
-import Data.Maybe (isJust)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -109,12 +108,14 @@ takeHeaderPragmas headerEnd comments = (pragmas, plain)
     recognised = [(c, headerPragma c) | c <- comments]
     pragmas = [entry c p | (c, Just p) <- recognised]
     plain =
-      [ if aboveAPragma then airless c else c
-      | ((c, Nothing), aboveAPragma) <- zip recognised nextIsPragma
+      [ if rightAbovePragma c then airless c else c
+      | (c, Nothing) <- recognised
       ]
-    nextIsPragma = map (isJust . snd) (drop 1 recognised) <> [False]
+    rightAbovePragma c =
+      Set.member (spanEndLine (commentSpan c) + 1) pragmaStarts
+    pragmaStarts =
+      Set.fromList [spanStartLine (commentSpan c) | (c, Just _) <- recognised]
     airless c = c {commentAfterGap = False, commentBeforeGap = False}
-
     entry c p =
       HeaderPragma
         { hpSpan = commentSpan c,
@@ -122,16 +123,13 @@ takeHeaderPragmas headerEnd comments = (pragmas, plain)
           hpName = pragmaName p,
           hpBody = pragmaBody p
         }
-
     headerPragma c = do
       p <- commentPragma c
       _ <- lookupOrder (pragmaName p)
       if inHeader headerEnd (commentSpan c) then Just p else Nothing
-
     orderOf p = case pragmaName p of
       "LANGUAGE" -> LanguageOrder (classifyExtension (pragmaBody p))
       other -> maybe OptionsGhcOrder id (lookupOrder other)
-
     lookupOrder = \case
       "LANGUAGE" -> Just (LanguageOrder Enabling)
       "OPTIONS_GHC" -> Just OptionsGhcOrder

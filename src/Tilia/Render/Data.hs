@@ -154,8 +154,11 @@ dataDecl ctx style tyCon tyVars tyVarSpan renderTyVar fixity outerBinders HsData
             sepBy separator (map (keepTogether . at_ ctx (conDecl ctx singleRecCon)) cons)
 
     derivings =
-      includeUnless (null dd_derivs) breakOrSpace
+      includeUnless (null dd_derivs) beforeDerivings
         <> indent (vsep (map (at_ ctx (derivingClause ctx)) dd_derivs))
+    beforeDerivings
+      | length dd_derivs > 1 = hardBreak
+      | otherwise = breakOrSpace
 
 -- | The documentation that bears on how a constructor is laid out.
 --

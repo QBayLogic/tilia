@@ -181,7 +181,7 @@ alsoNotation =
 structural :: TyCon -> Bool
 structural con =
   tyConName con
-    `elem` ["Maybe", "[]", "NonEmpty", "(,)", "(,,)", "(,,,)", "(,,,,)"]
+    `elem` ["Maybe", "List", "NonEmpty", "Tuple2", "Tuple3", "Tuple4", "Tuple5"]
 
 -- | Which side of the module name @qualified@ was written on.
 --

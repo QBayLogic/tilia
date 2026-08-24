@@ -227,22 +227,28 @@ onUnlessRefused = [ImplicitPrelude]
 
 -- | Apply a module's @LANGUAGE@ pragmas to a starting set.
 pragmasOver :: [Extension] -> Text -> [Extension]
-pragmasOver initial = foldl' apply initial . concatMap pragmaNames . headerLines
+pragmasOver initial = foldl' apply initial . concatMap pragmaNames . pragmaBodies
   where
     apply acc name = case T.stripPrefix "No" name >>= lookupExtension of
       Just off -> filter (/= off) acc
       Nothing -> case lookupExtension name of
         Just on | on `notElem` acc -> acc <> [on]
         _ -> acc
-    headerLines = T.lines
-    pragmaNames l = case T.stripPrefix "{-#" (T.stripStart l) of
-      Nothing -> []
-      Just rest ->
-        let body = T.takeWhile (/= '#') rest
-            (keyword, names) = T.break (== ' ') (T.stripStart body)
-         in if T.toUpper keyword == "LANGUAGE"
-              then filter (not . T.null) (map T.strip (T.splitOn "," names))
-              else []
+    pragmaNames body =
+      let (keyword, names) = T.break (== ' ') body
+       in if T.toUpper keyword == "LANGUAGE"
+            then filter (not . T.null) (map T.strip (T.splitOn "," names))
+            else []
+
+-- | What every @{-# … #-}@ in a module has between its braces, each on one
+-- line.
+pragmaBodies :: Text -> [Text]
+pragmaBodies source = case T.breakOn "{-#" source of
+  (_, rest)
+    | T.null rest -> []
+    | otherwise -> case T.breakOn "#-}" (T.drop 3 rest) of
+        (_, after) | T.null after -> []
+        (inner, after) -> T.unwords (T.words inner) : pragmaBodies (T.drop 3 after)
 
 lookupExtension :: Text -> Maybe Extension
 lookupExtension name = Map.lookup name extensionsByName
