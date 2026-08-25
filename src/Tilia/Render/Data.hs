@@ -138,9 +138,10 @@ dataDecl ctx style tyCon tyVars tyVarSpan renderTyVar fixity outerBinders HsData
             ConDeclGADT {..} -> spansOf (NE.toList con_names)
             ConDeclH98 {..} -> spanOf con_name
 
-          -- A constructor documented with @--@ lines cannot share a line
-          -- with anything at all. One documented with @{- | … -}@ can, so it
-          -- is laid out as though it were undocumented.
+          -- Documentation written as @--@ lines owns the rest of the line
+          -- it starts, so nothing can follow it and the constructors go one
+          -- to a line. Written as @{- | … -}@ it closes itself and asks
+          -- nothing of the layout.
           lineHaddocks = any (printsWholeLineDocs ctx . visibleDocs . unLoc) cons
 
           beforeEquals
@@ -166,12 +167,12 @@ dataDecl ctx style tyCon tyVars tyVarSpan renderTyVar fixity outerBinders HsData
       | length dd_derivs > 1 = hardBreak
       | otherwise = breakOrSpace
 
--- | The documentation that bears on how a constructor is laid out.
+-- | The documentation a constructor's own layout has to make room for.
 --
--- Only the constructor's own Haddock and the docs on its prefix arguments
--- count. A record constructor spreads its fields over several lines anyway,
--- so documenting one of them says nothing about how the @=@ and the
--- constructor name should be arranged.
+-- Which is its Haddock and the ones on its prefix arguments, and nothing
+-- deeper. A field of a record gets a line of its own wherever the @=@ ends
+-- up, so a Haddock on one of those settles nothing about the constructor
+-- around it and is left out of the question.
 visibleDocs :: ConDecl GhcPs -> [LHsDoc GhcPs]
 visibleDocs = \case
   ConDeclH98 {..} ->

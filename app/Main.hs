@@ -29,9 +29,9 @@ main = do
     Right output -> T.putStr output
 
 ----------------------------------------------------------------------------
--- Command line options parsing
+-- Command line options
 
--- | Command line options.
+-- | The options a run was given.
 newtype Opts = Opts
   { -- | File to format, 'Nothing' means stdin
     optInputFile :: Maybe FilePath

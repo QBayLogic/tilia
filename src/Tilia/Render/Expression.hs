@@ -514,13 +514,17 @@ hsCmd ctx site l = at ctx l (cmdBody ctx site)
 
 cmdBody :: Ctx -> Site -> HsCmd GhcPs -> Doc
 cmdBody ctx site = \case
+  -- Which of the two operands is written first is what the arrow's
+  -- direction says: @a -< b@ feeds the input on the right to the command on
+  -- the left, and @b >- a@ says the same thing the other way round.
   HsCmdArrApp _ body input arrow rightToLeft ->
-    let (l, r) = if rightToLeft then (body, input) else (input, body)
-     in hsExprIn ctx site {siteApplicand = False} l
+    let writtenFirst = if rightToLeft then body else input
+        writtenSecond = if rightToLeft then input else body
+     in hsExprIn ctx site {siteApplicand = False} writtenFirst
           <> breakOrSpace
           <> indent
             ( txt (arrowText arrow rightToLeft)
-                <> attach (exprHangs (unLoc input)) (hsExpr ctx r)
+                <> attach (exprHangs (unLoc input)) (hsExpr ctx writtenSecond)
             )
   HsCmdArrForm _ form Prefix cmds ->
     bananaWith (closingFor site) $
@@ -929,7 +933,7 @@ matchGroup ctx bracing mkBody style MG {..} =
         (adjustStyle m style)
         (isInfixMatch m)
         (HsUnannotated EpPatBind)
-        (matchStrictness m)
+        (bangBeforeName m)
         (unLoc m_pats)
         m_grhss
 
@@ -943,9 +947,10 @@ adjustStyle m = \case
   FunctionStyle _ | FunRhs {mc_fun = f} <- m_ctxt m -> FunctionStyle f
   style -> style
 
-matchStrictness :: Match id body -> SrcStrictness
-matchStrictness = \case
-  Match {m_ctxt = FunRhs {mc_strictness = s}} -> s
+-- | Was a @!@ written in front of the name this equation defines?
+bangBeforeName :: Match id body -> SrcStrictness
+bangBeforeName = \case
+  Match {m_ctxt = FunRhs {mc_strictness}} -> mc_strictness
   _ -> NoSrcStrict
 
 -- | One equation: a head, a body, and possibly a @where@.

@@ -74,14 +74,20 @@ adorn :: Ctx -> Maybe Span -> RdrName -> EpAnn NameAnn -> Doc -> Doc
 adorn ctx here x = go
   where
     go EpAnn {anns} = case anns of
+      -- A promotion tick, with whatever the name carries under it.
       NameAnnQuote {nann_quoted} -> (txt "'" <>) . go nann_quoted
-      NameAnn {nann_adornment = NameParens {}} -> inParens . spaceOutHash
-      NameAnn {nann_adornment = NameBackquotes {}} -> backticks
-      -- Whether the @->@ identifier was written parenthesised.
-      NameAnnRArrow {nann_mopen = Just _} -> inParens
+      -- The empty unboxed sum and the empty list are written out whole:
+      -- there is no name under the brackets to print.
       NameAnnOnly {nann_adornment = NameParensHash {}} -> const (txt "(# #)")
       NameAnnOnly {nann_adornment = NameSquare {}} ->
         const (txt "[" <> insideBrackets here mempty <> txt "]")
+      -- @->@ is the one name that is a keyword as well, and the parentheses
+      -- are recorded on their own rather than as an adornment.
+      NameAnnRArrow {nann_mopen = Just _} -> inParens
+      NameAnn {nann_adornment} -> case nann_adornment of
+        NameParens {} -> inParens . spaceOutHash
+        NameBackquotes {} -> backticks
+        _ -> id
       _ -> id
 
     inParens d = txt "(" <> d <> txt ")"

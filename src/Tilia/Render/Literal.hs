@@ -12,6 +12,7 @@ where
 
 import Control.Applicative ((<|>))
 import Control.Monad ((>=>))
+import Data.List (find)
 import Data.Semigroup (Min (..))
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -67,7 +68,7 @@ takeApart s = do
     stripMarkers Multiline "\"\"\"" s
       <|> stripMarkers Regular "\"" s
   let split = case litKind literal of
-        Regular -> splitGaps
+        Regular -> runsBetweenGaps
         Multiline -> splitMultiline
   pure literal {litParts = concatMap split (litParts literal)}
 
@@ -76,29 +77,38 @@ takeApart s = do
 stripMarkers :: LiteralKind -> Text -> Text -> Maybe Literal
 stripMarkers litKind marker s = do
   inner <- T.stripPrefix marker s
-  let hashed = marker <> "#"
-  (litClose, litParts) <-
-    (((hashed,) . pure) <$> T.stripSuffix hashed inner)
-      <|> (((marker,) . pure) <$> T.stripSuffix marker inner)
-  pure Literal {litOpen = marker, ..}
+  litClose <- find (`T.isSuffixOf` inner) [marker <> "#", marker]
+  body <- T.stripSuffix litClose inner
+  pure Literal {litOpen = marker, litParts = [body], ..}
 
--- | Split on string gaps: a backslash, some whitespace, another backslash.
---
--- > splitGaps "bar\\  \\fo\\&o" == ["bar", "fo\\&o"]
-splitGaps :: Text -> [Text]
-splitGaps s = go (T.breakOnAll "\\" s)
+-- | The runs of a literal either side of its string gaps.
+runsBetweenGaps :: Text -> [Text]
+runsBetweenGaps s = case gapAt 0 s of
+  Nothing -> [s]
+  Just (before, after) -> T.take before s : runsBetweenGaps after
   where
-    go [] = [s]
-    go ((before, after) : rest) = case T.uncons after of
-      Just ('\\', afterSlash)
-        | (gap, T.uncons -> Just ('\\', tailText)) <- T.span is_space afterSlash,
-          not (T.null gap) ->
-            before : splitGaps tailText
-        | otherwise ->
-            go (if escapesABackslash afterSlash then drop 1 rest else rest)
-      _ -> go rest
+    -- How much comes before the first gap, and what comes after it.
+    gapAt n t = case T.uncons t of
+      Nothing -> Nothing
+      Just ('\\', rest) -> case afterGap rest of
+        Just resumes -> Just (n, resumes)
+        Nothing -> let taken = 1 + escapedWidth rest in gapAt (n + taken) (T.drop taken t)
+      Just (_, rest) -> gapAt (n + 1) rest
 
-    escapesABackslash t = any (`T.isPrefixOf` t) ["\\", "^\\"]
+    -- Where the literal picks up again, if this backslash opened a gap.
+    afterGap t = case T.span is_space t of
+      (blank, rest)
+        | not (T.null blank), Just ('\\', resumes) <- T.uncons rest -> Just resumes
+      _ -> Nothing
+
+    -- How much follows the backslash of an escape that is not a gap. Only
+    -- @\\^X@ reaches past the character after the backslash; the numeric
+    -- escapes run on further, but their digits are not backslashes and do
+    -- not need skipping.
+    escapedWidth t = case T.uncons t of
+      Just ('^', _) -> 2
+      Just _ -> 1
+      Nothing -> 0
 
 -- | Split a multi-line literal the way GHC's lexer reads one, so that what
 -- comes back out means what went in.
@@ -108,7 +118,7 @@ splitMultiline =
     . map expandTabs
     . splitLines
     . joinParts
-    . splitGaps
+    . runsBetweenGaps
 
 -- | The line terminators the Report recognises, not merely @\\n@.
 splitLines :: Text -> [Text]

@@ -65,10 +65,12 @@ elsewhere =
     infixR p ops = [(OpName o, Fixity RightAssoc p) | o <- ops]
     infixN p ops = [(OpName o, Fixity NoAssoc p) | o <- ops]
 
-    -- The five Ormolu's own test suite carries. Two of them disagree with
-    -- the package the operator really comes from—@.=@ is @infix 4@ in lens
-    -- and @#@ is @infixr 8@ in it too—and the overrides win, because the
-    -- expected outputs were produced with them.
+    -- Five operators the corpus uses that belong to no package we can
+    -- consult, and whose fixities are therefore whatever the corpus was laid
+    -- out with. Two disagree with the library the spelling comes from—@.=@
+    -- is @infix 4@ in lens and @#@ is @infixr 8@ there—but the expected
+    -- outputs settle it, since matching them is the only thing these are
+    -- for.
     ormoluOverrides =
       infixR 8 [".="]
         <> infixR 5 ["#"]

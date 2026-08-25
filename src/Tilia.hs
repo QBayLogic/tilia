@@ -1,5 +1,8 @@
--- | A formatter for Haskell source code. This module exposes the official
--- stable API; other modules may not be as reliable.
+-- | Formatting a module, in one function.
+--
+-- Everything a caller needs is here. The modules under this one are the
+-- workings, and are exposed so that they can be tested and read rather than
+-- because anything outside is meant to depend on them.
 module Tilia
   ( format,
     ParseError,
