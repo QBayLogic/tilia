@@ -128,6 +128,9 @@ data Doc
     -- fusing them is what forces a printer to grow an escape hatch for each
     -- case where they come apart.
     DLocated !Span !Doc
+  | -- | Fence prevents comments inside from floating out and attaching to
+    -- elements they are not supposed to attach to.
+    DFence !Span !Doc
   deriving (Eq, Show)
 
 -- | Documents concatenate. @'DEmpty'@ is the unit, so a document is a
@@ -272,6 +275,7 @@ go env = \case
     Flat -> go env flatD
     Broken -> go env brokenD
   DLocated _ d -> go env d
+  DFence _ d -> go env d
 
 -- | Append a fragment, emitting the line's indentation first if this is the
 -- first thing on it.

@@ -11,7 +11,7 @@ module Tilia.Comments.Attach
   )
 where
 
-import Data.Bifunctor (first)
+import Data.Bifunctor (first, second)
 import Data.List.NonEmpty qualified as NE
 import Data.Text (Text)
 import Tilia.Comments
@@ -24,18 +24,21 @@ import Tilia.Span
 attachComments :: [Comment] -> Doc -> Doc
 attachComments cs doc = written <> foldMap atEnd (unplaced left)
   where
-    (written, left) = walk (placeComments (locatedSpans doc) cs) doc
+    (written, left) = walk (placeComments regions fences cs) doc
+    (regions, fences) = markedSpans doc
 
--- | Every region the document records provenance for.
-locatedSpans :: Doc -> [Span]
-locatedSpans = \case
-  DLocated s d -> s : locatedSpans d
-  DCat a b -> locatedSpans a <> locatedSpans b
-  DNest _ d -> locatedSpans d
-  DAlign d -> locatedSpans d
-  DGroup _ d -> locatedSpans d
-  DVariant a _ -> locatedSpans a
-  _ -> []
+-- | The spans of every 'DLocated' in the document, and of every 'DFence',
+-- in that order.
+markedSpans :: Doc -> ([Span], [Span])
+markedSpans = \case
+  DLocated s d -> first (s :) (markedSpans d)
+  DFence s d -> second (s :) (markedSpans d)
+  DCat a b -> markedSpans a <> markedSpans b
+  DNest _ d -> markedSpans d
+  DAlign d -> markedSpans d
+  DGroup _ d -> markedSpans d
+  DVariant a _ -> markedSpans a
+  _ -> ([], [])
 
 -- | Walk the document, giving each region what it was given.
 walk :: Placements -> Doc -> (Doc, Placements)
@@ -51,6 +54,7 @@ walk = go
             (d', p'') = go p' d
             only' = only (endOfAConstruct s) mine
          in (only' Above <> DLocated s d' <> only' Trailing, p'')
+      DFence s d -> first (DFence s) (go p d)
       DNest n d -> first (DNest n) (go p d)
       DAlign d -> first DAlign (go p d)
       DGroup l d -> first (DGroup l) (go p d)

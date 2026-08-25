@@ -1067,7 +1067,11 @@ match ctx bracing mkBody style isInfix multAnn strict pats GRHSs {..} =
     -- written after the pattern inside the alternative rather than at the
     -- end of the pattern's line, where the author wrote it.
     alternative g =
-      atSpan ctx (grhsSpan (unLoc g)) (guardedRhs ctx placement bracing mkBody groupStyle (unLoc g))
+      fenceWithin ctx (spanOf g) $
+        atSpan
+          ctx
+          (grhsSpan (unLoc g))
+          (guardedRhs ctx placement bracing mkBody groupStyle (unLoc g))
     groupStyle
       | isCaseStyle style && hasGuards = RightArrow
       | otherwise = EqualsSign

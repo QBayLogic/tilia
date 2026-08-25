@@ -58,29 +58,26 @@ data Comment = Comment
     commentBody :: NonEmpty Text,
     -- | How it was written.
     commentStyle :: CommentStyle,
+    -- | Whether the line above it in the input was empty.
+    commentAfterGap :: Bool,
+    -- | The column the line above it began at, when that line had anything
+    -- on it.
+    commentContentAboveAt :: Maybe Int,
     -- | Where the code before it on its opening line stops: the column one
     -- past the last character of that code, or 'Nothing' when the comment
     -- had the line to itself.
-    commentFollows :: Maybe Int,
-    -- | Whether the line above it in the input was empty.
-    --
-    -- What is above a comment is often not a node at all—a Haddock the
-    -- printer emits from the syntax tree, another comment—so the gap cannot
-    -- be worked out from spans later. It matters: a @-- |@ and a @--@ run
-    -- together are one doc string, and separated by an empty line they are
-    -- a doc string and a comment.
-    commentAfterGap :: Bool,
-    -- | Whether the line below it in the input was empty.
-    commentBeforeGap :: Bool,
+    commentCodeBeforeStopsAt :: Maybe Int,
     -- | Whether anything other than whitespace follows it on its closing
     -- line.
-    commentFollowed :: Bool
+    commentFollowed :: Bool,
+    -- | Whether the line below it in the input was empty.
+    commentBeforeGap :: Bool
   }
   deriving (Eq, Show)
 
 -- | Was the comment written after code on its line?
 commentTrailing :: Comment -> Bool
-commentTrailing = isJust . commentFollows
+commentTrailing = isJust . commentCodeBeforeStopsAt
 
 -- | Does this comment let code follow it on the same line?
 closesItself :: Comment -> Bool
@@ -130,10 +127,11 @@ mkComment sourceLines spn tok =
     { commentSpan = spanOfReal spn,
       commentBody = normalizeBody startColumn style raw,
       commentStyle = style,
-      commentFollows = follows,
       commentAfterGap = afterGap,
-      commentBeforeGap = beforeGap,
-      commentFollowed = followed
+      commentContentAboveAt = contentAboveAt,
+      commentCodeBeforeStopsAt = codeBeforeStopsAt,
+      commentFollowed = followed,
+      commentBeforeGap = beforeGap
     }
   where
     (style, raw) = case tok of
@@ -141,25 +139,36 @@ mkComment sourceLines spn tok =
       GHC.EpaBlockComment s -> (BlockComment, T.pack s)
       GHC.EpaDocComment _ -> (DocComment, sliceSpan sourceLines spn)
       GHC.EpaDocOptions s -> (LineComment, T.pack s)
-    -- Indentation is how many characters precede, which is not the column:
-    -- see 'offsetOf'.
+
+    -- The lines the answers are read off, and where on the opening one the
+    -- comment starts. Indentation is how many characters precede, which is
+    -- not the column: see 'offsetOf'.
     startColumn = maybe 0 (`offsetOf` GHC.srcSpanStartCol spn) openingLine
-    openingLine = case drop (GHC.srcSpanStartLine spn - 1) sourceLines of
+    openingLine = lineAt (GHC.srcSpanStartLine spn)
+    lineAbove
+      | GHC.srcSpanStartLine spn <= 1 = Nothing
+      | otherwise = lineAt (GHC.srcSpanStartLine spn - 1)
+    lineAt n = case drop (n - 1) sourceLines of
       (l : _) -> Just l
       [] -> Nothing
-    follows = do
+
+    -- The rest in the order the fields are declared in.
+    afterGap = maybe False (T.all isSpace) lineAbove
+    contentAboveAt = do
+      l <- lineAbove
+      if T.all isSpace l
+        then Nothing
+        else Just (columnOf l (T.length (T.takeWhile isSpace l)))
+    codeBeforeStopsAt = do
       l <- openingLine
       let before' = T.stripEnd (T.take startColumn l)
       if T.null before' then Nothing else Just (columnOf l (T.length before'))
-    afterGap = case drop (GHC.srcSpanStartLine spn - 2) sourceLines of
-      (l : _) | GHC.srcSpanStartLine spn > 1 -> T.all isSpace l
-      _ -> False
-    beforeGap = case drop (GHC.srcSpanEndLine spn) sourceLines of
-      (l : _) -> T.all isSpace l
-      [] -> False
-    followed = case drop (GHC.srcSpanEndLine spn - 1) sourceLines of
-      (l : _) -> not (T.all isSpace (T.drop (offsetOf l (GHC.srcSpanEndCol spn)) l))
-      [] -> False
+    followed = case lineAt (GHC.srcSpanEndLine spn) of
+      Just l -> not (T.all isSpace (T.drop (offsetOf l (GHC.srcSpanEndCol spn)) l))
+      Nothing -> False
+    beforeGap = case lineAt (GHC.srcSpanEndLine spn + 1) of
+      Just l -> T.all isSpace l
+      Nothing -> False
 
 -- | Apply the normalizations, in the only order that works: dedent before
 -- stripping, since a line of nothing but spaces has to still count as

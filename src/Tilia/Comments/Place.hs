@@ -12,6 +12,7 @@ module Tilia.Comments.Place
 where
 
 import Data.List (sortOn)
+import Data.IntSet qualified as IntSet
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Ord (Down (..))
@@ -33,8 +34,14 @@ data Placements = Placements
   }
 
 -- | Give every comment to a region.
-placeComments :: [Span] -> [Comment] -> Placements
-placeComments regions comments =
+placeComments ::
+  -- | The regions a comment may be given to
+  [Span] ->
+  -- | The boundaries a comment printed in place may not be carried across
+  [Span] ->
+  [Comment] ->
+  Placements
+placeComments regions fences comments =
   Placements
     { placedAt = Map.fromListWith (flip (<>)) [(r, [(p, c)]) | (Just (r, p), c) <- decided],
       placedNowhere = [c | (Nothing, c) <- decided]
@@ -42,37 +49,61 @@ placeComments regions comments =
   where
     decided = [(against c, c) | c <- comments]
 
+    -- Which lines end in a comment, so that a comment lined up under one of
+    -- them can tell whether it is carrying a remark on.
+    linesEndingInAComment =
+      IntSet.fromList
+        [spanEndLine (commentSpan c) | c <- comments, commentTrailing c]
+
     against c
       | commentTrailing c, Just r <- trailed = Just (r, Trailing)
+      | not (commentTrailing c), Just r <- continues = Just (r, Trailing)
       | Just r <- next = Just (r, Above)
       | otherwise = Nothing
       where
         here = commentSpan c
         trailed
-          | writtenAgainst = before
-          | commentFollowed c = Nothing
-          | closesItself c = before >>= surrounded
-          | otherwise = before
+          | writtenAgainst || not (commentFollowed c) = before
+          | otherwise = Nothing
         before =
           nearest (\r -> (Down (endPoint r), startPoint r)) $
             filter (\r -> endsJustBefore r && not (fencedOff r)) regions
-        surrounded r
-          | any middling regions = Just r
-          | otherwise = Nothing
-          where
-            middling o =
-              here `inside` o && r `inside` o && startPoint o < startPoint r
 
         writtenAgainst =
           any (\r -> Just (endPoint r) == stopsAt) regions
-        stopsAt = (,) (spanStartLine here) <$> commentFollows c
+        stopsAt = (,) (spanStartLine here) <$> commentCodeBeforeStopsAt c
 
         endsJustBefore r =
           spanEndLine r == spanStartLine here && endPoint r <= startPoint here
-        fencedOff r = any (\o -> here `inside` o && not (r `inside` o)) regions
+
+        fencedOff r = apart regions || (closesItself c && apart fences)
+          where
+            apart = any (\o -> here `inside` o && not (r `inside` o))
+
         next =
           nearest (\r -> (startPoint r, Down (endPoint r))) $
             filter (\r -> startPoint r >= endPoint here) regions
+
+        continues
+          | Just column <- commentContentAboveAt c,
+            column == spanStartColumn here,
+            runsOnFromAbove,
+            nothingBelowItLinesUp =
+              endingAbove
+          | otherwise = Nothing
+
+        runsOnFromAbove =
+          IntSet.member (spanStartLine here - 1) linesEndingInAComment
+
+        nothingBelowItLinesUp =
+          all (\r -> spanStartColumn r < spanStartColumn here) next
+
+        endingAbove =
+          nearest (\r -> (Down (endPoint r), startPoint r)) $
+            filter endsOnTheLineAbove regions
+          where
+            endsOnTheLineAbove r =
+              spanEndLine r == spanStartLine here - 1 && not (fencedOff r)
 
     -- Folded rather than sorted: this runs for every comment against every
     -- region, and only the first of the order is ever wanted.

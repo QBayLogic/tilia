@@ -44,6 +44,7 @@ module Tilia.Render.Context
     at,
     at_,
     atSpan,
+    fenceWithin,
     layoutFrom,
     layoutWithin,
     layoutAcross,
@@ -281,6 +282,12 @@ at_ ctx f l = at ctx l f
 atSpan :: Ctx -> Maybe Span -> Doc -> Doc
 atSpan _ Nothing d = d
 atSpan ctx (Just s) d = located s (grouped ctx s d)
+
+-- | Prevent comments inside the given region to float out of it and attach
+-- to elements outside.
+fenceWithin :: Ctx -> Maybe Span -> Doc -> Doc
+fenceWithin _ Nothing d = d
+fenceWithin _ (Just s) d = fence s d
 
 -- | Lay a region out as it was written, and claim nothing.
 --

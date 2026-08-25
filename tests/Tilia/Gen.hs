@@ -118,7 +118,8 @@ genDoc withVariant withBreaks = go
           [ DCat <$> go half <*> go half,
             DNest <$> choose (0, 2) <*> go (n - 1),
             DAlign <$> go (n - 1),
-            DLocated <$> genSpan <*> go (n - 1)
+            DLocated <$> genSpan <*> go (n - 1),
+            DFence <$> genSpan <*> go (n - 1)
           ]
             <> [ DGroup <$> elements [Flat, Broken] <*> go (n - 1)
                | withBreaks
@@ -153,6 +154,7 @@ shrinkDoc = \case
   DGroup l d -> [DEmpty, d] <> [DGroup l d' | d' <- shrinkDoc d]
   DVariant a b -> [DEmpty, a, b]
   DLocated s d -> [DEmpty, d] <> [DLocated s d' | d' <- shrinkDoc d]
+  DFence s d -> [DEmpty, d] <> [DFence s d' | d' <- shrinkDoc d]
 
 -- | Every fragment of literal text the document contains, in order.
 --
@@ -176,3 +178,4 @@ docTexts = \case
   DGroup _ d -> docTexts d
   DVariant a _ -> docTexts a
   DLocated _ d -> docTexts d
+  DFence _ d -> docTexts d

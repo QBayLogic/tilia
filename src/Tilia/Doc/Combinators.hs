@@ -25,6 +25,7 @@ module Tilia.Doc.Combinators
     broken,
     variant,
     located,
+    fence,
 
     -- * Attachment
     Placement (..),
@@ -170,6 +171,11 @@ variant = DVariant
 -- piece of the document corresponds to.
 located :: Span -> Doc -> Doc
 located = DLocated
+
+-- | Fence prevents comments inside from floating out and attaching to
+-- elements they are not supposed to attach to.
+fence :: Span -> Doc -> Doc
+fence = DFence
 
 ----------------------------------------------------------------------------
 -- Attachment
