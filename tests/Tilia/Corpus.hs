@@ -128,7 +128,11 @@ ormoluExamples =
           "declaration" </> "value" </> "function" </> "operator-comments-2.hs",
           "declaration" </> "value" </> "function" </> "record" </> "wildcard-comments-0.hs",
           "declaration" </> "value" </> "function" </> "record" </> "wildcard-comments-1.hs",
-          "other" </> "pragma-comments-after.hs"
+          "other" </> "pragma-comments-after.hs",
+          "declaration" </> "value" </> "function" </> "infix" </> "esqueleto-0.hs",
+          "declaration" </> "value" </> "function" </> "infix" </> "esqueleto-1.hs",
+          "declaration" </> "class" </> "default-signatures.hs",
+          "declaration" </> "type-families" </> "closed-type-family" </> "with-comments.hs"
         ],
       corpusDeclined = []
     }

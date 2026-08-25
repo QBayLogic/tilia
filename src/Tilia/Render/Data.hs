@@ -116,7 +116,13 @@ dataDecl ctx style tyCon tyVars tyVarSpan renderTyVar fixity outerBinders HsData
             indent $
               layoutFrom ctx wholeHeadSpan (breakOrSpace <> txt "where")
                 <> breakOrSpace
-                <> items NoBrace (map (at_ ctx (conDecl ctx False)) cons)
+                -- Braces once there is a semicolon to protect: written flat
+                -- the @where@ block has no column to end at, so anything
+                -- after the declaration would be read as another
+                -- constructor. One constructor needs no separator and so no
+                -- braces.
+                <> items (if null (drop 1 cons) then NoBrace else MayBrace)
+                  (map (at_ ctx (conDecl ctx False)) cons)
         | otherwise ->
             layoutFrom ctx (spanOf tyCon <> spansOf cons) . indent $
               beforeEquals <> txt "=" <> space <> alternatives
