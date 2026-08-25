@@ -41,6 +41,31 @@ spec = do
     it "does not mark one indented on a line of its own" $
       trailings "module M where\nx =\n    -- here\n    1\n" `shouldBe` [False]
 
+  -- The lexer counts a tab as advancing to the next multiple of eight, so a
+  -- line holding one has more columns than characters. Everything here works
+  -- by cutting the source at a column the compiler reported, and cutting at
+  -- the wrong place is not a crash but a comment that quietly believes it
+  -- has nothing after it.
+  describe "lines indented with tabs" $ do
+    it "sees the code before a comment" $
+      trailings "module M where\n\tx = 1 -- here\n" `shouldBe` [True]
+
+    it "sees that a comment has the line to itself" $
+      trailings "module M where\n\t-- here\n\tx = 1\n" `shouldBe` [False]
+
+    it "sees the code after a block comment" $
+      followeds "module M where\n\tx = f {- here -} 1\n" `shouldBe` [True]
+
+    it "sees that nothing follows a block comment" $
+      followeds "module M where\n\tx = f 1 {- here -}\n" `shouldBe` [False]
+
+    it "takes the comment's text and no more" $
+      bodies "module M where\n\tx = f {- here -} 1\n" `shouldBe` [["{- here -}"]]
+
+    it "dedents a block comment by what precedes it" $
+      bodies "module M where\n\t{- one\n\t   two -}\nx = 1\n"
+        `shouldBe` [["{- one", "   two -}"]]
+
   describe "normalization: space after dashes" $ do
     it "adds a missing space" $
       bodies "module M where\n--tight\nx = 1\n" `shouldBe` [["-- tight"]]
@@ -194,6 +219,9 @@ widened = map (NE.toList . commentBody . widenTrigger) . commentsIn
 
 trailings :: Text -> [Bool]
 trailings = map commentTrailing . commentsIn
+
+followeds :: Text -> [Bool]
+followeds = map commentFollowed . commentsIn
 
 headerLine :: Text -> Maybe Int
 headerLine src = case parseText defaultParserConfig "test.hs" src of

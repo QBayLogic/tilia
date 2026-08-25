@@ -29,7 +29,7 @@ module Tilia.Doc.Internal
   )
 where
 
-import Data.Maybe (isJust)
+import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Tilia.Span (Span, isSingleLine)
@@ -71,10 +71,10 @@ data Doc
     -- node it trails happens to sit would push a comma, an arrow or a
     -- closing bracket onto the next line.
     --
-    -- One line holds one of these. Two would mean two comments trailing
-    -- what turned out to be a single line of output, and the engine closes
-    -- the line rather than running them together into a comment neither
-    -- author wrote.
+    -- One line holds one of these at its end. A second means two comments
+    -- trailing what turned out to be a single line of output, and it goes on
+    -- a line of its own underneath rather than being run together with the
+    -- first into a comment neither author wrote.
     DHoldBack !Text
   | -- | Close the line, and let a break that immediately follows know that
     -- it has nothing left to do.
@@ -215,8 +215,10 @@ data Out = Out
     -- with nothing on it stays genuinely empty.
     outStarted :: !Bool,
     -- | Fragments held back until the line ends, in the order they were
-    -- given.
-    outHeldBack :: !(Maybe Text),
+    -- given. The first goes at the end of the line; any after it get lines
+    -- of their own under it, since two comments run together would be one
+    -- comment neither author wrote.
+    outHeldBack :: ![Text],
     -- | Whether the line was closed by something that already knew it was
     -- ending it, so that a break arriving now would add an empty line rather
     -- than end anything.
@@ -230,7 +232,7 @@ emptyOut =
       outCurrent = [],
       outColumn = 0,
       outStarted = False,
-      outHeldBack = Nothing,
+      outHeldBack = [],
       outClosed = False
     }
 
@@ -293,8 +295,8 @@ putText indent t out0
 -- | Hold a fragment back until the line ends.
 putHeldBack :: Int -> Text -> Out -> Out
 putHeldBack indent t out
-  | isJust (outHeldBack out) = putHeldBack indent t (closeLine indent out)
-  | outStarted out = out {outHeldBack = Just t, outClosed = False}
+  | outStarted out || not (null (outHeldBack out)) =
+      out {outHeldBack = outHeldBack out <> [t], outClosed = False}
   | otherwise = closeLine indent (putText indent t out)
 
 -- | Append a space, unless the line has not started or already ends in one.
@@ -349,10 +351,45 @@ breakLine indent out
   | outClosed out = out {outClosed = False}
   | atStart out = out
   | not (hasContent out), repeatsBlank out || opensABlock indent out = discarded
-  | otherwise = discarded {outLines = currentLine out : outLines out}
+  | otherwise = discarded {outLines = overflow indent out <> outLines out}
   where
     discarded =
-      out {outCurrent = [], outColumn = 0, outStarted = False, outHeldBack = Nothing}
+      out {outCurrent = [], outColumn = 0, outStarted = False, outHeldBack = []}
+
+-- | Every line the break that has just happened produces.
+--
+-- Usually one: the line that was being built. There are more when several
+-- fragments were held back for it, because only the first of them can go at
+-- its end and the rest need lines of their own. Held-back fragments are
+-- always comments, so several mean several comments that trailed different
+-- things in the input which have turned out to share a line of output; run
+-- together they would read as one comment nobody wrote, so each of the
+-- others gets a line below.
+--
+-- Held back until here rather than written when it arrived, because the
+-- line was not finished then. A comma or a closing bracket still to come
+-- would have been pushed underneath the comment.
+--
+-- Ordered as 'outLines' is, most recent first, ready to be put in front
+-- of it.
+overflow ::
+  -- | Where the line after these would begin, used only if there is no line
+  -- to take the indentation from
+  Int ->
+  Out ->
+  [Text]
+overflow indent out = reverse (finished : map below spilled)
+  where
+    finished = currentLine out
+    spilled = drop 1 (outHeldBack out)
+
+    -- Indented to match the line they spilled from rather than to the
+    -- indentation in force, so that they stay under the thing they were
+    -- written against instead of under whatever encloses it.
+    below t = T.replicate column " " <> T.stripEnd t
+    column
+      | T.null finished = indent
+      | otherwise = T.length (T.takeWhile (== ' ') finished)
 
 -- | Would an empty line here be the first thing inside a block?
 opensABlock :: Int -> Out -> Bool
@@ -364,11 +401,11 @@ opensABlock indent out = case outLines out of
 verbatimBreakLine :: Resume -> Out -> Out
 verbatimBreakLine resume out =
   out
-    { outLines = currentLine out : outLines out,
+    { outLines = overflow 0 out <> outLines out,
       outCurrent = [],
       outColumn = 0,
       outStarted = resume == AtMargin,
-      outHeldBack = Nothing,
+      outHeldBack = [],
       outClosed = False
     }
 
@@ -384,7 +421,7 @@ atStart out = null (outLines out) && not (hasContent out)
 
 -- | Is there anything on the current line, written or held back?
 hasContent :: Out -> Bool
-hasContent out = outStarted out || isJust (outHeldBack out)
+hasContent out = outStarted out || not (null (outHeldBack out))
 
 -- | The current line: what was written to it, then whatever was held back
 -- for its end, with one space between them and no trailing whitespace.
@@ -395,7 +432,7 @@ currentLine out
   | otherwise = written <> " " <> heldBack
   where
     written = T.stripEnd (T.concat (reverse (outCurrent out)))
-    heldBack = maybe "" T.stripEnd (outHeldBack out)
+    heldBack = maybe "" T.stripEnd (listToMaybe (outHeldBack out))
 
 -- | Assemble the final text: one trailing newline, no blank lines at the
 -- end, no trailing whitespace anywhere.

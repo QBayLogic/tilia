@@ -141,13 +141,16 @@ mkComment sourceLines spn tok =
       GHC.EpaBlockComment s -> (BlockComment, T.pack s)
       GHC.EpaDocComment _ -> (DocComment, sliceSpan sourceLines spn)
       GHC.EpaDocOptions s -> (LineComment, T.pack s)
-    -- Columns are 1-based; indentation is how many characters precede.
-    startColumn = GHC.srcSpanStartCol spn - 1
-    follows = case drop (GHC.srcSpanStartLine spn - 1) sourceLines of
-      (l : _) | not (T.null before') -> Just (T.length before' + 1)
-        where
-          before' = T.stripEnd (T.take startColumn l)
-      _ -> Nothing
+    -- Indentation is how many characters precede, which is not the column:
+    -- see 'offsetOf'.
+    startColumn = maybe 0 (`offsetOf` GHC.srcSpanStartCol spn) openingLine
+    openingLine = case drop (GHC.srcSpanStartLine spn - 1) sourceLines of
+      (l : _) -> Just l
+      [] -> Nothing
+    follows = do
+      l <- openingLine
+      let before' = T.stripEnd (T.take startColumn l)
+      if T.null before' then Nothing else Just (columnOf l (T.length before'))
     afterGap = case drop (GHC.srcSpanStartLine spn - 2) sourceLines of
       (l : _) | GHC.srcSpanStartLine spn > 1 -> T.all isSpace l
       _ -> False
@@ -155,7 +158,7 @@ mkComment sourceLines spn tok =
       (l : _) -> T.all isSpace l
       [] -> False
     followed = case drop (GHC.srcSpanEndLine spn - 1) sourceLines of
-      (l : _) -> not (T.all isSpace (T.drop (GHC.srcSpanEndCol spn - 1) l))
+      (l : _) -> not (T.all isSpace (T.drop (offsetOf l (GHC.srcSpanEndCol spn)) l))
       [] -> False
 
 -- | Apply the normalizations, in the only order that works: dedent before
@@ -326,11 +329,39 @@ sliceSpan sourceLines spn =
   where
     covered =
       take (endLine - startLine + 1) (drop (startLine - 1) sourceLines)
-    clip n =
-      (if n == startLine then T.drop (startCol - 1) else id)
-        . (if n == endLine then T.take (endCol - 1) else id)
+    clip n l =
+      (if n == startLine then T.drop (offsetOf l startCol) else id)
+        . (if n == endLine then T.take (offsetOf l endCol) else id)
+        $ l
 
     startLine = GHC.srcSpanStartLine spn
     endLine = GHC.srcSpanEndLine spn
     startCol = GHC.srcSpanStartCol spn
     endCol = GHC.srcSpanEndCol spn
+
+----------------------------------------------------------------------------
+-- Columns and offsets
+
+-- | How many characters of a line come before the compiler's column.
+--
+-- A column is not a character offset. The lexer counts a tab as advancing to
+-- the next multiple of eight, so a line with a tab in it has more columns
+-- than it has characters, and cutting the text at a column would cut in the
+-- wrong place. In a file indented with tabs that is every line.
+offsetOf :: Text -> Int -> Int
+offsetOf line column = T.length (T.take (walk 0 1) line)
+  where
+    walk i c
+      | c >= column = i
+      | i >= T.length line = i + (column - c)
+      | otherwise = walk (i + 1) (afterChar (T.index line i) c)
+
+-- | The compiler's column for the character at this offset.
+columnOf :: Text -> Int -> Int
+columnOf line offset = T.foldl' (flip afterChar) 1 (T.take offset line)
+
+-- | Where the column moves to once this character has been read.
+afterChar :: Char -> Int -> Int
+afterChar ch c
+  | ch == '\t' = ((c - 1) `div` 8 + 1) * 8 + 1
+  | otherwise = c + 1

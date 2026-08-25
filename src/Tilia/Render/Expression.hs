@@ -723,18 +723,17 @@ comprehension ctx site es = align (variant onOneLine acrossLines)
     acrossLines = txt "[" <> space <> keepInside (body <> hardBreak <> txt "]")
     keepInside = if siteInBlock site then align else id
     body = at ctx es sections
-
     sections xs = case unsnoc xs of
       Nothing -> error "Tilia: a comprehension always yields something"
       Just (stmts, yield) ->
         align (hsStmt ctx yield)
           <> breakOrSpace
-          <> txt "|"
-          <> space
-          <> sepBy
-            (breakOrSpace <> txt "|" <> space)
-            (map section (comprehensionSections stmts))
-    section = align . commaSep . map (align . hsStmt ctx)
+          <> sepBy breakOrSpace (map section (comprehensionSections stmts))
+    section stmts =
+      located'
+        (spansOf stmts)
+        (txt "|" <> space <> align (commaSep (map (align . hsStmt ctx) stmts)))
+    located' = maybe id located
 
 -- | Split the statements of a comprehension into its parallel sections.
 --

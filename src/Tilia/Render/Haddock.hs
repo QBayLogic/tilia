@@ -98,9 +98,13 @@ docBody ctx style doc@(L l str) =
       | null (docLines str) -> Nothing
       | otherwise -> Just (rebuilt, False)
   where
-    rebuilt =
-      maybe id located (spanOfSrcSpan l) $
-        sepBy hardBreak (zipWith line' (True : repeat False) (docLines str))
+    -- No provenance on a rebuilt Haddock, unlike one whose text is reused.
+    -- Rebuilding is what happens when the author wrote it in another style,
+    -- and the commonest of those is a @-- ^@ being printed as @-- |@, which
+    -- moves it from after what it documents to before. Offering where it
+    -- used to be as somewhere a comment may attach would put that comment
+    -- ahead of comments that were written above it.
+    rebuilt = sepBy hardBreak (zipWith line' (True : repeat False) (docLines str))
     line' isFirst t =
       (if isFirst then txt (opener style) else txt "--")
         <> space

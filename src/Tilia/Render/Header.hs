@@ -249,13 +249,26 @@ importExportItems :: Ctx -> [LIE GhcPs] -> Doc
 importExportItems ctx xs = variant (laidOut False) (laidOut True)
   where
     laidOut broken' =
-      sepBy breakOrSpace [item broken' place x | (place, x) <- places xs]
-    item broken' place x =
-      sectionGap place (unLoc x)
+      sepBy breakOrSpace (zipWith (item broken') (Nothing : map Just xs) (places xs))
+    item broken' previous (place, x) =
+      gapAbove place (unLoc <$> previous) (unLoc x)
         <> align (at ctx (widenToDoc x) (ieItem ctx (comma' broken' place)))
-    sectionGap place = \case
-      IEGroup {} | place == Middle || place == Last -> hardBreak
-      _ -> mempty
+    gapAbove place previous here
+      | place == First || place == Only = mempty
+      | isSection here = hardBreak
+      | isPipe here, maybe False runsOn previous = hardBreak
+      | otherwise = mempty
+    isSection = \case
+      IEGroup {} -> True
+      _ -> False
+    isPipe = \case
+      IEDoc {} -> True
+      _ -> False
+    -- Documentation that takes in whatever is written directly under it.
+    runsOn = \case
+      IEDoc {} -> True
+      IEDocNamed {} -> True
+      _ -> False
     comma' broken' place
       | broken' = True
       | otherwise = place == First || place == Middle
