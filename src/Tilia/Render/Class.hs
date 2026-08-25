@@ -25,10 +25,11 @@ where
 import Data.Function (on)
 import Data.List (sortBy)
 import Data.Maybe (isNothing)
+import GHC.Builtin.Types (cTupleTyConName, isCTupleTyConName)
 import GHC.Core.Coercion.Axiom (Role (..))
 import GHC.Hs
 import GHC.Types.Fixity (LexicalFixity (..))
-import GHC.Types.Name.Reader (RdrName)
+import GHC.Types.Name.Reader (RdrName (..))
 import GHC.Types.SrcLoc (GenLocated (..), leftmost_smallest, unLoc)
 import Tilia.Doc.Combinators
 import Tilia.Render.Context
@@ -67,20 +68,27 @@ classDecl ctx anns ctxt tyCon HsQTvs {..} fixity fdeps sigs binds families defau
       breakOrSpace
         <> indent
           ( foldMap (classContext ctx) ctxt
-              <> layoutFrom
-                ctx
-                headSpan
-                ( defHead
-                    (fixity == Infix)
-                    True
-                    (name ctx tyCon)
-                    (map (at_ ctx (tyVarBndr ctx)) hsq_explicit)
-                )
+              <> layoutFrom ctx headSpan classHead
               <> indent (funDeps ctx fdeps)
               <> includeUnless
                 (null members)
                 (breakOrSpace <> atSpan ctx whereSpan (txt "where"))
           )
+
+    classHead
+      | isCTuple (unLoc tyCon) (length hsq_explicit) =
+          layoutWithin ctx (spanOf tyCon) (spansOf hsq_explicit) $
+            parens
+              ( insideBrackets
+                  (spanOf tyCon)
+                  (commaSep (map (align . at_ ctx (tyVarBndr ctx)) hsq_explicit))
+              )
+      | otherwise =
+          defHead
+            (fixity == Infix)
+            True
+            (name ctx tyCon)
+            (map (at_ ctx (tyVarBndr ctx)) hsq_explicit)
 
     body =
       includeUnless
@@ -95,6 +103,11 @@ classDecl ctx anns ctxt tyCon HsQTvs {..} fixity fdeps sigs binds families defau
           map (fmap (InstD NoExtField . TyFamInstD NoExtField)) defaults,
           map (fmap (DocD NoExtField)) docs
         ]
+
+-- | Is this the constraint tuple of the given arity?
+isCTuple :: RdrName -> Int -> Bool
+isCTuple (Exact n) arity = isCTupleTyConName n && n == cTupleTyConName arity
+isCTuple _ _ = False
 
 -- | A context on a class head, with the @=>@ that follows it.
 classContext :: Ctx -> LHsContext GhcPs -> Doc

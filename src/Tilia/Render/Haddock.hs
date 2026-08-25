@@ -92,10 +92,11 @@ docBody ctx style doc@(L l str) =
       Just
         ( maybe id located (spanOfSrcSpan l) $
             align (sepBy (verbatimBreak AtIndent) (map txt (NE.toList written))),
-          isBlockForm written
+          selfClosing written
         )
     Nothing
-      | null (docLines str) -> Nothing
+      | null written' -> Nothing
+      | blockForm -> Just (rebuiltBlock, False)
       | otherwise -> Just (rebuilt, False)
   where
     -- No provenance on a rebuilt Haddock, unlike one whose text is reused.
@@ -104,11 +105,30 @@ docBody ctx style doc@(L l str) =
     -- moves it from after what it documents to before. Offering where it
     -- used to be as somewhere a comment may attach would put that comment
     -- ahead of comments that were written above it.
-    rebuilt = sepBy hardBreak (zipWith line' (True : repeat False) (docLines str))
+    rebuilt = sepBy hardBreak (zipWith line' (True : repeat False) written')
     line' isFirst t =
       (if isFirst then txt (opener style) else txt "--")
         <> space
         <> txt t
+
+    -- One the author wrote as a block comment over several lines is
+    -- rebuilt as one. Cut into @--@ lines it would stop being a single
+    -- comment: the lexer reads the first line as documentation and every
+    -- line after it as an ordinary comment, so a Haddock of two lines would
+    -- come back as a Haddock of one and a comment saying half a sentence.
+    -- A block of one line has no such lines to lose and is rebuilt as
+    -- @-- |@ like any other.
+    rebuiltBlock =
+      align $
+        txt (blockOpener style)
+          <> space
+          <> sepBy (verbatimBreak AtIndent) (map txt written')
+          <> space
+          <> txt "-}"
+
+    asBlock = writtenAsBlock ctx doc
+    written' = docLines asBlock str
+    blockForm = asBlock && length written' > 1
 
 -- | How a rebuilt Haddock begins.
 opener :: DocStyle -> Text
@@ -117,6 +137,19 @@ opener = \case
   Caret -> "-- ^"
   Section n -> "-- " <> T.replicate n "*"
   Chunk n -> docSectionName n
+
+-- | How a rebuilt Haddock that stays a block comment begins.
+blockOpener :: DocStyle -> Text
+blockOpener = \case
+  Pipe -> "{- |"
+  Caret -> "{- ^"
+  Section n -> "{- " <> T.replicate n "*"
+  Chunk n -> "{- $" <> T.pack n
+
+-- | Did the author write this Haddock as a block comment?
+writtenAsBlock :: Ctx -> LHsDoc GhcPs -> Bool
+writtenAsBlock ctx doc =
+  maybe False isBlockForm (writtenHaddock ctx (spanOfSrcSpan (getLoc doc)))
 
 -- | The anchor of a named documentation chunk.
 --
@@ -167,6 +200,10 @@ marker = \case
 isBlockForm :: NonEmpty Text -> Bool
 isBlockForm written = "{-" `T.isPrefixOf` T.stripStart (NE.head written)
 
+-- | May code follow the reused text on the line it ends?
+selfClosing :: NonEmpty Text -> Bool
+selfClosing written = isBlockForm written && null (NE.tail written)
+
 ----------------------------------------------------------------------------
 -- Documentation and layout
 
@@ -187,8 +224,8 @@ printsWholeLineDocs ctx x = case docsIn x of
   docs -> any takesWholeLines docs
   where
     takesWholeLines doc = case reusableText ctx Pipe doc of
-      Just written -> not (isBlockForm written)
-      Nothing -> not (null (docLines (unLoc doc)))
+      Just written -> not (selfClosing written)
+      Nothing -> not (null (docLines (writtenAsBlock ctx doc) (unLoc doc)))
 
 -- | The spans of every Haddock in a fragment.
 --
@@ -222,10 +259,14 @@ docStringsIn = listify (const True :: HsDocString -> Bool)
 -- Doc strings
 
 -- | The lines of a doc string, normalised the way Haddock reads them.
-docLines :: WithHsDocIdentifiers HsDocString GhcPs -> [Text]
-docLines str
+docLines ::
+  -- | Was it written as a block comment?
+  Bool ->
+  WithHsDocIdentifiers HsDocString GhcPs ->
+  [Text]
+docLines blockForm str
   | null body = []
-  | otherwise = map (guardDollar . unpad) body
+  | otherwise = map guardDollar (dedent (map unpad body))
   where
     body =
       dropWhileEnd T.null
@@ -240,6 +281,23 @@ docLines str
     padded = case dropWhile T.null body of
       (t : _) -> " " `T.isPrefixOf` t
       [] -> False
+
+    -- Written as @{- | … -}@, the lines after the first are indented to sit
+    -- under the opening bracket, and that indentation is measured from a
+    -- column the text is about to leave: printed back as @--@ lines it
+    -- would show up as a run of spaces the author never typed. Only the
+    -- part they all share goes, so anything indented further—an example, a
+    -- code block—keeps the shape it was given.
+    dedent ls
+      | not blockForm = ls
+      | otherwise = case ls of
+          [] -> []
+          (first' : rest) -> first' : map (T.drop (shared rest)) rest
+
+    shared ls = case map indentation (filter (not . T.null) ls) of
+      [] -> 0
+      ns -> minimum ns
+    indentation = T.length . T.takeWhile (== ' ')
 
     -- A line may not begin with a dollar: that is the spelling of a named
     -- chunk, and one appearing by accident is a parse error.

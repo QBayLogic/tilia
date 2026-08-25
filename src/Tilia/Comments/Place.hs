@@ -14,9 +14,8 @@ where
 import Data.List (sortOn)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (isNothing, listToMaybe, mapMaybe)
 import Data.Ord (Down (..))
-import Tilia.Comments (Comment (..), commentTrailing)
+import Tilia.Comments (Comment (..), closesItself, commentTrailing)
 import Tilia.Span
 
 -- | Where a comment stands in relation to the region it was given to.
@@ -37,13 +36,11 @@ data Placements = Placements
 placeComments :: [Span] -> [Comment] -> Placements
 placeComments regions comments =
   Placements
-    { placedAt = Map.fromListWith (flip (<>)) (mapMaybe assign comments),
-      placedNowhere = filter (isNothing . against) comments
+    { placedAt = Map.fromListWith (flip (<>)) [(r, [(p, c)]) | (Just (r, p), c) <- decided],
+      placedNowhere = [c | (Nothing, c) <- decided]
     }
   where
-    assign c = do
-      (region, position) <- against c
-      pure (region, [(position, c)])
+    decided = [(against c, c) | c <- comments]
 
     against c
       | commentTrailing c, Just r <- trailed = Just (r, Trailing)
@@ -52,10 +49,19 @@ placeComments regions comments =
       where
         here = commentSpan c
         trailed
-          | writtenAgainst || not (commentFollowed c) =
-              nearest (\r -> (Down (endPoint r), startPoint r)) $
-                filter (\r -> endsJustBefore r && not (fencedOff r)) regions
+          | writtenAgainst = before
+          | commentFollowed c = Nothing
+          | closesItself c = before >>= surrounded
+          | otherwise = before
+        before =
+          nearest (\r -> (Down (endPoint r), startPoint r)) $
+            filter (\r -> endsJustBefore r && not (fencedOff r)) regions
+        surrounded r
+          | any middling regions = Just r
           | otherwise = Nothing
+          where
+            middling o =
+              here `inside` o && r `inside` o && startPoint o < startPoint r
 
         writtenAgainst =
           any (\r -> Just (endPoint r) == stopsAt) regions
@@ -68,8 +74,14 @@ placeComments regions comments =
           nearest (\r -> (startPoint r, Down (endPoint r))) $
             filter (\r -> startPoint r >= endPoint here) regions
 
+    -- Folded rather than sorted: this runs for every comment against every
+    -- region, and only the first of the order is ever wanted.
     nearest :: (Ord k) => (Span -> k) -> [Span] -> Maybe Span
-    nearest key = listToMaybe . sortOn key
+    nearest key = fmap fst . foldl' closer Nothing
+      where
+        closer best s = case best of
+          Just (_, k) | k <= key s -> best
+          _ -> Just (s, key s)
 
 -- | Does the first region fall within the second?
 inside :: Span -> Span -> Bool

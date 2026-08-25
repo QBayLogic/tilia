@@ -5,6 +5,7 @@ module Tilia.Span.Ghc
     spanOf,
     spansOf,
     tokenSpan,
+    annSpan,
   )
 where
 
@@ -32,6 +33,10 @@ spanOf = spanOfSrcSpan . getHasLoc
 -- | Where a keyword or a piece of punctuation was written.
 tokenSpan :: EpToken sym -> Maybe Span
 tokenSpan = spanOfSrcSpan . getEpTokenSrcSpan
+
+-- | Where an annotation says something was written.
+annSpan :: (HasLoc l) => l -> Maybe Span
+annSpan = spanOfSrcSpan . getHasLoc
 
 -- | The span covering every located thing in the list.
 spansOf :: (HasLoc l) => [GenLocated l a] -> Maybe Span

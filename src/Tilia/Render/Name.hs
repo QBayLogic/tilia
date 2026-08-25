@@ -84,11 +84,17 @@ adorn ctx here x = go
       -- @->@ is the one name that is a keyword as well, and the parentheses
       -- are recorded on their own rather than as an adornment.
       NameAnnRArrow {nann_mopen = Just _} -> inParens
-      NameAnn {nann_adornment} -> case nann_adornment of
-        NameParens {} -> inParens . spaceOutHash
-        NameBackquotes {} -> backticks
-        _ -> id
+      -- The name inside the brackets is claimed separately from the
+      -- brackets themselves, so that a comment written against it—@( {-
+      -- here -} :+: )@—is put where it was written rather than after the
+      -- closing bracket.
+      NameAnn {nann_adornment, nann_name} -> case nann_adornment of
+        NameParens {} -> inParens . spaceOutHash . itsOwn nann_name
+        NameBackquotes {} -> backticks . itsOwn nann_name
+        _ -> itsOwn nann_name
       _ -> id
+
+    itsOwn = atSpan ctx . annSpan
 
     inParens d = txt "(" <> d <> txt ")"
 
