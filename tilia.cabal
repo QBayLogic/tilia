@@ -138,6 +138,7 @@ test-suite tests
   build-tool-depends: hspec-discover:hspec-discover >=2 && <3
   hs-source-dirs: tests
   other-modules:
+    Tilia.Comments.PlaceSpec
     Tilia.CommentsSpec
     Tilia.Corpus
     Tilia.CorpusSpec
