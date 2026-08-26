@@ -10,7 +10,6 @@ import Control.Exception (SomeException, evaluate, try)
 import Control.Monad (join)
 import Data.ByteString qualified as BS
 import Data.Foldable (for_)
-import Data.IORef
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -25,6 +24,7 @@ import Tilia.Equivalence (commentDifference, syntaxDifference)
 import Tilia.Parser
   ( ParsedModule (..),
     defaultParserConfig,
+    describeParseError,
     parseText,
     movesPositions,
   )
@@ -46,7 +46,6 @@ corpusSpec corpus =
         it "is available" . pendingWith $
           "corpus not on this machine and could not be fetched: " <> T.unpack problem
       Right examples -> do
-        tally <- runIO (newIORef mempty)
         limit <- runIO exampleTimeout
         colours <- runIO coloursFor
 
@@ -54,11 +53,8 @@ corpusSpec corpus =
         for_ examples $ \example ->
           it (exampleName example) $ do
             result <- check colours limit example
-            modifyIORef' tally (<> record result)
             for_ (complaint (Set.member (exampleName example) declines) result) $
               expectationFailure . T.unpack
-
-        summarise (length examples) tally
 
 -- | How long one example gets before it is called a failure.
 exampleTimeout :: IO Int
@@ -68,74 +64,24 @@ exampleTimeout =
     _ -> pure (60 * 1_000_000)
 
 ----------------------------------------------------------------------------
--- What the run added up to
-
--- | Counts across a corpus, accumulated as its examples run.
-data Tally = Tally
-  { -- | Examples we could read and format.
-    tallyChecked :: !Int,
-    -- | Examples that are not Haskell we can read.
-    tallySkipped :: !Int,
-    -- | Examples the formatter refuses to rewrite.
-    tallyDeclined :: !Int
-  }
-
-instance Semigroup Tally where
-  a <> b =
-    Tally
-      { tallyChecked = tallyChecked a + tallyChecked b,
-        tallySkipped = tallySkipped a + tallySkipped b,
-        tallyDeclined = tallyDeclined a + tallyDeclined b
-      }
-
-instance Monoid Tally where
-  mempty = Tally 0 0 0
-
--- | What one result contributes.
---
--- A broken example still counts as checked: it was read and formatted, and
--- the failure is reported against the example itself.
-record :: Result -> Tally
-record = \case
-  Skipped -> mempty {tallySkipped = 1}
-  Declined -> mempty {tallyDeclined = 1}
-  Broken _ -> mempty {tallyChecked = 1}
-  Formatted -> mempty {tallyChecked = 1}
-
--- | What the run covered, as against what any one example did.
---
--- These run last, which is what makes the tally complete by the time they
--- read it.
-summarise :: Int -> IORef Tally -> Spec
-summarise total tally = do
-  it "has examples to run" $ do
-    Tally {..} <- readIORef tally
-    -- Under a selection there may legitimately be nothing here; it is the
-    -- whole corpus formatting nothing that would mean the wiring is broken.
-    if tallyChecked + tallySkipped + tallyDeclined < total
-      then pure ()
-      else tallyChecked `shouldSatisfy` (> 0)
-
-  it "reports what it covered" $ do
-    Tally {..} <- readIORef tally
-    pendingWith $
-      show tallyChecked
-        <> " examples formatted, "
-        <> show tallySkipped
-        <> " skipped as not parseable by us, "
-        <> show tallyDeclined
-        <> " declined"
-
-----------------------------------------------------------------------------
 -- Checking one example
 
 -- | What running the formatter over one example established.
+--
+-- Every one of these but 'Formatted' and an expected 'Declined' is a
+-- failure. An example the formatter cannot read is not an example we are
+-- excused from: it is one the corpus was supposed to have been told about,
+-- in 'corpusSkip', where it stops being an example at all. Anything that
+-- stops parsing without being named there is a change in what we can read,
+-- and that is exactly the thing worth hearing about.
 data Result
-  = -- | The input is not Haskell we can read, which is a fact about the
-    -- corpus rather than about the formatter. GHC's test suite is full of
-    -- files that are meant not to compile, and of CPP that we do not
-    -- expand.
-    Skipped
+  = -- | The bytes are not UTF-8, so there is nothing to parse. A Haskell
+    -- source file is UTF-8 by definition, and GHC's test suite carries a
+    -- few that are not on purpose.
+    NotUtf8
+  | -- | GHC's own parser could not read it. Its test suite is full of files
+    -- meant not to compile, and of CPP that we do not expand.
+    DoesNotParse Text
   | -- | The input is Haskell, and the formatter refuses to rewrite it.
     Declined
   | -- | A property does not hold.
@@ -151,19 +97,24 @@ complaint ::
   Maybe Text
 complaint declines = \case
   Broken why -> Just why
+  NotUtf8 -> Just (unlisted "is not UTF-8")
+  DoesNotParse where' -> Just (unlisted ("does not parse, at " <> where'))
   Declined
     | declines -> Nothing
     | otherwise -> Just "the formatter declined this, and the corpus does not say it should"
-  _
+  Formatted
     | declines -> Just "the corpus says this should be declined, and it was not"
     | otherwise -> Nothing
+  where
+    unlisted why =
+      "this " <> why <> ", and the corpus does not list it under corpusSkip"
 
 check :: Colours -> Int -> Example -> IO Result
 check colours limit example = do
   source <- readUtf8 (exampleInput example)
   expected <- traverse readUtf8 (exampleReference example)
   case source of
-    Nothing -> pure Skipped
+    Nothing -> pure NotUtf8
     Just text -> guarded limit (checkPure colours text (join expected))
 
 -- | Read a file that is supposed to be a Haskell module.
@@ -171,9 +122,7 @@ check colours limit example = do
 -- Decoded here rather than by 'T.readFile', which would use whatever
 -- encoding the machine happens to be set to and fail on a byte it did not
 -- expect. A Haskell source file is UTF-8 by definition, so one that is not
--- is not a module—GHC's test suite carries a handful on purpose, to check
--- that the compiler rejects them—and 'Nothing' puts it with the rest of the
--- corpus we cannot read instead of reporting it against the formatter.
+-- is not a module, and 'Nothing' says so.
 readUtf8 :: FilePath -> IO (Maybe Text)
 readUtf8 path = either (const Nothing) Just . decodeUtf8' <$> BS.readFile path
 
@@ -193,7 +142,8 @@ guarded limit result =
     Right (Just settled) -> pure settled
   where
     forced = \case
-      Skipped -> Skipped
+      NotUtf8 -> NotUtf8
+      DoesNotParse where' -> T.length where' `seq` DoesNotParse where'
       Declined -> Declined
       Broken why -> T.length why `seq` Broken why
       Formatted -> Formatted
@@ -212,9 +162,9 @@ guarded limit result =
 checkPure :: Colours -> Text -> Maybe Text -> Result
 checkPure colours source expected
   | movesPositions source = Declined
-  | otherwise = case parse source of
-      Nothing -> Skipped
-      Just before ->
+  | otherwise = case parseText defaultParserConfig "<corpus>" source of
+      Left problem -> DoesNotParse (describeParseError problem)
+      Right before ->
         let formatted = render before
             against name = diff colours ("input", name) source formatted
          in case parse formatted of
