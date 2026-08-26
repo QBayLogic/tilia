@@ -19,7 +19,8 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Ord (Down (..))
 import Tilia.Comments
-  ( Comment (..),
+  ( Above (..),
+    Comment (..),
     closesItself,
     commentTrailing,
     singleLine,
@@ -121,7 +122,7 @@ placeComments regions fences comments =
             filter (\r -> startPoint r >= endPoint here) regions
 
         continues
-          | Just column <- commentContentAboveAt c,
+          | ContentAt column <- commentAbove c,
             column == spanStartColumn here,
             runsOnFromAbove,
             nothingBelowItLinesUp =

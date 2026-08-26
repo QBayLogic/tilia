@@ -91,8 +91,8 @@ writtenAs atTheEnd position c = case shapeOf position c of
   OnItsOwnLines ->
     gapAbove <> closeLine <> commentDoc c <> closeLine <> gapBelow
   where
-    gapAbove = includeWhen (commentAfterGap c) (closeLine <> blankLine)
-    gapBelow = includeWhen (commentBeforeGap c && not atTheEnd) blankLine
+    gapAbove = includeWhen (commentGapAbove c) (closeLine <> blankLine)
+    gapBelow = includeWhen (commentGapBelow c && not atTheEnd) blankLine
 
 -- | A comment nothing came to collect, written after everything.
 atEnd :: Comment -> Doc

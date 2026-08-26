@@ -7,6 +7,7 @@
 module Tilia.Comments
   ( Comment (..),
     CommentStyle (..),
+    Above (..),
     commentsOf,
     renderComment,
     closesItself,
@@ -49,6 +50,16 @@ data CommentStyle
     DocComment
   deriving (Eq, Show)
 
+-- | What was on the line above a comment.
+data Above
+  = -- | Nothing was: the comment begins on the first line of the file.
+    TopOfFile
+  | -- | An empty line.
+    BlankLine
+  | -- | Something, beginning at this column.
+    ContentAt !Int
+  deriving (Eq, Show)
+
 -- | One comment.
 data Comment = Comment
   { -- | Where it was in the input.
@@ -58,11 +69,11 @@ data Comment = Comment
     commentBody :: NonEmpty Text,
     -- | How it was written.
     commentStyle :: CommentStyle,
-    -- | Whether the line above it in the input was empty.
-    commentAfterGap :: Bool,
-    -- | The column the line above it began at, when that line had anything
-    -- on it.
-    commentContentAboveAt :: Maybe Int,
+    -- | What was on the line above it.
+    --
+    -- What a comment lines up with is how its author said what it is about,
+    -- and the line above is the only thing it can line up with.
+    commentAbove :: Above,
     -- | Where the code before it on its opening line stops: the column one
     -- past the last character of that code, or 'Nothing' when the comment
     -- had the line to itself.
@@ -70,8 +81,10 @@ data Comment = Comment
     -- | Whether anything other than whitespace follows it on its closing
     -- line.
     commentFollowed :: Bool,
-    -- | Whether the line below it in the input was empty.
-    commentBeforeGap :: Bool
+    -- | Whether to leave an empty line above it when it is printed.
+    commentGapAbove :: Bool,
+    -- | Whether to leave an empty line below it when it is printed.
+    commentGapBelow :: Bool
   }
   deriving (Eq, Show)
 
@@ -127,11 +140,11 @@ mkComment sourceLines spn tok =
     { commentSpan = spanOfReal spn,
       commentBody = normalizeBody startColumn style raw,
       commentStyle = style,
-      commentAfterGap = afterGap,
-      commentContentAboveAt = contentAboveAt,
+      commentAbove = above,
       commentCodeBeforeStopsAt = codeBeforeStopsAt,
       commentFollowed = followed,
-      commentBeforeGap = beforeGap
+      commentGapAbove = above == BlankLine,
+      commentGapBelow = gapBelow
     }
   where
     (style, raw) = case tok of
@@ -153,12 +166,11 @@ mkComment sourceLines spn tok =
       [] -> Nothing
 
     -- The rest in the order the fields are declared in.
-    afterGap = maybe False (T.all isSpace) lineAbove
-    contentAboveAt = do
-      l <- lineAbove
-      if T.all isSpace l
-        then Nothing
-        else Just (columnOf l (T.length (T.takeWhile isSpace l)))
+    above = case lineAbove of
+      Nothing -> TopOfFile
+      Just l
+        | T.all isSpace l -> BlankLine
+        | otherwise -> ContentAt (columnOf l (T.length (T.takeWhile isSpace l)))
     codeBeforeStopsAt = do
       l <- openingLine
       let before' = T.stripEnd (T.take startColumn l)
@@ -166,7 +178,7 @@ mkComment sourceLines spn tok =
     followed = case lineAt (GHC.srcSpanEndLine spn) of
       Just l -> not (T.all isSpace (T.drop (offsetOf l (GHC.srcSpanEndCol spn)) l))
       Nothing -> False
-    beforeGap = case lineAt (GHC.srcSpanEndLine spn + 1) of
+    gapBelow = case lineAt (GHC.srcSpanEndLine spn + 1) of
       Just l -> T.all isSpace l
       Nothing -> False
 

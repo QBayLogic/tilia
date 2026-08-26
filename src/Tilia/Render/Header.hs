@@ -115,7 +115,7 @@ takeHeaderPragmas headerEnd comments = (pragmas, plain)
       Set.member (spanEndLine (commentSpan c) + 1) pragmaStarts
     pragmaStarts =
       Set.fromList [spanStartLine (commentSpan c) | (c, Just _) <- recognised]
-    airless c = c {commentAfterGap = False, commentBeforeGap = False}
+    airless c = c {commentGapAbove = False, commentGapBelow = False}
     entry c p =
       HeaderPragma
         { hpSpan = commentSpan c,

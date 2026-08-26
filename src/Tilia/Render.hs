@@ -115,10 +115,10 @@ heldOff haddocks = map holdOff
     starts = Set.fromList (map (spanStartLine . commentSpan) haddocks)
     holdOff c =
       c
-        { commentAfterGap =
-            commentAfterGap c || Set.member (spanStartLine s - 1) ends,
-          commentBeforeGap =
-            commentBeforeGap c || Set.member (spanEndLine s + 1) starts
+        { commentGapAbove =
+            commentGapAbove c || Set.member (spanStartLine s - 1) ends,
+          commentGapBelow =
+            commentGapBelow c || Set.member (spanEndLine s + 1) starts
         }
       where
         s = commentSpan c
