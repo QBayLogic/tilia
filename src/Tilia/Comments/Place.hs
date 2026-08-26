@@ -14,10 +14,12 @@ module Tilia.Comments.Place
 where
 
 import Data.List (sortOn)
+import Data.IntMap.Strict qualified as IntMap
 import Data.IntSet qualified as IntSet
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Ord (Down (..))
+import Data.Set qualified as Set
 import Tilia.Comments
   ( Above (..),
     Comment (..),
@@ -97,6 +99,16 @@ placeComments regions fences comments =
           not (commentFollowed c)
         ]
 
+    regionsByEndLine =
+      IntMap.fromListWith (<>) [(spanEndLine r, [r]) | r <- regions]
+
+    regionEndPoints = Set.fromList (map endPoint regions)
+
+    regionsByStartPoint =
+      Map.fromListWith wider [(startPoint r, r) | r <- regions]
+      where
+        wider a b = if endPoint a >= endPoint b then a else b
+
     against c
       | commentTrailing c, Just r <- trailed = Just (r, After)
       | not (commentTrailing c), Just r <- continues = Just (r, After)
@@ -108,26 +120,24 @@ placeComments regions fences comments =
           | writtenAgainst || not (commentFollowed c) = endingOn (spanStartLine here)
           | otherwise = Nothing
         endingOn line =
-          nearest (\r -> (Down (endPoint r), startPoint r)) (filter candidate regions)
+          nearest (\r -> (Down (endPoint r), startPoint r)) (filter candidate onThatLine)
           where
-            candidate r =
-              spanEndLine r == line
-                && endPoint r <= startPoint here
-                && not (fencedOff r)
+            onThatLine = IntMap.findWithDefault [] line regionsByEndLine
+            candidate r = endPoint r <= startPoint here && not (fencedOff r)
 
-        writtenAgainst =
-          any (\r -> Just (endPoint r) == stopsAt) regions
+        writtenAgainst = maybe False (`Set.member` regionEndPoints) stopsAt
         stopsAt = (,) (spanStartLine here) <$> commentCodeBeforeStopsAt c
 
-        fencedOff r = apart regions || (printedInPlace && apart fences)
+        enclosingRegions = filter (here `inside`) regions
+        enclosingFences = filter (here `inside`) fences
+
+        fencedOff r = outside enclosingRegions || (printedInPlace && outside enclosingFences)
           where
-            apart = any (\o -> here `inside` o && not (r `inside` o))
+            outside = any (not . (r `inside`))
 
         printedInPlace = shapeOf After c == InPlace
 
-        next =
-          nearest (\r -> (startPoint r, Down (endPoint r))) $
-            filter (\r -> startPoint r >= endPoint here) regions
+        next = snd <$> Map.lookupGE (endPoint here) regionsByStartPoint
 
         continues
           | ContentAt column <- commentAbove c,
