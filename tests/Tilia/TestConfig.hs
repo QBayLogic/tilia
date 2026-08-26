@@ -19,14 +19,14 @@ import Tilia.Fixity
     resolveScope,
   )
 import Tilia.Fixity.Builtin (builtinFixities)
-import Tilia.Parser (effectiveExtensions)
+import Tilia.Parser (effectiveExtensions, onUnlessRefused)
 import Tilia.Render (Settings (..), defaultSettings)
 
 -- | How to format one corpus example.
 exampleSettings :: Text -> HsModule GhcPs -> Settings
 exampleSettings source hsModule =
   defaultSettings
-    { setExtensions = Set.fromList (effectiveExtensions source),
+    { setExtensions = Set.fromList (effectiveExtensions onUnlessRefused source),
       setScope = Just (resolveScope exportsOf hsModule)
     }
 

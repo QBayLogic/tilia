@@ -13,9 +13,9 @@ module Tilia.Comments.Place
   )
 where
 
-import Data.List (sortOn)
 import Data.IntMap.Strict qualified as IntMap
 import Data.IntSet qualified as IntSet
+import Data.List (sortOn)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Ord (Down (..))

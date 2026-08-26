@@ -60,7 +60,6 @@ where
 
 import Codec.Archive.Tar qualified as Tar
 import Codec.Compression.GZip qualified as GZip
-import Control.Exception (SomeException, try)
 import Control.Monad (filterM, join)
 import Crypto.Hash.SHA256 qualified as SHA256
 import Data.Aeson (FromJSON (..), eitherDecodeFileStrict, withObject, (.:), (.:?))
@@ -94,6 +93,7 @@ import Tilia.Fixity.Cabal (exposedModules, packageModules, sourceDirs)
 import Tilia.Fixity.Cache
 import Tilia.Fixity.PackageDb
 import Tilia.Parser
+import Tilia.Utils (quietly)
 
 ----------------------------------------------------------------------------
 -- The plan
@@ -533,16 +533,6 @@ readModule tarball modName = quietly Nothing $ do
           Just (T.decodeUtf8Lenient (BL.toStrict content))
       | otherwise = acc
 
--- | Run an action, falling back on the given value if it throws.
---
--- A missing tarball, a truncated archive, a file that is not valid UTF-8, a
--- @cabal@ that is not installed: none of these should stop a file being
--- formatted. The cost of failure here is an unresolved fixity.
-quietly :: a -> IO a -> IO a
-quietly fallback action =
-  try action >>= \case
-    Left (_ :: SomeException) -> pure fallback
-    Right a -> pure a
 
 -- | How far a chain of re-exports is followed.
 reexportDepth :: Int

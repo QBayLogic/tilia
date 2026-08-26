@@ -14,7 +14,6 @@ module Tilia.Project
   )
 where
 
-import Control.Exception (SomeException, try)
 import Data.List (isSuffixOf)
 import System.Directory
   ( canonicalizePath,
@@ -22,6 +21,7 @@ import System.Directory
     listDirectory,
   )
 import System.FilePath (takeDirectory)
+import Tilia.Utils (quietly)
 
 -- | A project, and what marked it out.
 data ProjectRoot = ProjectRoot
@@ -70,8 +70,3 @@ findProjectRoot start = quietly Nothing $ do
           (packageFile : _) -> Just packageFile
           [] -> Nothing
 
-quietly :: a -> IO a -> IO a
-quietly fallback action =
-  try action >>= \case
-    Left (_ :: SomeException) -> pure fallback
-    Right a -> pure a

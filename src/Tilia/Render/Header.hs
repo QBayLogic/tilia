@@ -378,8 +378,7 @@ importDecl ctx ImportDecl {..} =
           <> importList
       )
   where
-    qualifiedLast =
-      extensionOn ctx ImportQualifiedPost || ideclQualified == QualifiedPost
+    qualifiedLast = extensionOn ctx ImportQualifiedPost
     isQualified = isImportDeclQualified ideclQualified
 
     packageQualifier = case ideclPkgQual of

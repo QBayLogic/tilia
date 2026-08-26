@@ -4,8 +4,10 @@
 module Tilia.RenderSpec (spec) where
 
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
+import GHC.LanguageExtensions.Type (Extension (..))
 import Test.Hspec
 import Tilia.Fixity
   ( Direction (..),
@@ -44,7 +46,7 @@ spec = do
                      "module M where"
                    ]
 
-    it "leaves the author's choice of qualified style alone" $
+    it "puts qualified first throughout when the extension is off" $
       format
         [ "module M where",
           "import Data.Map qualified as M",
@@ -52,8 +54,21 @@ spec = do
         ]
         `shouldBe` [ "module M where",
                      "",
-                     "import Data.Map qualified as M",
+                     "import qualified Data.Map as M",
                      "import qualified Data.Set as S"
+                   ]
+
+    it "puts qualified last throughout when the extension is on" $
+      formatUnder
+        [ImportQualifiedPost]
+        [ "module M where",
+          "import Data.Map qualified as M",
+          "import qualified Data.Set as S"
+        ]
+        `shouldBe` [ "module M where",
+                     "",
+                     "import Data.Map qualified as M",
+                     "import Data.Set qualified as S"
                    ]
 
   describe "comments" $ do
@@ -230,15 +245,21 @@ spec = do
 format :: [Text] -> [Text]
 format = formatWith Nothing
 
+-- | Format with the given extensions in force, as a package would put them.
+formatUnder :: [Extension] -> [Text] -> [Text]
+formatUnder exts = withSettings defaultSettings {setExtensions = Set.fromList exts}
+
 formatWith :: Maybe Scope -> [Text] -> [Text]
-formatWith scope input =
+formatWith scope = withSettings defaultSettings {setScope = scope}
+
+withSettings :: Settings -> [Text] -> [Text]
+withSettings settings input =
   case parseText defaultParserConfig "<test>" source of
     Left _ -> error ("did not parse:\n" <> T.unpack source)
     Right parsed ->
       T.lines (printDoc defaultRenderOptions (renderModule settings parsed))
   where
     source = T.unlines input
-    settings = defaultSettings {setScope = scope}
 
 -- | A module with comments in all the places that are hard to put them
 -- back.

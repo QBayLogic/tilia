@@ -15,13 +15,15 @@ import Tilia.Format
     formatFile,
     formatIn,
   )
+import Tilia.Package (newPackageReader)
 
 main :: IO ()
 main = do
   Opts {..} <- execParser optsParserInfo
+  askPackage <- newPackageReader
   result <- case optInputFile of
-    Just path -> formatFile path
-    Nothing -> T.getContents >>= formatIn "."
+    Just path -> formatFile askPackage path
+    Nothing -> T.getContents >>= formatIn askPackage "."
   case result of
     Left e -> do
       T.hPutStrLn stderr ("tilia: " <> describeFormatError e)

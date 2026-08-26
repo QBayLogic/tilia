@@ -14,6 +14,9 @@ module Tilia.Parser
     defaultParserConfig,
     sourceExtensions,
     effectiveExtensions,
+    onUnlessRefused,
+    lookupExtension,
+    parserConfigFor,
 
     -- * Pragmas that move the positions
     movesPositions,
@@ -95,15 +98,19 @@ newtype ParserConfig = ParserConfig
     pcExtensions :: [Extension]
   }
 
--- | No extensions beyond whatever @GHC2021@ implies.
---
--- The edition has to be asked for explicitly: the parser is told a set of
--- extensions and knows nothing about editions, so a module relying on one
--- being in force—@foreign import@, say, which @ForeignFunctionInterface@
--- allows and nothing else does—would not parse without this.
+-- | What to parse with when the package says nothing.
 defaultParserConfig :: ParserConfig
-defaultParserConfig =
-  ParserConfig {pcExtensions = GHC.languageExtensions (Just GHC.GHC2021)}
+defaultParserConfig = parserConfigFor []
+
+-- | What to parse with, given whatever the package had to say.
+parserConfigFor ::
+  -- | What the package puts in force
+  [Extension] ->
+  ParserConfig
+parserConfigFor package =
+  ParserConfig
+    { pcExtensions = GHC.languageExtensions (Just GHC.GHC2021) <> package
+    }
 
 -- | Parse a module.
 parseText ::
@@ -141,13 +148,6 @@ parseText config path source =
         (GHC.mkRealSrcLoc (mkFastString path) 1 1)
 
 -- | Close a set of extensions under what they imply.
---
--- @TemplateHaskell@ turns @TemplateHaskellQuotes@ on, and the lexer
--- consults the second rather than the first, so a module that asks only for
--- the first would not lex its own quotations. Implications that turn
--- something /off/ are ignored: a formatter wants to accept as much as it
--- can, and an extension left on that the compiler would have switched off
--- costs nothing here.
 withImplied :: [Extension] -> [Extension]
 withImplied = settle . nub
   where
@@ -221,8 +221,15 @@ sourceExtensions :: Text -> [Extension]
 sourceExtensions = pragmasOver []
 
 -- | The extensions actually in force in a module.
-effectiveExtensions :: Text -> [Extension]
-effectiveExtensions = pragmasOver onUnlessRefused
+effectiveExtensions ::
+  -- | What the package the module belongs to puts in force, which is its
+  -- @default-language@ and @default-extensions@ already resolved into a
+  -- set.
+  [Extension] ->
+  -- | The module's source, read here for its @LANGUAGE@ pragmas alone.
+  Text ->
+  [Extension]
+effectiveExtensions = pragmasOver
 
 -- | The extensions on until a module says otherwise.
 onUnlessRefused :: [Extension]

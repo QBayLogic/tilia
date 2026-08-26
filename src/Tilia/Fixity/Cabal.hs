@@ -11,13 +11,13 @@ where
 
 import Codec.Archive.Tar qualified as Tar
 import Codec.Compression.GZip qualified as GZip
-import Control.Exception (SomeException, try)
 import Data.ByteString.Lazy qualified as BL
 import Data.Char (isSpace)
 import Data.List (isSuffixOf)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
+import Tilia.Utils (quietly)
 
 -- | The modules a package exposes, read from the @.cabal@ file in its
 -- source tarball.
@@ -106,9 +106,3 @@ fieldsNamed name = go
     deeperThan n l = T.null (T.strip l) || indentOf l > n
     indentOf = T.length . T.takeWhile isSpace
 
--- | Run an action, falling back on the given value if it throws.
-quietly :: a -> IO a -> IO a
-quietly fallback action =
-  try action >>= \case
-    Left (_ :: SomeException) -> pure fallback
-    Right a -> pure a

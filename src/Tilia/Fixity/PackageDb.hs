@@ -21,7 +21,6 @@ module Tilia.Fixity.PackageDb
   )
 where
 
-import Control.Exception (SomeException, try)
 import Data.Char (isSpace)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
@@ -29,6 +28,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import System.Exit (ExitCode (..))
 import System.Process (readProcessWithExitCode)
+import Tilia.Utils (quietly)
 
 -- | A package the compiler can see.
 data InstalledPackage = InstalledPackage
@@ -119,8 +119,3 @@ parseFields = Map.fromList . mapMaybe field . groups . T.lines
             Just (T.strip key, T.unwords (T.drop 1 value : map T.strip rest))
       _ -> Nothing
 
-quietly :: a -> IO a -> IO a
-quietly fallback action =
-  try action >>= \case
-    Left (_ :: SomeException) -> pure fallback
-    Right a -> pure a

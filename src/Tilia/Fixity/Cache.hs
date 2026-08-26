@@ -17,7 +17,6 @@ module Tilia.Fixity.Cache
   )
 where
 
-import Control.Exception (SomeException, try)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
@@ -33,6 +32,7 @@ import System.Directory
   )
 import System.FilePath ((</>))
 import Tilia.Fixity
+import Tilia.Utils (quietly)
 
 -- | Where cached answers are kept.
 newtype Cache = Cache FilePath
@@ -151,8 +151,3 @@ writeAtomically path contents = quietly () $ do
   T.writeFile temporary contents
   renameFile temporary path
 
-quietly :: a -> IO a -> IO a
-quietly fallback action =
-  try action >>= \case
-    Left (_ :: SomeException) -> pure fallback
-    Right a -> pure a
