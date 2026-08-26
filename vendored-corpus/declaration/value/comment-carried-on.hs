@@ -28,3 +28,11 @@ afterAGap = do
   a --
 
   bar
+
+-- Lined up with a line that has a comment on it but does not end in one, so
+-- there is no remark above to carry on.
+codeAfterTheComment = g
+      (a {- said once -} + b)
+      -- and this is about something else
+  where
+    h = 1

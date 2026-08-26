@@ -84,11 +84,18 @@ placeComments regions fences comments =
   where
     decided = [(against c, c) | c <- comments]
 
-    -- Which lines end in a comment, so that a comment lined up under one of
-    -- them can tell whether it is carrying a remark on.
+    -- Which lines end in a comment that trails code, so that a comment
+    -- lined up under one of them can tell whether it is carrying a remark
+    -- on. Both halves of that are needed: a comment with the line to itself
+    -- begins a remark rather than continuing one, and a comment with code
+    -- after it does not end its line, so the line below is not under it.
     linesEndingInAComment =
       IntSet.fromList
-        [spanEndLine (commentSpan c) | c <- comments, commentTrailing c]
+        [ spanEndLine (commentSpan c)
+        | c <- comments,
+          commentTrailing c,
+          not (commentFollowed c)
+        ]
 
     against c
       | commentTrailing c, Just r <- trailed = Just (r, After)
