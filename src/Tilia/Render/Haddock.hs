@@ -166,35 +166,48 @@ docSectionName n = "-- $" <> T.pack n
 reusableText :: Ctx -> DocStyle -> LHsDoc GhcPs -> Maybe (NonEmpty Text)
 reusableText ctx style doc = do
   written <- writtenHaddock ctx (spanOfSrcSpan (getLoc doc))
-  if writtenAs style (NE.head written) then Just written else Nothing
+  if openedInStyle style (NE.head written) then Just written else Nothing
 
 -- | Was the Haddock written in the style it is about to come back out in?
-writtenAs :: DocStyle -> Text -> Bool
-writtenAs style firstLine = case marker style of
-  (wanted, tooMany) ->
-    any (starts wanted tooMany) (T.stripPrefix "--" leader <|> T.stripPrefix "{-" leader)
-  where
-    leader = T.stripStart firstLine
-    starts wanted tooMany rest =
-      wanted `T.isPrefixOf` t && not (tooMany `T.isPrefixOf` t)
-      where
-        t = T.stripStart rest
+openedInStyle :: DocStyle -> Text -> Bool
+openedInStyle style firstLine = case afterOpener firstLine of
+  Nothing -> False
+  Just inside -> case style of
+    -- A chunk's name is the compiler's to delimit, and it may have stopped
+    -- somewhere the line carries on: @-- $Id: …@ names the chunk @Id@ and
+    -- then goes on with a colon that is no part of it. So the name is
+    -- matched as a prefix and where it ends is left to the compiler.
+    Chunk _ -> triggerFor style `T.isPrefixOf` inside
+    -- The rest are a run of characters that ends where the run ends, so the
+    -- run is read off the line and compared whole. Matching a prefix would
+    -- take @** x@ for a @* x@ that happens to be followed by a star.
+    _ -> triggerOn inside == Just (triggerFor style)
 
--- | The text a style is written with, and a longer one that would mean a
--- different style.
---
--- Only the section headings need the second: @** x@ is a heading one level
--- down and not a @* x@ that happens to be followed by an asterisk. The rest
--- cannot be mistaken for anything longer, and say so with a marker no text
--- begins with.
-marker :: DocStyle -> (Text, Text)
-marker = \case
-  Pipe -> ("|", noSuchText)
-  Caret -> ("^", noSuchText)
-  Section n -> (T.replicate n "*", T.replicate (n + 1) "*")
-  Chunk n -> ("$" <> T.pack n, noSuchText)
+-- | The trigger a style is written with.
+triggerFor :: DocStyle -> Text
+triggerFor = \case
+  Pipe -> "|"
+  Caret -> "^"
+  Section n -> T.replicate n "*"
+  Chunk n -> "$" <> T.pack n
+
+-- | What follows the @--@ or @{-@ that opens a comment, with the spaces
+-- after it removed.
+afterOpener :: Text -> Maybe Text
+afterOpener firstLine = T.stripStart <$> opened (T.stripStart firstLine)
   where
-    noSuchText = "\0"
+    opened t = T.stripPrefix "--" t <|> T.stripPrefix "{-" t
+
+-- | The trigger an opened comment carries, for the triggers that are a run
+-- of one character.
+triggerOn :: Text -> Maybe Text
+triggerOn inside = do
+  (c, rest) <- T.uncons inside
+  case c of
+    '|' -> Just "|"
+    '^' -> Just "^"
+    '*' -> Just (T.cons c (T.takeWhile (== '*') rest))
+    _ -> Nothing
 
 -- | Was the reused text a block comment?
 isBlockForm :: NonEmpty Text -> Bool

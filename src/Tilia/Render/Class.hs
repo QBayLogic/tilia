@@ -113,7 +113,7 @@ isCTuple _ _ = False
 classContext :: Ctx -> LHsContext GhcPs -> Doc
 classContext ctx ctxt
   | null (unLoc ctxt) = mempty
-  | otherwise = context ctx ctxt <> space <> txt "=>" <> breakOrSpace
+  | otherwise = context ctx ctxt <> joinedBy "=>"
 
 -- | The functional dependencies of a class.
 funDeps :: Ctx -> [LHsFunDep GhcPs] -> Doc
@@ -324,7 +324,7 @@ tyFamInstEqn ctx FamEqn {..} =
           (map (typeArgument ctx) feqn_pats)
 
     rhs =
-      indent (space <> txt "=" <> breakOrSpace <> hsType ctx feqn_rhs)
+      indent (joinedBy "=" <> hsType ctx feqn_rhs)
 
 ----------------------------------------------------------------------------
 -- Role annotations

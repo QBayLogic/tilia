@@ -88,7 +88,7 @@ dataDecl ctx style tyCon tyVars tyVarSpan renderTyVar fixity outerBinders HsData
           <> foldMap kindSignature dd_kindSig
 
     kindSignature k =
-      space <> txt "::" <> breakOrSpace <> indent (hsType ctx k)
+      joinedBy "::" <> indent (hsType ctx k)
 
     -- The @{-# CTYPE … #-}@ pragma of a foreign data type.
     foreignType = case unLoc <$> dd_cType of
@@ -205,9 +205,7 @@ conDecl ctx _ ConDeclGADT {..} =
         <> includeUnless
           (null cs)
           (indent (comma <> breakOrSpace <> commaSep (map (name ctx) cs)))
-        <> space
-        <> txt "::"
-        <> breakOrSpace
+        <> joinedBy "::"
         <> indent (layoutFrom ctx sigSpan (brokenIfDocumented ctx documented signature))
 
     signature =
@@ -218,7 +216,7 @@ conDecl ctx _ ConDeclGADT {..} =
            )
         <> foldMap (\tele -> forallTelescope ctx tele <> breakOrSpace) con_inner_bndrs
         <> foldMap
-          (\qs -> context ctx qs <> space <> txt "=>" <> breakOrSpace)
+          (\qs -> context ctx qs <> joinedBy "=>")
           con_mb_cxt
         <> layoutFrom ctx argResSpan (brokenIfDocumented ctx documented argsAndResult)
 
@@ -241,14 +239,12 @@ conDecl ctx _ ConDeclGADT {..} =
     arguments = case con_g_args of
       PrefixConGADT NoExtField xs -> foldMap argument xs
       RecConGADT _ x ->
-        recordFieldsAt ctx x <> space <> txt "->" <> breakOrSpace
+        recordFieldsAt ctx x <> joinedBy "->"
     argument x =
       documentedConDeclField ctx x
         <> space
         <> multiplicity (hsType ctx) (cdf_multiplicity x)
-        <> space
-        <> txt "->"
-        <> breakOrSpace
+        <> joinedBy "->"
 
     declSpan = spansOf (NE.toList con_names) <> sigSpan
     sigSpan = spanOf con_outer_bndrs <> foldMap spanOf con_mb_cxt <> argResSpan
@@ -340,7 +336,7 @@ conDecl ctx singleRecCon ConDeclH98 {..} = case con_args of
 leftContext :: Ctx -> LHsContext GhcPs -> Doc
 leftContext ctx = \case
   L _ [] -> mempty
-  ctxt -> context ctx ctxt <> space <> txt "=>" <> breakOrSpace
+  ctxt -> context ctx ctxt <> joinedBy "=>"
 
 ----------------------------------------------------------------------------
 -- Deriving clauses

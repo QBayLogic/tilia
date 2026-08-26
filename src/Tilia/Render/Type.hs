@@ -122,15 +122,15 @@ typeBody ctx documented here = \case
     layoutWithin ctx here (spansOf xs) $
       tupleBrackets sort (insideBrackets here (commaSep (map (align . hsType ctx) xs)))
   HsSumTy _ xs ->
-    unboxed (sepBy (space <> txt "|" <> breakOrSpace) (map (align . hsType ctx) xs))
+    unboxed (sepBy (joinedBy "|") (map (align . hsType ctx) xs))
   HsOpTy _ _ x op y -> typeChain ctx x op y
   HsParTy _ t ->
     layoutWithin ctx here (spanOf t) (parens (insideBrackets here (hsType ctx t)))
   HsIParamTy _ n t ->
-    align (at ctx n outputable <> space <> txt "::" <> breakOrSpace <> indent (hsType ctx t))
+    align (at ctx n outputable <> joinedBy "::" <> indent (hsType ctx t))
   HsStarTy _ _ -> txt "*"
   HsKindSig _ t k ->
-    align (hsType ctx t <> space <> txt "::" <> breakOrSpace <> indent (hsType ctx k))
+    align (hsType ctx t <> joinedBy "::" <> indent (hsType ctx k))
   HsSpliceTy _ splice -> knotSplice (ctxKnot ctx) ctx DollarSplice splice
   HsDocTy _ t str -> haddockInline ctx Pipe str <> hsType ctx t
   HsExplicitListTy _ promoted xs ->
@@ -337,7 +337,7 @@ tyVarBndr ctx HsTvb {..} = flagPrefix tvb_flag <> enclosed (binder <> kind)
     (kind, kinded) = case tvb_kind of
       HsBndrNoKind _ -> (mempty, False)
       HsBndrKind _ k ->
-        (space <> txt "::" <> breakOrSpace <> indent (hsType ctx k), True)
+        (joinedBy "::" <> indent (hsType ctx k), True)
 
     enclosed
       | flagIsInferred tvb_flag = braces
@@ -444,9 +444,7 @@ recordField ctx HsConDeclRecField {..} =
     <> align (commaSep (map (at_ ctx (name ctx . foLabel)) cdrf_names))
     <> space
     <> multiplicity (hsType ctx) (cdf_multiplicity cdrf_spec)
-    <> space
-    <> txt "::"
-    <> breakOrSpace
+    <> joinedBy "::"
     <> align (indent (conDeclField ctx cdrf_spec))
 
 -- | A constructor field, without its documentation or its multiplicity.

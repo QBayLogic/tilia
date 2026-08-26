@@ -63,9 +63,7 @@ patBody ctx bracing inAsPat here = \case
   ViewPat _ e p ->
     align $
       knotExpr (ctxKnot ctx) ctx plainSite e
-        <> space
-        <> txt "->"
-        <> breakOrSpace
+        <> joinedBy "->"
         <> indent (recur p)
   SplicePat _ splice -> knotSplice (ctxKnot ctx) ctx DollarSplice splice
   LitPat _ lit -> outputable lit
@@ -126,7 +124,7 @@ patFieldBind ctx HsFieldBind {..} =
   at ctx hfbLHS (fieldOcc ctx)
     <> includeUnless
       hfbPun
-      (space <> txt "=" <> breakOrSpace <> indent (hsPat ctx hfbRHS))
+      (joinedBy "=" <> indent (hsPat ctx hfbRHS))
 
 -- | The name of a record field.
 fieldOcc :: Ctx -> FieldOcc GhcPs -> Doc

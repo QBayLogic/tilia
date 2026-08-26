@@ -26,7 +26,6 @@ where
 import Data.Function (on)
 import Data.List (sortOn)
 import Data.List.NonEmpty qualified as NE
-import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -183,7 +182,7 @@ pragmaBlock = foldMap render . dedupe . sortOn key . concatMap split
 -- | Which group an extension belongs to.
 classifyExtension :: Text -> ExtensionClass
 classifyExtension t
-  | t `Set.member` extensionPacks = Pack
+  | namesAnEdition t = Pack
   -- @ImplicitPrelude@ and @CUSKs@ are turned off by other extensions, so
   -- asking for either of them only takes effect at the end.
   | t == "ImplicitPrelude" = Last'
@@ -192,10 +191,12 @@ classifyExtension t
       Just (c, _) | "No" `T.isPrefixOf` t, c `elem` ['A' .. 'Z'] -> Disabling
       _ -> Enabling
 
--- | The extension packs, which name a whole edition of the language.
-extensionPacks :: Set Text
-extensionPacks =
-  Set.fromList (map (T.pack . show) [minBound :: Language .. maxBound])
+-- | Does this name a whole edition of the language rather than one
+-- extension of it?
+namesAnEdition :: Text -> Bool
+namesAnEdition t = any spelledTheSame [minBound .. maxBound]
+  where
+    spelledTheSame edition = t == T.pack (show (edition :: Language))
 
 ----------------------------------------------------------------------------
 -- The module

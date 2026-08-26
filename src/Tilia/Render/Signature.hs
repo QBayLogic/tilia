@@ -104,7 +104,7 @@ fixitySig ctx (FixitySig namespace names (Fixity precedence direction)) =
 
 inlineSig :: Ctx -> LocatedN RdrName -> InlinePragma -> Doc
 inlineSig ctx n InlinePragma {..} =
-  pragmaBraces $
+  pragmaBrackets $
     inlineSpec inl_inline
       <> space
       <> conLike
@@ -126,7 +126,7 @@ specialiseSig ::
   InlinePragma ->
   Doc
 specialiseSig ctx binders target types InlinePragma {..} =
-  pragmaBraces $
+  pragmaBrackets $
     txt "SPECIALIZE"
       <> space
       <> inlineSpec inl_inline
@@ -138,7 +138,7 @@ specialiseSig ctx binders target types InlinePragma {..} =
             <> hsExpr ctx target
             <> includeUnless
               (null types)
-              (space <> txt "::" <> breakOrSpace <> commaSep (map (hsSigType ctx) types))
+              (joinedBy "::" <> commaSep (map (hsSigType ctx) types))
         )
   where
     -- A pragma that says neither when to inline nor whether to is saying
@@ -211,7 +211,7 @@ completeSig ctx names ty =
   layoutAcross ctx names . pragma "COMPLETE" . indent $
     commaSep (map (name ctx) names)
       <> foldMap
-        (\t -> space <> txt "::" <> breakOrSpace <> indent (name ctx t))
+        (\t -> joinedBy "::" <> indent (name ctx t))
         ty
 
 sccSig :: Ctx -> LocatedN RdrName -> Maybe (XRec GhcPs StringLiteral) -> Doc
@@ -226,9 +226,7 @@ standaloneKindSig ctx (StandaloneKindSig _ n sigTy) =
     <> indent
       ( space
           <> name ctx n
-          <> space
-          <> txt "::"
-          <> breakOrSpace
+          <> joinedBy "::"
           <> hsSigType ctx sigTy
       )
 

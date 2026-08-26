@@ -93,8 +93,8 @@ whenFlat whenBroken render = variant (render MayBrace) (render whenBroken)
 -- | A @case@ or lambda standing as a block item has to delimit itself when
 -- the block is flat, unless it is the function of an application, where the
 -- argument that follows already does so.
-adjustBracing :: Site -> (Bracing -> Doc) -> Doc
-adjustBracing site render
+bracedForSite :: Site -> (Bracing -> Doc) -> Doc
+bracedForSite site render
   | siteInBlock site && not (siteApplicand site) = whenFlat (siteBracing site) render
   | otherwise = render (siteBracing site)
 
@@ -207,9 +207,7 @@ exprBody ctx site here = \case
   ExprWithTySig _ x HsWC {hswc_body} ->
     align $
       hsExpr ctx x
-        <> space
-        <> txt "::"
-        <> breakOrSpace
+        <> joinedBy "::"
         <> indent (hsSigType ctx hswc_body)
   ArithSeq _ _ range -> arithSeq ctx (closingFor site) range
   HsTypedBracket (bracketAnn, _) e ->
@@ -245,17 +243,13 @@ exprBody ctx site here = \case
   HsForAll _ tele e -> forallTelescope ctx tele <> breakOrSpace <> hsExpr ctx e
   HsQual _ qs e ->
     at ctx qs (contextOf loneVariableExpr (hsExpr ctx) . map unbracketed)
-      <> space
-      <> txt "=>"
-      <> breakOrSpace
+      <> joinedBy "=>"
       <> hsExpr ctx e
   HsFunArr _ multAnn x y ->
     hsExpr ctx x
       <> space
       <> multiplicity (hsExpr ctx) multAnn
-      <> space
-      <> txt "->"
-      <> breakOrSpace
+      <> joinedBy "->"
       <> case unLoc y of
         HsFunArr {} -> exprBody ctx plainSite (spanOf y) (unLoc y)
         _ -> hsExpr ctx y
@@ -498,12 +492,6 @@ unbracketed :: LHsExpr GhcPs -> LHsExpr GhcPs
 unbracketed e = case unLoc e of
   HsPar _ inner -> unbracketed inner
   _ -> e
-
--- | The name of an operator, when the expression standing as one is a name.
-operatorName :: LHsExpr GhcPs -> Maybe RdrName
-operatorName e = case unLoc e of
-  HsVar _ (L _ n) -> Just n
-  _ -> Nothing
 
 ----------------------------------------------------------------------------
 -- Commands
@@ -782,10 +770,8 @@ caseOf ctx site mkBody scrutinee mg =
   txt "case"
     <> space
     <> hsExpr ctx scrutinee
-    <> space
-    <> txt "of"
-    <> breakOrSpace
-    <> adjustBracing site alternatives
+    <> joinedBy "of"
+    <> bracedForSite site alternatives
   where
     alternatives b = underSite site (matchGroup ctx b mkBody CaseStyle mg)
 
@@ -803,7 +789,7 @@ lambda ::
   Doc
 lambda ctx site variant' mkBody mg = case keyword of
   Nothing -> matchGroup ctx (siteBracing site) mkBody LambdaStyle mg
-  Just kw -> txt kw <> breakOrSpace <> adjustBracing site alternatives
+  Just kw -> txt kw <> breakOrSpace <> bracedForSite site alternatives
   where
     alternatives b = underSite site (matchGroup ctx b mkBody LambdaCaseStyle mg)
     keyword = case variant' of
@@ -1243,9 +1229,7 @@ localBinds ctx bracing = \case
   where
     implicitBind (IPBind _ (L _ n) e) =
       outputable n
-        <> space
-        <> txt "="
-        <> breakOrSpace
+        <> joinedBy "="
         <> indent (hsExprIn ctx (withBracing MayBrace plainSite) e)
 
     -- The bindings have no wrapper of their own, so the annotation's anchor

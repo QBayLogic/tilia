@@ -4,9 +4,12 @@
 -- | The document representation and the engine that turns it into text.
 --
 -- Printing code should not import this module; import
--- "Tilia.Doc.Combinators" instead, which exposes 'Doc' abstractly
--- along with the vocabulary for building one. This module is for the engine
--- itself and for tests that need to look inside a document.
+-- "Tilia.Doc.Combinators" instead, which exposes 'Doc' abstractly along
+-- with the vocabulary for building one. What needs the constructors is the
+-- engine below, the pass that walks a finished document to put the comments
+-- into it ("Tilia.Comments.Attach"), and tests that look inside a document.
+-- Those three take a document apart rather than build one, which is the
+-- thing the vocabulary cannot express.
 --
 -- The printer is split in two halves that meet at 'Doc'. Code that walks
 -- the syntax tree builds a 'Doc', which is an ordinary immutable value with

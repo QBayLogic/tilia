@@ -38,24 +38,20 @@ module Tilia.Doc.Combinators
     align,
 
     -- * Combining
-    hcat,
     hsep,
     vsep,
     sepBy,
+    joinedBy,
     punctuate,
 
     -- * Wrapping
-    enclose,
     ClosingIndent (..),
     bracket,
-    bracketWith,
-    spacedBracket,
     parens,
     parensWith,
     brackets,
     bracketsWith,
     braces,
-    banana,
     bananaWith,
     unboxed,
     unboxedWith,
@@ -225,10 +221,6 @@ align = DAlign
 ----------------------------------------------------------------------------
 -- Combining
 
--- | Concatenate, with nothing in between.
-hcat :: [Doc] -> Doc
-hcat = mconcat
-
 -- | Concatenate, separated by 'space'.
 hsep :: [Doc] -> Doc
 hsep = sepBy space
@@ -240,6 +232,11 @@ vsep = sepBy hardBreak
 -- | Concatenate, separated by the given document.
 sepBy :: Doc -> [Doc] -> Doc
 sepBy s = mconcat . intersperse s
+
+-- | The token that joins two parts of a construct: a space, the token, and
+-- then the place the line may break.
+joinedBy :: Text -> Doc
+joinedBy t = space <> txt t <> breakOrSpace
 
 -- | Append the separator to every element but the last.
 --
@@ -369,11 +366,8 @@ bracketsWith closing = bracketWith closing "[" "]"
 braces :: Doc -> Doc
 braces = bracket "{" "}"
 
--- | @(|@ and @|)@, from arrow notation.
-banana :: Doc -> Doc
-banana = bananaWith Outdented
-
--- | @(|@ and @|)@, with a say in where the closing bracket goes.
+-- | @(|@ and @|)@, from arrow notation, with a say in where the closing
+-- bracket goes.
 bananaWith ::
   -- | Where the closing banana goes
   ClosingIndent ->

@@ -15,7 +15,7 @@
 -- "Tilia.Render.Header".
 module Tilia.Render.Pragma
   ( -- * Braces
-    pragmaBraces,
+    pragmaBrackets,
     pragma,
 
     -- * Inlining and rules
@@ -48,14 +48,14 @@ import Tilia.Render.Name
 --
 -- The closing brace is indented when the pragma breaks, which keeps it from
 -- being mistaken for the start of a new declaration.
-pragmaBraces :: Doc -> Doc
-pragmaBraces body =
+pragmaBrackets :: Doc -> Doc
+pragmaBrackets body =
   align (txt "{-#" <> space <> body <> breakOrSpace <> indent (txt "#-}"))
 
 -- | A named pragma with a body.
 pragma :: Text -> Doc -> Doc
 pragma pragmaName body =
-  pragmaBraces (txt pragmaName <> breakOrSpace <> body)
+  pragmaBrackets (txt pragmaName <> breakOrSpace <> body)
 
 ----------------------------------------------------------------------------
 -- Inlining and rules
@@ -85,7 +85,7 @@ inlineSpec = \case
 overlapMode :: Maybe (LocatedP OverlapMode) -> Maybe Doc
 overlapMode mode = txt . braced <$> (spelled . unLoc =<< mode)
   where
-    -- Written out whole rather than built with 'pragmaBraces': an overlap
+    -- Written out whole rather than built with 'pragmaBrackets': an overlap
     -- mode is one word and must never be broken across lines.
     braced keyword = "{-# " <> keyword <> " #-}"
 
