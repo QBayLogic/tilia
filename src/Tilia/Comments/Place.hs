@@ -98,18 +98,19 @@ placeComments regions fences comments =
       where
         here = commentSpan c
         trailed
-          | writtenAgainst || not (commentFollowed c) = before
+          | writtenAgainst || not (commentFollowed c) = endingOn (spanStartLine here)
           | otherwise = Nothing
-        before =
-          nearest (\r -> (Down (endPoint r), startPoint r)) $
-            filter (\r -> endsJustBefore r && not (fencedOff r)) regions
+        endingOn line =
+          nearest (\r -> (Down (endPoint r), startPoint r)) (filter candidate regions)
+          where
+            candidate r =
+              spanEndLine r == line
+                && endPoint r <= startPoint here
+                && not (fencedOff r)
 
         writtenAgainst =
           any (\r -> Just (endPoint r) == stopsAt) regions
         stopsAt = (,) (spanStartLine here) <$> commentCodeBeforeStopsAt c
-
-        endsJustBefore r =
-          spanEndLine r == spanStartLine here && endPoint r <= startPoint here
 
         fencedOff r = apart regions || (printedInPlace && apart fences)
           where
@@ -126,7 +127,7 @@ placeComments regions fences comments =
             column == spanStartColumn here,
             runsOnFromAbove,
             nothingBelowItLinesUp =
-              endingAbove
+              endingOn (spanStartLine here - 1)
           | otherwise = Nothing
 
         runsOnFromAbove =
@@ -134,13 +135,6 @@ placeComments regions fences comments =
 
         nothingBelowItLinesUp =
           all (\r -> spanStartColumn r < spanStartColumn here) next
-
-        endingAbove =
-          nearest (\r -> (Down (endPoint r), startPoint r)) $
-            filter endsOnTheLineAbove regions
-          where
-            endsOnTheLineAbove r =
-              spanEndLine r == spanStartLine here - 1 && not (fencedOff r)
 
     -- Folded rather than sorted: this runs for every comment against every
     -- region, and only the first of the order is ever wanted.
