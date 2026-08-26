@@ -2,6 +2,8 @@
 module Tilia.Comments.Place
   ( -- * Where a comment goes
     Position (..),
+    Shape (..),
+    shapeOf,
 
     -- * The answers
     Placements,
@@ -16,16 +18,48 @@ import Data.IntSet qualified as IntSet
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Ord (Down (..))
-import Tilia.Comments (Comment (..), closesItself, commentTrailing)
+import Tilia.Comments
+  ( Comment (..),
+    closesItself,
+    commentTrailing,
+    singleLine,
+  )
 import Tilia.Span
 
--- | Where a comment stands in relation to the region it was given to.
+-- | Which side of its region a comment is emitted on.
 data Position
-  = -- | On lines of its own, above the region.
-    Above
-  | -- | At the end of the line the region ends on.
-    Trailing
-  deriving (Eq, Ord, Show)
+  = -- | Before the region.
+    Before
+  | -- | After the region.
+    After
+  deriving (Eq, Show)
+
+-- | How a comment is printed in relation to the region carrying it.
+data Shape
+  = -- | Spliced where the region prints, with code able to follow it on the
+    -- same line.
+    InPlace
+  | -- | Printed where the region is, and the line closed after it.
+    EndsTheLine
+  | -- | Held back to the end of whatever line of output it lands on,
+    -- however much of that line is still to be written.
+    HeldBack
+  | -- | On lines of its own, keeping the empty lines the author left around
+    -- it.
+    OnItsOwnLines
+  deriving (Eq, Show)
+
+-- | What a comment given to a region at this position will look like.
+shapeOf :: Position -> Comment -> Shape
+shapeOf position c = case position of
+  Before
+    | closesItself c && commentFollowed c -> InPlace
+    | commentTrailing c -> EndsTheLine
+    | otherwise -> OnItsOwnLines
+  After
+    | closesItself c -> InPlace
+    | singleLine c -> HeldBack
+    | otherwise -> EndsTheLine
 
 -- | What each region was given, and what nothing could be found for.
 data Placements = Placements
@@ -56,9 +90,9 @@ placeComments regions fences comments =
         [spanEndLine (commentSpan c) | c <- comments, commentTrailing c]
 
     against c
-      | commentTrailing c, Just r <- trailed = Just (r, Trailing)
-      | not (commentTrailing c), Just r <- continues = Just (r, Trailing)
-      | Just r <- next = Just (r, Above)
+      | commentTrailing c, Just r <- trailed = Just (r, After)
+      | not (commentTrailing c), Just r <- continues = Just (r, After)
+      | Just r <- next = Just (r, Before)
       | otherwise = Nothing
       where
         here = commentSpan c
@@ -76,9 +110,11 @@ placeComments regions fences comments =
         endsJustBefore r =
           spanEndLine r == spanStartLine here && endPoint r <= startPoint here
 
-        fencedOff r = apart regions || (closesItself c && apart fences)
+        fencedOff r = apart regions || (printedInPlace && apart fences)
           where
             apart = any (\o -> here `inside` o && not (r `inside` o))
+
+        printedInPlace = shapeOf After c == InPlace
 
         next =
           nearest (\r -> (startPoint r, Down (endPoint r))) $

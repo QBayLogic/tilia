@@ -53,7 +53,7 @@ walk = go
         let (mine, p') = takePlaced s p
             (d', p'') = go p' d
             only' = only (endOfAConstruct s) mine
-         in (only' Above <> DLocated s d' <> only' Trailing, p'')
+         in (only' Before <> DLocated s d' <> only' After, p'')
       DFence s d -> first (DFence s) (go p d)
       DNest n d -> first (DNest n) (go p d)
       DAlign d -> first DAlign (go p d)
@@ -82,17 +82,15 @@ writtenAs ::
   Position ->
   Comment ->
   Doc
-writtenAs atTheEnd position c = case position of
-  Above
-    | closesItself c && commentFollowed c -> commentDoc c <> space
-    | commentTrailing c -> space <> commentDoc c <> closeLine
-    | otherwise -> gapAbove <> onItsOwnLine <> gapBelow
-  Trailing
-    | closesItself c -> space <> commentDoc c <> space
-    | singleLine c -> holdBack (renderComment c)
-    | otherwise -> space <> commentDoc c <> closeLine
+writtenAs atTheEnd position c = case shapeOf position c of
+  InPlace -> case position of
+    Before -> commentDoc c <> space
+    After -> space <> commentDoc c <> space
+  EndsTheLine -> space <> commentDoc c <> closeLine
+  HeldBack -> holdBack (renderComment c)
+  OnItsOwnLines ->
+    gapAbove <> closeLine <> commentDoc c <> closeLine <> gapBelow
   where
-    onItsOwnLine = closeLine <> commentDoc c <> closeLine
     gapAbove = includeWhen (commentAfterGap c) (closeLine <> blankLine)
     gapBelow = includeWhen (commentBeforeGap c && not atTheEnd) blankLine
 
