@@ -13,8 +13,9 @@ import Data.Map.Strict qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
-import GHC.Hs (HsModule (..))
+import GHC.Hs (HsModule (..), XModulePs (..))
 import GHC.Hs.Extension (GhcPs)
+import GHC.Types.SrcLoc (getLoc)
 import GHC.LanguageExtensions.Type (Extension (..))
 import Tilia.Comments
   ( Comment (..),
@@ -33,9 +34,10 @@ import Tilia.Render.Context
 import Tilia.Render.Declaration (decls, declsKeepingGroups)
 import Tilia.Render.Expression (hsCmd, hsExprIn, untypedSplice)
 import Tilia.Render.Haddock (haddockSpans)
-import Tilia.Render.Header (hsModule, takeHeaderPragmas, takeStackHeader)
+import Tilia.Render.Header (HeaderPragma (..), hsModule, takeHeaderPragmas, takeStackHeader)
 import Tilia.Render.Signature (sigDecl)
 import Tilia.Span
+import Tilia.Span.Ghc (spanOf, spanOfSrcSpan)
 
 -- | What the printer needs to know about the module beyond its text.
 data RenderConfig = RenderConfig
@@ -71,7 +73,8 @@ renderModule settings parsed =
     (haddocks, loose') = splitHaddocks hsMod (pmComments parsed)
     plain = heldOff haddocks loose'
     (stackHeader, rest) = takeStackHeader (pmHeaderEnd parsed) plain
-    (pragmas, loose) = takeHeaderPragmas (pmHeaderEnd parsed) rest
+    (pragmas, uncovered) = takeHeaderPragmas (pmHeaderEnd parsed) rest
+    loose = heldOffModuleDoc hsMod haddocks pragmas uncovered
 
     sorted m =
       m
@@ -114,6 +117,38 @@ heldOff haddocks = map holdOff
             }
       where
         s = commentSpan c
+
+-- | Hold the first comment of the header off the module's own Haddock.
+heldOffModuleDoc ::
+  HsModule GhcPs ->
+  -- | The Haddocks of the module, the module's own among them
+  [Comment] ->
+  -- | The pragmas the header is about to hoist
+  [HeaderPragma] ->
+  [Comment] ->
+  [Comment]
+heldOffModuleDoc hsMod haddocks pragmas cs
+  | Just ended <- endOfModuleDoc,
+    Just began <- startOfModuleLine,
+    (before', c : after') <- break (uncoveredBetween ended began) cs =
+      before' <> (c {commentGapAbove = True} : after')
+  | otherwise = cs
+  where
+    uncoveredBetween ended began c =
+      ended < spanStartLine here
+        && spanStartLine here < began
+        && not (Set.member (spanEndLine here + 1) travellers)
+      where
+        here = commentSpan c
+    travellers = Set.fromList (map (spanStartLine . hpSpan) pragmas)
+    endOfModuleDoc = do
+      s <- moduleDoc
+      c <- lookup (startPoint s) [(startPoint (commentSpan h), h) | h <- haddocks]
+      if bracketed c then Nothing else Just (spanEndLine s)
+    moduleDoc = case hsmodExt hsMod of
+      XModulePs {hsmodHaddockModHeader = Just d} -> spanOfSrcSpan (getLoc d)
+      _ -> Nothing
+    startOfModuleLine = spanStartLine <$> (spanOf =<< hsmodName hsMod)
 
 -- | The lines above the module, put back exactly as they were written.
 prologue :: [Text] -> Doc

@@ -3,10 +3,10 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 5019 formatted.
+5133 examples, 5021 formatted.
 
 ==========================================================================
-broken (37)
+broken (35)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/Termination/Monad.hs
@@ -243,72 +243,6 @@ Agda-2.8.0/src/full/Agda/TypeChecking/With.hs
     + import Agda.Utils.List1 (List1, pattern (:|))
       import qualified Agda.Utils.List1 as List1
       import Agda.Utils.Ma
-
-Agda-2.8.0/src/full/Agda/Utils/List1.hs
-    a different program, in one configuration: HsModule > XModulePs > Just > L > WithHsDocIdentifiers > a documentation comment changed
-    --- input
-    +++ output
-    @@ -1,4 +1,5 @@
-      {-# LANGUAGE CPP #-}
-    + {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-    
-      -- | Non-empty lists.
-      --
-    @@ -13,49 +14,46 @@
-      --     import qualified Agda.Utils.List1 as List1
-      --
-      --   @
-    -
-    - {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-    -   -- because of https://gitlab.haskell.org/ghc/ghc/issues/10339
-    + -- because of https://gitlab.haskell.org/ghc/ghc/issues/10339
-    
-      module Agda.Utils.List1
-    -   ( module Agda.Utils.List1
-    -   , module List1
-    -   , module IsList
-    -   , module Unzip
-    -   ) where
-    -
-    - import Prelude hiding (filter, unzip)
-    +   ( module Agda.Utils.List1,
-    +     module List1,
-    +     module IsList,
-    +     module Unzip,
-    +   )
-    + where
-    
-      import Control.Arrow ((&&&))
-      import Control.Monad (filterM)
-      import qualified Control.Monad as List (zipWithM, zipWithM_)
-    -
-      import qualified Data.Either as Either
-    - import Data.Function ( on )
-    + import Data.Function (on)
-      import qualified Data.List as List
-    - import qualified Data.Maybe as Maybe
-    -
-      import Data.List.NonEmpty as List1 hiding (fromList, toList, unzip)
-      import qualified Data.List.NonEmpty as List1 (toList)
-    + import qualified Data.Maybe as Maybe
-    + import Prelude hiding (filter, unzip)
-    
-      -- Prevent warning -Wx-data-list-nonempty-unzip
-    +
-      #if MIN_VERSION_base(4,19,0)
-      import Data.Functor as Unzip (unzip)
-      #else
-      import Data.List.NonEmpty as Unzip (unzip)
-      #endif
-    -
-    - import GHC.Exts as IsList ( IsList(..) )
-    -
-    - import Agda.Utils.Functor ((<.>), (<&>))
-    - import Agda.Utils.Null (Null(..))
-    + import Agda.Utils.Functor ((<&>), (<.>))
-      import qualified Agda.Utils.List as List
-    + import Agda.Utils.Null (Null (..))
-    … and 303 more lines
 
 Agda-2.8.0/src/setup/Agda/Setup.hs
     formatting is non-idempotent
@@ -1214,72 +1148,6 @@ pandoc-3.10.2/src/Text/Pandoc/Parsing/State.hs
     
       -- | Parsing options.
     … and 276 more lines
-
-raaz-0.3.11/api/random/PRGenerator.hs
-    a different program: HsModule > XModulePs > Just > L > WithHsDocIdentifiers > a documentation comment changed
-    --- input
-    +++ output
-    @@ -1,3 +1,7 @@
-    + {-# LANGUAGE DataKinds #-}
-    + {-# LANGUAGE FlexibleContexts #-}
-    + {-# LANGUAGE RecordWildCards #-}
-    +
-      -- | This module implements the pseudo-random generator using the
-      -- /fast key erasure technique/
-      -- (<https://blog.cr.yp.to/20170723-random.html>) parameterised on the
-    @@ -9,29 +13,29 @@
-      -- raaz the library. A casual user should not be looking into this
-      -- module this let alone tweaking the code here.
-      --
-    -
-    - {-# LANGUAGE FlexibleContexts #-}
-    - {-# LANGUAGE DataKinds        #-}
-    - {-# LANGUAGE RecordWildCards   #-}
-      -- {-# LANGUAGE NamedFieldPun    #-}
-    
-      module PRGenerator
-    -        ( -- * Pseudo-random generator
-    -          -- $internals$
-    -          RandomState, reseed, fillRandomBytes
-    -          -- ** Information about the cryptographic generator.
-    -        , entropySource, csprgName, csprgDescription
-    -        ) where
-    +   ( -- * Pseudo-random generator
-    +     -- $internals$
-    +     RandomState,
-    +     reseed,
-    +     fillRandomBytes,
-    
-    - import Foreign.Ptr ( castPtr )
-    - import Entropy
-    - import Prelude
-    +     -- ** Information about the cryptographic generator.
-    +     entropySource,
-    +     csprgName,
-    +     csprgDescription,
-    +   )
-    + where
-    
-    + import Context
-    + import Entropy
-    + import Foreign.Ptr (castPtr)
-    + import Implementation
-      import Raaz.Core
-      import Raaz.Core.Memory
-    -
-    - import Implementation
-    - import Context
-    + import Prelude
-    
-      -- $internals$
-      --
-    @@ -89,7 +93,6 @@
-      -- not reveal the random data that is given out previously.
-      --
-    
-    -
-      -- | Name of the csprg used for stretching the seed.
-    … and 138 more lines
 
 scotty-0.30/test/Web/ScottySpec.hs
     formatting is non-idempotent

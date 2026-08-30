@@ -353,7 +353,7 @@ formatted       faa55c2f1ad1  Agda-2.8.0/src/full/Agda/Utils/IntSet/Infinite.hs
 formatted       37f9f2b34f7d  Agda-2.8.0/src/full/Agda/Utils/Lens.hs
 formatted       7cc1db9fff98  Agda-2.8.0/src/full/Agda/Utils/Lens/Examples.hs
 formatted       ef65f125c3b1  Agda-2.8.0/src/full/Agda/Utils/List.hs
-broken          dfe8f9d66586  Agda-2.8.0/src/full/Agda/Utils/List1.hs
+formatted       78277618380c  Agda-2.8.0/src/full/Agda/Utils/List1.hs
 formatted       3514de48df05  Agda-2.8.0/src/full/Agda/Utils/List2.hs
 formatted       e460a45d4f65  Agda-2.8.0/src/full/Agda/Utils/ListT.hs
 formatted       690e8ea83f27  Agda-2.8.0/src/full/Agda/Utils/Map.hs
@@ -3736,7 +3736,7 @@ formatted       77a977c85c0d  raaz-0.3.11/api/auth/Interface.hs
 formatted       7b45644314ef  raaz-0.3.11/api/digest/Interface.hs
 formatted       abdae110e56a  raaz-0.3.11/api/encrypt/Interface.hs
 formatted       ffc859b186af  raaz-0.3.11/api/random/Internal.hs
-broken          f2314ca8b7c9  raaz-0.3.11/api/random/PRGenerator.hs
+formatted       8dfc8a50cfda  raaz-0.3.11/api/random/PRGenerator.hs
 formatted       d4e767dc817c  raaz-0.3.11/benchmarks/Main.hs
 formatted       876b405577a3  raaz-0.3.11/benchmarks/internal/Benchmark/CSPRG.hs
 formatted       20cee45b7828  raaz-0.3.11/benchmarks/internal/Benchmark/Primitive.hs
