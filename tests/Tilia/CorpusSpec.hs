@@ -93,25 +93,25 @@ againstRecord path run examples = do
         parallel $
           for_ examples $ \example ->
             it (exampleName example) $ do
-              Result outcome why <- run example
-              note seen (exampleName example, outcome, T.take reasonLength why)
+              Result outcome why digest <- run example
+              note seen (exampleName example, Entry outcome digest, T.take reasonLength why)
 
     record seen = do
-      entries <- readIORef seen
-      if length entries /= length examples
+      noted <- readIORef seen
+      if length noted /= length examples
         then
           putStrLn $
             "not writing "
               <> path
               <> ": "
-              <> show (length entries)
+              <> show (length noted)
               <> " of "
               <> show (length examples)
               <> " examples ran, so this run does not know what the rest do."
               <> " Regenerate without --match."
         else do
-          writeManifest path (Map.fromList [(n, o) | (n, o, _) <- entries])
-          writeReport reportPath entries
+          writeManifest path (Map.fromList [(n, e) | (n, e, _) <- noted])
+          writeReport reportPath [(n, entryOutcome e, w) | (n, e, w) <- noted]
 
     note :: IORef [a] -> a -> IO ()
     note seen entry = atomicModifyIORef' seen (\es -> (entry : es, ()))
@@ -120,12 +120,14 @@ againstRecord path run examples = do
       manifest <- runIO (readManifest path)
       parallel $ for_ examples $ \example ->
         it (exampleName example) $ do
-          Result outcome why <- run example
+          Result outcome why digest <- run example
           case Map.lookup (exampleName example) manifest of
             Nothing -> expectationFailure (T.unpack (unrecorded outcome))
             Just expected
-              | expected /= outcome ->
-                  expectationFailure (T.unpack (moved expected outcome why))
+              | entryOutcome expected /= outcome ->
+                  expectationFailure (T.unpack (moved (entryOutcome expected) outcome why))
+              | entryDigest expected /= digest ->
+                  expectationFailure (T.unpack (rewritten (entryDigest expected) digest))
               | otherwise -> case outcome of
                   Formatted -> pure ()
                   Declined -> pure ()
@@ -149,6 +151,14 @@ againstRecord path run examples = do
         <> outcomeName outcome
         <> T.pack regenerate
 
+    rewritten was now =
+      T.pack path
+        <> " says this comes out as "
+        <> was
+        <> ", and it comes out as "
+        <> now
+        <> T.pack regenerate
+
     moved expected outcome why =
       T.pack path
         <> " says this "
@@ -170,7 +180,15 @@ reasonLength = 2000
 -- Checking one example
 
 -- | What running the formatter over one example established, and why.
-data Result = Result Outcome Text
+data Result = Result
+  { -- | The outcome.
+    resultOutcome :: Outcome,
+    -- | Explanation in text.
+    resultWhy :: Text,
+    -- | A digest of what the formatter wrote, or
+    -- 'Tilia.Corpus.Manifest.noDigest' where it wrote nothing.
+    resultDigest :: Text
+  }
 
 -- | What the runner should do about what one example produced.
 data Verdict
@@ -190,7 +208,7 @@ verdict ::
   Bool ->
   Result ->
   Verdict
-verdict declines (Result outcome why) = case outcome of
+verdict declines (Result outcome why _) = case outcome of
   Broken -> Fails why
   NotUtf8 -> Fails (unlisted "is not UTF-8")
   DoesNotParse -> Fails (unlisted ("does not parse, at " <> why))
@@ -213,7 +231,7 @@ check colours example = do
   source <- readUtf8 (exampleInput example)
   expected <- traverse readUtf8 (exampleReference example)
   case source of
-    Nothing -> pure (Result NotUtf8 "")
+    Nothing -> pure (Result NotUtf8 "" noDigest)
     Just text ->
       guarded (checkPure colours (exampleName example) (exampleExtensions example) text (join expected))
 
@@ -227,10 +245,14 @@ guarded :: Result -> IO Result
 guarded result =
   try (evaluate (forced result)) >>= \case
     Left (e :: SomeException) ->
-      pure (Result Broken ("the formatter raised an error: " <> firstLine (T.pack (show e))))
+      pure (Result Broken ("the formatter raised an error: " <> firstLine (T.pack (show e))) noDigest)
     Right settled -> pure settled
   where
-    forced r@(Result outcome why) = outcome `seq` T.length why `seq` r
+    forced r =
+      resultOutcome r
+        `seq` T.length (resultWhy r)
+        `seq` T.length (resultDigest r)
+        `seq` r
     firstLine = T.strip . T.takeWhile (/= '\n')
 
 -- | Everything that can be established about one example without doing any
@@ -238,23 +260,23 @@ guarded result =
 checkPure :: Colours -> FilePath -> [Extension] -> Text -> Maybe Text -> Result
 checkPure colours path package source expected
   | movesPositions source =
-      Result Declined "a pragma that moves positions, which we do not rewrite"
+      Result Declined "a pragma that moves positions, which we do not rewrite" noDigest
   | usesCpp inForce source = checkCpp colours path package source expected
   | otherwise = case parseModule config path source of
-      Left problem -> Result DoesNotParse (describeParseError problem)
+      Left problem -> Result DoesNotParse (describeParseError problem) noDigest
       Right before ->
         let formatted = render before
             against name = diff colours ("input", name) source formatted
          in case parse formatted of
               Nothing ->
-                Result
+                told formatted
                   Broken
                   ( "the formatted output does not parse\n"
                       <> against "output (does not parse)"
                   )
               Just after
                 | Just difference <- syntaxDifference (pmModule before) (pmModule after) ->
-                    Result
+                    told formatted
                       Broken
                       ( "a different program: "
                           <> difference
@@ -266,7 +288,7 @@ checkPure colours path package source expected
                       (pmModule before, pmModule after)
                       (pmComments before)
                       (pmComments after) ->
-                    Result
+                    told formatted
                       Broken
                       ( "comments: "
                           <> difference
@@ -275,20 +297,21 @@ checkPure colours path package source expected
                       )
                 | settled <- render after,
                   settled /= formatted ->
-                    Result
+                    told formatted
                       Broken
                       ( "formatting is non-idempotent\n"
                           <> diff colours ("first pass", "second pass") formatted settled
                       )
                 | Just reference <- expected,
                   reference /= formatted ->
-                    Result
+                    told formatted
                       Broken
                       ( "does not match the corpus's expected output\n"
                           <> diff colours ("expected", "ours") reference formatted
                       )
-                | otherwise -> Result Formatted ""
+                | otherwise -> told formatted Formatted ""
   where
+    told formatted outcome why = Result outcome why (digestOf formatted)
     config = parserConfigFor package
     inForce = effectiveExtensions package source
     parse = either (const Nothing) Just . parseModule config path
@@ -304,14 +327,15 @@ checkPure colours path package source expected
 -- it.
 checkCpp :: Colours -> FilePath -> [Extension] -> Text -> Maybe Text -> Result
 checkCpp colours path package source expected = case formatWithCpp parser render path source of
-  Left why -> Result Declined (describeCppError why)
+  Left why -> Result Declined (describeCppError why) noDigest
   Right formatted -> case (countLeaves source, countLeaves formatted) of
-    (Left why, _) -> Result Broken ("the input's configurations: " <> describeCppError why)
+    (Left why, _) ->
+      told formatted Broken ("the input's configurations: " <> describeCppError why)
     (_, Left why) ->
-      Result Broken ("the output's configurations: " <> describeCppError why <> "\n" <> against formatted)
+      told formatted Broken ("the output's configurations: " <> describeCppError why <> "\n" <> against formatted)
     (Right went, Right came)
       | went /= came ->
-          Result
+          told formatted
             Broken
             ( "formatting changed how many configurations there are, from "
                 <> count went
@@ -334,35 +358,38 @@ checkCpp colours path package source expected = case formatWithCpp parser render
             )
             formatted
   where
+    told formatted outcome why = Result outcome why (digestOf formatted)
     count :: Integer -> Text
     count = T.pack . show
     against formatted = diff colours ("input", "output") source formatted
     quantified enumerate reservation formatted =
       case (enumerate source, enumerate formatted) of
-        (Left why, _) -> Result Broken ("the input's configurations: " <> describeCppError why)
+        (Left why, _) ->
+          told formatted Broken ("the input's configurations: " <> describeCppError why)
         (_, Left why) ->
-          Result Broken ("the output's configurations: " <> describeCppError why <> "\n" <> against formatted)
+          told formatted Broken ("the output's configurations: " <> describeCppError why <> "\n" <> against formatted)
         (Right went, Right came)
           | (why : _) <- alongside went came ->
-              Result Broken (why <> "\n" <> against formatted)
+              told formatted Broken (why <> "\n" <> against formatted)
           | otherwise -> case formatWithCpp parser render path formatted of
               Left why ->
-                Result Broken ("the output cannot be formatted again: " <> describeCppError why)
+                told formatted Broken ("the output cannot be formatted again: " <> describeCppError why)
               Right settled
                 | settled /= formatted ->
-                    Result
+                    told formatted
                       Broken
                       ( "formatting is non-idempotent\n"
                           <> diff colours ("first pass", "second pass") formatted settled
                       )
                 | Just reference <- expected,
                   reference /= formatted ->
-                    Result
+                    told formatted
                       Broken
                       ( "does not match the corpus's expected output\n"
                           <> diff colours ("expected", "ours") reference formatted
                       )
-                | otherwise -> maybe (Result Formatted "") (Result PartlyChecked) reservation
+                | otherwise ->
+                  maybe (told formatted Formatted "") (told formatted PartlyChecked) reservation
     alongside went came =
       [ why
         | (answers, before) <- went,

@@ -9,6 +9,9 @@ module Tilia.Corpus.Manifest
     outcomeName,
 
     -- * Records of it
+    Entry (..),
+    digestOf,
+    noDigest,
     Manifest,
     readManifest,
     writeManifest,
@@ -23,7 +26,10 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as T
 import Data.Text.IO qualified as T
+import Crypto.Hash.SHA256 qualified as SHA256
+import Data.ByteString.Base16 qualified as B16
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (lookupEnv)
 import System.FilePath (takeDirectory)
@@ -70,8 +76,25 @@ outcomeNamed name =
 ----------------------------------------------------------------------------
 -- Records of it
 
--- | What each example of a corpus is expected to do, by name.
-type Manifest = Map FilePath Outcome
+-- | What one example did, and what it produced.
+data Entry = Entry
+  { -- | Expected outcome
+    entryOutcome :: Outcome,
+    -- | A digest of what the formatter wrote, or 'noDigest' where it wrote
+    -- nothing.
+    entryDigest :: Text
+  }
+  deriving (Eq, Show)
+
+-- | A short digest of an example's output.
+digestOf :: Text -> Text
+digestOf = T.take 12 . T.decodeUtf8 . B16.encode . SHA256.hash . T.encodeUtf8
+
+-- | What stands in the digest's place where the formatter wrote nothing.
+noDigest :: Text
+noDigest = "-"
+
+type Manifest = Map FilePath Entry
 
 -- | Read a manifest.
 --
@@ -86,11 +109,11 @@ readManifest path =
     Right text -> pure (Map.fromList (concatMap entry (T.lines text)))
   where
     entry line = case T.words line of
-      (what : rest)
+      (what : digest : rest)
         | not ("#" `T.isPrefixOf` what),
           Just outcome <- outcomeNamed what,
           not (null rest) ->
-            [(T.unpack (T.unwords rest), outcome)]
+            [(T.unpack (T.unwords rest), Entry outcome digest)]
       _ -> []
 
 -- | Write a manifest, sorted by name so that a regeneration diff shows what
@@ -108,9 +131,12 @@ writeManifest path manifest = do
         "# not.",
         ""
       ]
-    line (name, outcome) =
-      T.justifyLeft width ' ' (outcomeName outcome) <> T.pack name
-    width = 2 + maximum (1 : map (T.length . outcomeName) (Map.elems manifest))
+    line (name, entry) =
+      T.justifyLeft width ' ' (outcomeName (entryOutcome entry))
+        <> T.justifyLeft 14 ' ' (entryDigest entry)
+        <> T.pack name
+    width =
+      2 + maximum (1 : map (T.length . outcomeName . entryOutcome) (Map.elems manifest))
 
 -- | Write the reasons beside the record.
 writeReport :: FilePath -> [(FilePath, Outcome, Text)] -> IO ()
