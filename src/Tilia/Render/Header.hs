@@ -253,7 +253,7 @@ importExportItems ctx xs = variant (laidOut False) (laidOut True)
       sepBy breakOrSpace (zipWith (item broken') (Nothing : map Just xs) (places xs))
     item broken' previous (place, x) =
       gapAbove place (unLoc <$> previous) (unLoc x)
-        <> align (at ctx (widenToDoc x) (ieItem ctx (comma' broken' place)))
+        <> align (at ctx (widenToDoc x) (ieItem ctx (spanOf x) (comma' broken' place)))
     gapAbove place previous here
       | place == First || place == Only = mempty
       | isSection here = hardBreak
@@ -282,8 +282,8 @@ widenToDoc l@(L ann ie) = case itemDoc ie of
   Just (L docSpan _) -> L (ann <> noAnnSrcSpan docSpan) ie
 
 -- | One item of an import or export list.
-ieItem :: Ctx -> Bool -> IE GhcPs -> Doc
-ieItem ctx withComma = \case
+ieItem :: Ctx -> Maybe Span -> Bool -> IE GhcPs -> Doc
+ieItem ctx here withComma = \case
   IEVar warning n doc ->
     exportWarning warning
       <> at ctx n (wrappedName ctx)
@@ -321,7 +321,9 @@ ieItem ctx withComma = \case
     exportWarning warning <> at ctx m (moduleHeadName ctx) <> comma'
   IEGroup NoExtField n str -> haddock ctx (Section n) Open str
   IEDoc NoExtField str -> haddock ctx Pipe Open str
-  IEDocNamed NoExtField n -> txt (docSectionName n)
+  IEDocNamed NoExtField n -> case writtenHaddock ctx here of
+    Just written -> sepBy (verbatimBreak AtIndent) (map txt (NE.toList written))
+    Nothing -> txt (docSectionName n)
   where
     comma' = includeWhen withComma comma
     exportWarning =

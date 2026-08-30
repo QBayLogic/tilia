@@ -756,7 +756,7 @@ formatted       bifunctors-5.6.3/src/Data/Bifunctor/Join.hs
 formatted       bifunctors-5.6.3/src/Data/Bifunctor/Joker.hs
 formatted       bifunctors-5.6.3/src/Data/Bifunctor/Product.hs
 formatted       bifunctors-5.6.3/src/Data/Bifunctor/Sum.hs
-broken          bifunctors-5.6.3/src/Data/Bifunctor/TH.hs
+formatted       bifunctors-5.6.3/src/Data/Bifunctor/TH.hs
 formatted       bifunctors-5.6.3/src/Data/Bifunctor/TH/Internal.hs
 formatted       bifunctors-5.6.3/src/Data/Bifunctor/Tannen.hs
 formatted       bifunctors-5.6.3/src/Data/Bifunctor/Wrapped.hs
@@ -2912,7 +2912,7 @@ formatted       mtl-2.3.2/Control/Monad/Accum.hs
 formatted       mtl-2.3.2/Control/Monad/Cont.hs
 formatted       mtl-2.3.2/Control/Monad/Cont/Class.hs
 formatted       mtl-2.3.2/Control/Monad/Error/Class.hs
-broken          mtl-2.3.2/Control/Monad/Except.hs
+formatted       mtl-2.3.2/Control/Monad/Except.hs
 formatted       mtl-2.3.2/Control/Monad/Identity.hs
 formatted       mtl-2.3.2/Control/Monad/RWS.hs
 formatted       mtl-2.3.2/Control/Monad/RWS/CPS.hs
@@ -3749,7 +3749,7 @@ formatted       raaz-0.3.11/core/Raaz/Core/Encode.hs
 formatted       raaz-0.3.11/core/Raaz/Core/Encode/Base16.hs
 formatted       raaz-0.3.11/core/Raaz/Core/Encode/Base64.hs
 formatted       raaz-0.3.11/core/Raaz/Core/Encode/Internal.hs
-broken          raaz-0.3.11/core/Raaz/Core/Memory.hs
+formatted       raaz-0.3.11/core/Raaz/Core/Memory.hs
 formatted       raaz-0.3.11/core/Raaz/Core/MonoidalAction.hs
 formatted       raaz-0.3.11/core/Raaz/Core/Parse.hs
 formatted       raaz-0.3.11/core/Raaz/Core/Parse/Unsafe.hs
@@ -3762,14 +3762,14 @@ formatted       raaz-0.3.11/core/Raaz/Core/Types/Copying.hs
 formatted       raaz-0.3.11/core/Raaz/Core/Types/Endian.hs
 formatted       raaz-0.3.11/core/Raaz/Core/Types/Equality.hs
 formatted       raaz-0.3.11/core/Raaz/Core/Types/Internal.hs
-broken          raaz-0.3.11/core/Raaz/Core/Types/Pointer.hs
+formatted       raaz-0.3.11/core/Raaz/Core/Types/Pointer.hs
 formatted       raaz-0.3.11/core/Raaz/Core/Types/Tuple.hs
 formatted       raaz-0.3.11/core/Raaz/Core/Util/ByteString.hs
 formatted       raaz-0.3.11/core/Raaz/Primitive/AEAD/Internal.hs
 formatted       raaz-0.3.11/core/Raaz/Primitive/Blake2/Internal.hs
 formatted       raaz-0.3.11/core/Raaz/Primitive/ChaCha20/Internal.hs
 formatted       raaz-0.3.11/core/Raaz/Primitive/HashMemory.hs
-broken          raaz-0.3.11/core/Raaz/Primitive/Keyed/Internal.hs
+formatted       raaz-0.3.11/core/Raaz/Primitive/Keyed/Internal.hs
 formatted       raaz-0.3.11/core/Raaz/Primitive/Poly1305/Internal.hs
 formatted       raaz-0.3.11/core/Raaz/Primitive/Sha2/Internal.hs
 formatted       raaz-0.3.11/implementation/Blake2b/CHandWritten.hs
@@ -3800,10 +3800,10 @@ formatted       raaz-0.3.11/monocypher/tests/Monocypher.hs
 formatted       raaz-0.3.11/monocypher/tests/Monocypher/Blake2bSpec.hs
 formatted       raaz-0.3.11/monocypher/tests/Monocypher/ChaCha20Spec.hs
 formatted       raaz-0.3.11/monocypher/tests/Monocypher/Sha512Spec.hs
-broken          raaz-0.3.11/raaz/Raaz.hs
-broken          raaz-0.3.11/raaz/Raaz/Auth.hs
+formatted       raaz-0.3.11/raaz/Raaz.hs
+formatted       raaz-0.3.11/raaz/Raaz/Auth.hs
 formatted       raaz-0.3.11/raaz/Raaz/AuthEncrypt.hs
-broken          raaz-0.3.11/raaz/Raaz/AuthEncrypt/Unsafe.hs
+formatted       raaz-0.3.11/raaz/Raaz/AuthEncrypt/Unsafe.hs
 formatted       raaz-0.3.11/raaz/Raaz/Digest.hs
 formatted       raaz-0.3.11/raaz/Raaz/Random.hs
 formatted       raaz-0.3.11/raaz/Raaz/V1/Auth.hs
@@ -3987,7 +3987,7 @@ formatted       servant-0.20.3.0/src/Servant/API/Status.hs
 formatted       servant-0.20.3.0/src/Servant/API/Stream.hs
 formatted       servant-0.20.3.0/src/Servant/API/Sub.hs
 formatted       servant-0.20.3.0/src/Servant/API/TypeErrors.hs
-broken          servant-0.20.3.0/src/Servant/API/TypeLevel.hs
+formatted       servant-0.20.3.0/src/Servant/API/TypeLevel.hs
 formatted       servant-0.20.3.0/src/Servant/API/TypeLevel/List.hs
 formatted       servant-0.20.3.0/src/Servant/API/UVerb.hs
 formatted       servant-0.20.3.0/src/Servant/API/UVerb/Union.hs
