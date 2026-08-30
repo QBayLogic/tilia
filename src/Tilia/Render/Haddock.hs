@@ -33,7 +33,7 @@ import Control.Applicative ((<|>))
 import Data.List (dropWhileEnd)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.List.NonEmpty qualified as NE
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Hs
@@ -105,7 +105,14 @@ docBody ctx style doc@(L l str) =
     -- moves it from after what it documents to before. Offering where it
     -- used to be as somewhere a comment may attach would put that comment
     -- ahead of comments that were written above it.
-    rebuilt = sepBy hardBreak (zipWith line' (True : repeat False) written')
+    rebuilt =
+      sepBy hardBreak (zipWith line' (True : repeat False) written')
+        <> mconcat (replicate trailingBlanks (hardBreak <> txt "--"))
+    trailingBlanks = case writtenHaddock ctx (spanOfSrcSpan l) of
+      Nothing -> 0
+      Just ls -> length (takeWhile isBlankLine (reverse (NE.toList ls)))
+    isBlankLine t = T.null (T.strip (fromMaybe t (T.stripPrefix "--" (T.strip t))))
+
     line' isFirst t =
       (if isFirst then txt (opener style) else txt "--")
         <> space

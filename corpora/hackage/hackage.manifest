@@ -74,7 +74,7 @@ formatted       Agda-2.8.0/src/full/Agda/Interaction/InteractionTop.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/JSON.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/JSONTop.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/Library.hs
-broken          Agda-2.8.0/src/full/Agda/Interaction/Library/Base.hs
+formatted       Agda-2.8.0/src/full/Agda/Interaction/Library/Base.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/Library/Parse.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/MakeCase.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/Monad.hs
@@ -3645,7 +3645,7 @@ formatted       purescript-0.15.15/src/Language/PureScript/Linter/Imports.hs
 formatted       purescript-0.15.15/src/Language/PureScript/Linter/Wildcards.hs
 formatted       purescript-0.15.15/src/Language/PureScript/Make.hs
 formatted       purescript-0.15.15/src/Language/PureScript/Make/Actions.hs
-broken          purescript-0.15.15/src/Language/PureScript/Make/BuildPlan.hs
+formatted       purescript-0.15.15/src/Language/PureScript/Make/BuildPlan.hs
 formatted       purescript-0.15.15/src/Language/PureScript/Make/Cache.hs
 formatted       purescript-0.15.15/src/Language/PureScript/Make/Monad.hs
 formatted       purescript-0.15.15/src/Language/PureScript/ModuleDependencies.hs
@@ -3894,7 +3894,7 @@ formatted       safe-exceptions-0.1.7.4/test/Spec.hs
 formatted       scientific-0.3.8.1/Setup.hs
 formatted       scientific-0.3.8.1/bench/bench.hs
 formatted       scientific-0.3.8.1/src/Data/ByteString/Builder/Scientific.hs
-broken          scientific-0.3.8.1/src/Data/Scientific.hs
+formatted       scientific-0.3.8.1/src/Data/Scientific.hs
 formatted       scientific-0.3.8.1/src/Data/Text/Lazy/Builder/Scientific.hs
 formatted       scientific-0.3.8.1/src/GHC/Integer/Compat.hs
 formatted       scientific-0.3.8.1/src/Utils.hs

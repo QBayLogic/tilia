@@ -3,71 +3,11 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 4999 formatted.
+5133 examples, 5002 formatted.
 
 ==========================================================================
-broken (57)
+broken (54)
 ==========================================================================
-
-Agda-2.8.0/src/full/Agda/Interaction/Library/Base.hs
-    comments: `--` became `--   (E.g., containing spaces.)`
-    --- input
-    +++ output
-    @@ -1,55 +1,47 @@
-      -- | Basic data types for library management.
-    -
-      module Agda.Interaction.Library.Base where
-    
-    - import Prelude hiding (null)
-    -
-    - import Control.DeepSeq
-    - import qualified Control.Exception as E
-    -
-    - import Control.Monad.Except
-    - import Control.Monad.State
-    - import Control.Monad.Writer        ( WriterT, runWriterT, MonadWriter, tell )
-    - import Control.Monad.IO.Class      ( MonadIO(..) )
-    -
-    - import Data.Bifunctor              ( first , second )
-    - import Data.Char                   ( isDigit )
-    - import Data.Function               ( (&), on )
-    - import Data.Hashable               ( Hashable )
-    - import qualified Data.List         as List
-    - import Data.Map                    ( Map )
-    - import qualified Data.Map          as Map
-    - import Data.Semigroup              ( Semigroup(..) )
-    - import Data.Text                   ( Text, unpack )
-    - import qualified Data.Text         as T
-    -
-    - import GHC.Generics                ( Generic )
-    -
-    - import System.Directory
-    -
-      import Agda.Interaction.Options.Warnings
-    -
-      import Agda.Syntax.Common.Pretty
-      import Agda.Syntax.Position
-    -
-    - import Agda.Utils.IO               ( showIOException )
-    + import Agda.Utils.IO (showIOException)
-      import Agda.Utils.Lens
-    - import Agda.Utils.List             ( chopWhen )
-    - import Agda.Utils.List1            ( List1, toList )
-    - import Agda.Utils.List2            ( List2, toList )
-    - import qualified Agda.Utils.List1  as List1
-    + import Agda.Utils.List (chopWhen)
-    + import Agda.Utils.List1 (List1, toList)
-    + import qualified Agda.Utils.List1 as List1
-    + import Agda.Utils.List2 (List2, toList)
-      import Agda.Utils.Null
-    + import Control.DeepSeq
-    + import qualified Control.Exception as E
-    + import Control.Monad.Except
-    + import Control.Monad.IO.Class (MonadIO (..))
-    + import Control.Monad.State
-    + import Control.Monad.Writer (MonadWriter, WriterT, runWriterT, tell)
-    + import Data.Bifunctor (first, second)
-    + import Data.Char (isDigit)
 
 Agda-2.8.0/src/full/Agda/Termination/Monad.hs
     comments: `-- lazy by intention!` became `--   (= clause telescope).  Used to approximate termination`
@@ -1470,66 +1410,6 @@ pipes-4.3.16/src/Pipes/Lift.hs
     +     runRWSP,
     … and 433 more lines
 
-purescript-0.15.15/src/Language/PureScript/Make/BuildPlan.hs
-    comments: `--` became `-- plan; used to decide whether a module needs rebuilding.`
-    --- input
-    +++ output
-    @@ -1,65 +1,63 @@
-      module Language.PureScript.Make.BuildPlan
-    -   ( BuildPlan(bpEnv, bpIndex)
-    -   , BuildJobResult(..)
-    -   , buildJobSuccess
-    -   , construct
-    -   , getResult
-    -   , collectResults
-    -   , markComplete
-    -   , needsRebuild
-    -   ) where
-    -
-    - import Prelude
-    +   ( BuildPlan (bpEnv, bpIndex),
-    +     BuildJobResult (..),
-    +     buildJobSuccess,
-    +     construct,
-    +     getResult,
-    +     collectResults,
-    +     markComplete,
-    +     needsRebuild,
-    +   )
-    + where
-    
-      import Control.Concurrent.Async.Lifted as A
-      import Control.Concurrent.Lifted as C
-    - import Control.Monad.Base (liftBase)
-      import Control.Monad (foldM)
-    - import Control.Monad.Trans.Control (MonadBaseControl(..))
-    - import Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
-    + import Control.Monad.Base (liftBase)
-    + import Control.Monad.Trans.Control (MonadBaseControl (..))
-    + import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
-      import Data.Foldable (foldl')
-      import Data.Map qualified as M
-      import Data.Maybe (fromMaybe, mapMaybe)
-      import Data.Time.Clock (UTCTime)
-      import Language.PureScript.AST (Module, getModuleName)
-    - import Language.PureScript.Crash (internalError)
-      import Language.PureScript.CST qualified as CST
-    - import Language.PureScript.Errors (MultipleErrors(..))
-    + import Language.PureScript.Crash (internalError)
-    + import Language.PureScript.Errors (MultipleErrors (..))
-      import Language.PureScript.Externs (ExternsFile)
-      import Language.PureScript.Make.Actions as Actions
-      import Language.PureScript.Make.Cache (CacheDb, CacheInfo, checkChanged)
-      import Language.PureScript.Names (ModuleName)
-      import Language.PureScript.Sugar.Names.Env (Env, primEnv)
-      import System.Directory (getCurrentDirectory)
-    + import Prelude
-    
-      -- | The BuildPlan tracks information about our build progress, and holds all
-      -- prebuilt modules for incremental builds.
-      data BuildPlan = BuildPlan
-    -   { bpPrebuilt :: M.Map Mod
-
 raaz-0.3.11/api/random/PRGenerator.hs
     a different program: HsModule > XModulePs > Just > L > WithHsDocIdentifiers > a documentation comment changed
     --- input
@@ -1595,72 +1475,6 @@ raaz-0.3.11/api/random/PRGenerator.hs
     -
       -- | Name of the csprg used for stretching the seed.
     … and 138 more lines
-
-scientific-0.3.8.1/src/Data/Scientific.hs
-    comments: `--` became `-- to the 'Fractional' number: @'fromInteger' c * 10 '^^' e@.`
-    --- input
-    +++ output
-    @@ -1,11 +1,11 @@
-    - {-# LANGUAGE DeriveDataTypeable #-}
-      {-# LANGUAGE BangPatterns #-}
-    - {-# LANGUAGE ScopedTypeVariables #-}
-    - {-# LANGUAGE UnboxedTuples #-}
-    - {-# LANGUAGE PatternGuards #-}
-    - {-# LANGUAGE Trustworthy #-}
-    + {-# LANGUAGE DeriveDataTypeable #-}
-      {-# LANGUAGE DeriveLift #-}
-    + {-# LANGUAGE PatternGuards #-}
-    + {-# LANGUAGE ScopedTypeVariables #-}
-      {-# LANGUAGE StandaloneDeriving #-}
-    + {-# LANGUAGE Trustworthy #-}
-    + {-# LANGUAGE UnboxedTuples #-}
-    
-      -- |
-      -- Module      :  Data.Scientific
-    @@ -52,77 +52,76 @@
-      --
-      -- @import qualified Data.Scientific as Scientific@
-      module Data.Scientific
-    -     ( Scientific
-    +   ( Scientific,
-    
-    -       -- * Construction
-    -     , scientific
-    +     -- * Construction
-    +     scientific,
-    
-    -       -- * Projections
-    -     , coefficient
-    -     , base10Exponent
-    +     -- * Projections
-    +     coefficient,
-    +     base10Exponent,
-    
-    -       -- * Predicates
-    -     , isFloating
-    -     , isInteger
-    +     -- * Predicates
-    +     isFloating,
-    +     isInteger,
-    
-    -       -- * Conversions
-    -       -- ** Rational
-    -     , unsafeFromRational
-    -     , fromRationalRepetend
-    -     , fromRationalRepetendLimited
-    -     , fromRationalRepetendUnlimited
-    -     , toRationalRepetend
-    +     -- * Conversions
-    
-    -       -- ** Floating & integer
-    -     , floatingOrInteger
-    -     , toRealFloat
-    -     , toBoundedRealFloat
-    -     , toBoundedInteger
-    -     , fromFloatDigits
-    +     -- ** Rational
-    +     unsafeFromRational,
-    … and 1265 more lines
 
 scotty-0.30/test/Web/ScottySpec.hs
     formatting is non-idempotent
