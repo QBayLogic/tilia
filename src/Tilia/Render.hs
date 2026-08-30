@@ -20,7 +20,6 @@ import Tilia.Comments
   ( Comment (..),
     commentTrailing,
     closesItself,
-    documentsNothing,
     escapeTrigger,
     widenTrigger,
   )
@@ -139,8 +138,7 @@ splitHaddocks hsMod = foldr sort' ([], [])
   where
     inTree = Set.fromList (map startPoint (haddockSpans hsMod))
     sort' c (docs, rest)
-      | startPoint (commentSpan c) `Set.member` inTree,
-        not (documentsNothing c) =
+      | startPoint (commentSpan c) `Set.member` inTree =
           (widenTrigger c : docs, rest)
       | otherwise = (docs, escapeTrigger c : rest)
 

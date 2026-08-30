@@ -16,7 +16,6 @@ module Tilia.Comments
     widenTrigger,
     escapeTrigger,
     triggerEscaped,
-    documentsNothing,
     opensHaddock,
 
     -- * Pragmas
@@ -239,17 +238,6 @@ escapeTrigger c = case commentStyle c of
           triggered rest ->
             T.take n l <> (if T.null gap then " " else gap) <> "\\" <> rest
       _ -> l
-
--- | Is there nothing after this comment's trigger? In that case it is not a
--- Haddock but an ordinary comment.
-documentsNothing :: Comment -> Bool
-documentsNothing c = case splitTrigger headLine of
-  Nothing -> False
-  Just (_, body) -> all (T.null . content) (body : rest)
-  where
-    headLine :| rest = commentBody c
-    content = T.strip . without "-}" T.stripSuffix . without "--" T.stripPrefix . T.strip
-    without affix strip t = maybe t id (strip affix t)
 
 -- | Has this comment been through 'escapeTrigger'?
 --

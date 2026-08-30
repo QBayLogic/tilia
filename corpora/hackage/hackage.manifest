@@ -731,10 +731,10 @@ formatted       34698069cedb  aws-0.25.3/Examples/PutBucketNearLine.hs
 formatted       d6caebe65382  aws-0.25.3/Examples/SimpleDb.hs
 formatted       9492eae131c0  aws-0.25.3/Examples/Sqs.hs
 formatted       e865ae48f11b  aws-0.25.3/Setup.hs
-formatted       c36de3bb93ba  aws-0.25.3/tests/DynamoDb/Main.hs
+formatted       354bb309a68c  aws-0.25.3/tests/DynamoDb/Main.hs
 formatted       75daea597c6a  aws-0.25.3/tests/DynamoDb/Utils.hs
 formatted       3ffa8999bdf7  aws-0.25.3/tests/S3/Main.hs
-formatted       de958f7e3828  aws-0.25.3/tests/Sqs/Main.hs
+formatted       44336eea1e26  aws-0.25.3/tests/Sqs/Main.hs
 formatted       791d9b3fc4f8  aws-0.25.3/tests/Utils.hs
 formatted       c4588035d2e2  base64-bytestring-1.2.1.0/Data/ByteString/Base64.hs
 formatted       2897fc80ce31  base64-bytestring-1.2.1.0/Data/ByteString/Base64/Internal.hs
@@ -2764,7 +2764,7 @@ formatted       21c053af24d4  leksah-0.16.2.2/src/IDE/Preferences.hs
 formatted       2f0f2284081d  leksah-0.16.2.2/src/IDE/Session.hs
 formatted       277f211ae71b  leksah-0.16.2.2/src/IDE/SourceCandy.hs
 formatted       95169d9d3f63  leksah-0.16.2.2/src/IDE/Statusbar.hs
-formatted       ae9eac07eab5  leksah-0.16.2.2/src/IDE/SymbolNavigation.hs
+formatted       052cb64e36f0  leksah-0.16.2.2/src/IDE/SymbolNavigation.hs
 formatted       265b135c829e  leksah-0.16.2.2/src/IDE/TextEditor.hs
 formatted       b345661c1e07  leksah-0.16.2.2/src/IDE/TextEditor/Class.hs
 formatted       9ef1071cba91  leksah-0.16.2.2/src/IDE/TextEditor/CodeMirror.hs
@@ -3415,7 +3415,7 @@ formatted       d100cca123ea  pipes-4.3.16/benchmarks/PreludeBench.hs
 formatted       276250c17f41  pipes-4.3.16/src/Pipes.hs
 formatted       332e8aaad352  pipes-4.3.16/src/Pipes/Core.hs
 formatted       a8c0035a2069  pipes-4.3.16/src/Pipes/Internal.hs
-broken          6f4147a5472c  pipes-4.3.16/src/Pipes/Lift.hs
+formatted       e3b36f0685b2  pipes-4.3.16/src/Pipes/Lift.hs
 formatted       82bba5f85292  pipes-4.3.16/src/Pipes/Prelude.hs
 formatted       436224de8a77  pipes-4.3.16/src/Pipes/Tutorial.hs
 formatted       6ca40cc862a8  pipes-4.3.16/tests/Main.hs
@@ -4296,7 +4296,7 @@ formatted       61d4105d3456  statistics-0.16.5.0/benchmark/Main.hs
 formatted       d80f7bf6f96d  statistics-0.16.5.0/examples/kde/KDE.hs
 formatted       dcea40eeb511  statistics-0.16.5.0/tests/Tests/ApproxEq.hs
 formatted       2ae25961f71d  statistics-0.16.5.0/tests/Tests/Correlation.hs
-broken          b98f9c0ae997  statistics-0.16.5.0/tests/Tests/Distribution.hs
+formatted       b0317e3f9b24  statistics-0.16.5.0/tests/Tests/Distribution.hs
 formatted       3d4db70bc7ca  statistics-0.16.5.0/tests/Tests/ExactDistribution.hs
 formatted       299f43f28485  statistics-0.16.5.0/tests/Tests/Function.hs
 formatted       9c5a618f3bf1  statistics-0.16.5.0/tests/Tests/Helpers.hs
@@ -4739,8 +4739,8 @@ formatted       c90273d226e8  transformers-0.6.3.0/legacy/pre711/Data/Functor/Co
 partly-checked  8bd6cde36e0e  transformers-0.6.3.0/legacy/pre711/Data/Functor/Product.hs
 formatted       e68212e8be31  transformers-0.6.3.0/legacy/pre711/Data/Functor/Sum.hs
 formatted       e865ae48f11b  typed-process-0.2.13.0/Setup.hs
-broken          10a849df09d5  typed-process-0.2.13.0/src/System/Process/Typed.hs
-broken          d17dc66f1536  typed-process-0.2.13.0/src/System/Process/Typed/Internal.hs
+formatted       b26f653e6a78  typed-process-0.2.13.0/src/System/Process/Typed.hs
+formatted       a2f3c6df3e9b  typed-process-0.2.13.0/src/System/Process/Typed/Internal.hs
 formatted       2fbd14b119a4  typed-process-0.2.13.0/test/Spec.hs
 formatted       7da6b9dd8336  typed-process-0.2.13.0/test/System/Process/TypedSpec.hs
 formatted       e865ae48f11b  unliftio-0.2.25.1/Setup.hs

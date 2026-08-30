@@ -65,9 +65,7 @@ data Ending
 
 -- | Print a Haddock.
 haddock :: Ctx -> DocStyle -> Ending -> LHsDoc GhcPs -> Doc
-haddock ctx style ending doc = case docBody ctx style doc of
-  Nothing -> mempty
-  Just (body, _) -> body <> close
+haddock ctx style ending doc = fst (docBody ctx style doc) <> close
   where
     close = case ending of
       Open -> mempty
@@ -79,26 +77,27 @@ haddock ctx style ending doc = case docBody ctx style doc of
 -- left as written. A @--@ Haddock owns the rest of its line and still has to
 -- end it.
 haddockInline :: Ctx -> DocStyle -> LHsDoc GhcPs -> Doc
-haddockInline ctx style doc = case docBody ctx style doc of
-  Nothing -> mempty
-  Just (body, isSelfClosing) ->
-    body <> (if isSelfClosing then breakOrSpace else hardBreak)
+haddockInline ctx style doc =
+  body <> (if isSelfClosing then breakOrSpace else hardBreak)
+  where
+    (body, isSelfClosing) = docBody ctx style doc
 
 -- | The Haddock itself, and whether the form it took delimits itself.
-docBody :: Ctx -> DocStyle -> LHsDoc GhcPs -> Maybe (Doc, Bool)
+docBody :: Ctx -> DocStyle -> LHsDoc GhcPs -> (Doc, Bool)
 docBody ctx style doc@(L l str) =
   case reusableText ctx style doc of
     Just written ->
-      Just
-        ( maybe id located (spanOfSrcSpan l) $
-            align (sepBy (verbatimBreak AtIndent) (map txt (NE.toList written))),
-          selfClosing written
-        )
+      ( maybe id located (spanOfSrcSpan l) $
+          align (sepBy (verbatimBreak AtIndent) (map txt (NE.toList written))),
+        selfClosing written
+      )
     Nothing
-      | null written' -> Nothing
-      | blockForm -> Just (rebuiltBlock, False)
-      | otherwise -> Just (rebuilt, False)
+      | null written' -> (emptyBlock, True)
+      | blockForm -> (rebuiltBlock, False)
+      | otherwise -> (rebuilt, False)
   where
+    emptyBlock = txt (blockOpener style) <> space <> txt "-}"
+
     -- No provenance on a rebuilt Haddock, unlike one whose text is reused.
     -- Rebuilding is what happens when the author wrote it in another style,
     -- and the commonest of those is a @-- ^@ being printed as @-- |@, which
