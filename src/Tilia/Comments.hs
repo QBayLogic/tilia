@@ -11,6 +11,7 @@ module Tilia.Comments
     commentsOf,
     renderComment,
     closesItself,
+    bracketed,
     commentTrailing,
     singleLine,
     widenTrigger,
@@ -95,6 +96,10 @@ commentTrailing = isJust . commentCodeBeforeStopsAt
 -- | Does this comment let code follow it on the same line?
 closesItself :: Comment -> Bool
 closesItself c = commentStyle c == BlockComment && singleLine c
+
+-- | Was this comment written between brackets rather than as @--@ lines?
+bracketed :: Comment -> Bool
+bracketed c = "{-" `T.isPrefixOf` T.stripStart (NE.head (commentBody c))
 
 -- | Is this comment a single line?
 singleLine :: Comment -> Bool

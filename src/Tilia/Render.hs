@@ -20,6 +20,7 @@ import Tilia.Comments
   ( Comment (..),
     commentTrailing,
     closesItself,
+    bracketed,
     escapeTrigger,
     widenTrigger,
   )
@@ -94,20 +95,23 @@ renderModule settings parsed =
 heldOff :: [Comment] -> [Comment] -> [Comment]
 heldOff haddocks = map holdOff
   where
-    ends = Set.fromList (map (spanEndLine . commentSpan) haddocks)
+    written = filter (not . bracketed) haddocks
+    ends = Set.fromList (map (spanEndLine . commentSpan) written)
     starts =
       Set.fromList
         [ spanStartLine (commentSpan h)
-          | h <- haddocks,
+          | h <- written,
             not (commentTrailing h)
         ]
-    holdOff c =
-      c
-        { commentGapAbove =
-            commentGapAbove c || Set.member (spanStartLine s - 1) ends,
-          commentGapBelow =
-            commentGapBelow c || Set.member (spanEndLine s + 1) starts
-        }
+    holdOff c
+      | bracketed c = c
+      | otherwise =
+          c
+            { commentGapAbove =
+                commentGapAbove c || Set.member (spanStartLine s - 1) ends,
+              commentGapBelow =
+                commentGapBelow c || Set.member (spanEndLine s + 1) starts
+            }
       where
         s = commentSpan c
 

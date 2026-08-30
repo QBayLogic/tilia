@@ -3,10 +3,10 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 5017 formatted.
+5133 examples, 5018 formatted.
 
 ==========================================================================
-broken (39)
+broken (38)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/Termination/Monad.hs
@@ -565,12 +565,7 @@ dlist-1.0/Data/DList.hs
       #if __GLASGOW_HASKELL__ >= 708
       {-
     
-    @@ -37,27 +39,40 @@
-      efficiently.
-    
-      -}
-    +
-      {- ORMOLU_ENABLE -}
+    @@ -41,23 +43,35 @@
     
       module Data.DList
         ( -- * Difference List Type
@@ -793,19 +788,6 @@ hashable-1.5.1.0/tests/Regress.hs
     -         , testCase "4" $ nullaryCase 4 S4
     -         ]
     … and 214 more lines
-
-hledger-1.52.1/Hledger/Cli/Commands/Setup.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -44,6 +44,7 @@
-      Check and show the status of the hledger installation.
-    
-      -}
-    +
-      -- {-# OPTIONS_GHC -Wno-unused-matches #-}
-    
-      module Hledger.Cli.Commands.Setup
 
 hspec-core-2.11.17/src/Test/Hspec/Core/Compat.hs
     formatting is non-idempotent

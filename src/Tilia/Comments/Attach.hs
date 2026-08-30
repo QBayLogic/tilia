@@ -76,9 +76,16 @@ walk = go
       d -> (d, p)
 
 -- | Hold the last comment off a Haddock about to be written under it.
+--
+-- Only a comment written as @--@ lines needs holding off: the lexer would
+-- read it and the Haddock under it as one comment. A @{- … -}@ ends at its
+-- own bracket and may sit against whatever follows.
 heldOffFrom :: Doc -> [Comment] -> [Comment]
 heldOffFrom d cs = case unsnoc cs of
-  Just (earlier, c) | opensWithHaddock d -> earlier <> [c {commentGapBelow = True}]
+  Just (earlier, c)
+    | not (bracketed c),
+      opensWithHaddock d ->
+        earlier <> [c {commentGapBelow = True}]
   _ -> cs
 
 -- | Does this region begin its first line with a Haddock?

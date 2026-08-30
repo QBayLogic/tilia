@@ -303,6 +303,7 @@ ormoluSkip =
     "declaration" </> "data" </> "comment-in-empty-record.hs",
     "import" </> "comment-inside-empty-import-list.hs",
     "other" </> "comment-two-blocks.hs",
+    "other" </> "comment-glued-together.hs",
     "other" </> "multiple-blank-line-comment.hs",
     "declaration" </> "type" </> "parens-comments.hs",
     "declaration" </> "value" </> "function" </> "parens-comments.hs",
