@@ -404,7 +404,7 @@ merge guards varied = go Broken
       | Just xs <- traverse only spines = alongside layout xs
       | otherwise = factored layout spines
       where
-        spines = map spine ds
+        spines = map (spineAt layout) ds
 
     alongside _ [] = mempty
     alongside layout xs@(x : _) = case x of
@@ -433,10 +433,6 @@ merge guards varied = go Broken
                         choice xs
                   _ -> DGroup inside merged
       DAlign _ | Just ds <- every (\case DAlign d -> Just d; _ -> Nothing) -> DAlign (go layout ds)
-      DVariant _ _
-        | Just as <- every (\case DVariant a _ -> Just a; _ -> Nothing),
-          Just bs <- every (\case DVariant _ b -> Just b; _ -> Nothing) ->
-            DVariant (go Flat as) (go Broken bs)
       _ -> choice xs
       where
         every f = traverse f xs
@@ -444,7 +440,7 @@ merge guards varied = go Broken
     unwrapping layout spans xs = do
       inside <- sole [i | (i, s) <- zip [0 :: Int ..] spans, all (covers s) spans]
       wrapper <- listToMaybe (drop inside xs)
-      if opens wrapper then Just (openedAgainst layout inside wrapper) else Nothing
+      if opens layout wrapper then Just (openedAgainst layout inside wrapper) else Nothing
       where
         sole [i] = Just i
         sole _ = Nothing
@@ -455,21 +451,18 @@ merge guards varied = go Broken
           DNest n x -> DNest n (openedAgainst l inside' x)
           DAlign x -> DAlign (openedAgainst l inside' x)
           DGroup m x -> DGroup m (openedAgainst m inside' x)
-          DVariant a b ->
-            DVariant (openedAgainst Flat inside' a) (openedAgainst Broken inside' b)
-          _ -> case spine d of
+          _ -> case spineAt l d of
             parts@(_ : _ : _) ->
               factored l [if k == inside' then parts else [e] | (k, e) <- zip [0 :: Int ..] xs]
             _ -> choice xs
 
-    opens = \case
-      DLocated _ x -> opens x
-      DFence _ x -> opens x
-      DNest _ x -> opens x
-      DAlign x -> opens x
-      DGroup _ x -> opens x
-      DVariant _ b -> opens b
-      d -> case spine d of
+    opens layout = \case
+      DLocated _ x -> opens layout x
+      DFence _ x -> opens layout x
+      DNest _ x -> opens layout x
+      DAlign x -> opens layout x
+      DGroup l x -> opens l x
+      d -> case spineAt layout d of
         _ : _ : _ -> True
         _ -> False
 
@@ -543,7 +536,7 @@ merge guards varied = go Broken
 
 -- | Would these two documents print the same, laid out like this?
 agree :: Varied -> Layout -> Doc -> Doc -> Bool
-agree varied layout a b = alike (spine a) (spine b)
+agree varied layout a b = alike (spineAt layout a) (spineAt layout b)
   where
     alike [] [] = True
     alike (x : xs) (y : ys) = here x y && alike xs ys
@@ -552,9 +545,6 @@ agree varied layout a b = alike (spine a) (spine b)
     inside x y = agree varied layout x y
 
     here x y = case (x, y) of
-      (DVariant flatX brokenX, DVariant flatY brokenY) -> case layout of
-        Flat -> agree varied Flat flatX flatY
-        Broken -> agree varied Broken brokenX brokenY
       (DGroup l x', DGroup m y') -> l == m && agree varied l x' y'
       (DNest n x', DNest m y') -> n == m && inside x' y'
       (DAlign x', DAlign y') -> inside x' y'
@@ -597,7 +587,7 @@ combine :: Layout -> Doc -> [(Varied, Doc)] -> Maybe Doc
 combine layout base ds = case filter (\(v, d) -> not (agree v layout base d)) ds of
   [] -> Just base
   [(_, only)] -> Just only
-  many -> case (spine base, [(v, spine d) | (v, d) <- many]) of
+  many -> case (spineAt layout base, [(v, spineAt layout d) | (v, d) <- many]) of
     ([b], ss) | Just xs <- traverse (\(v, s) -> (,) v <$> single s) ss -> descend b xs
     (bs, ss) -> spliced bs ss
   where
@@ -620,12 +610,6 @@ combine layout base ds = case filter (\(v, d) -> not (agree v layout base d)) ds
           Just is <- every (\case DGroup _ d -> Just d; _ -> Nothing) ->
             let inside = if Broken `elem` (l : map snd ls) then Broken else Flat
              in DGroup inside <$> combine inside i is
-      DVariant i j
-        | Just is <- every (\case DVariant a _ -> Just a; _ -> Nothing),
-          Just js <- every (\case DVariant _ b' -> Just b'; _ -> Nothing) ->
-            case layout of
-              Flat -> (`DVariant` j) <$> combine Flat i is
-              Broken -> DVariant i <$> combine Broken j js
       _ -> Nothing
       where
         every f = traverse (\(v, d) -> (,) v <$> f d) xs
@@ -730,6 +714,17 @@ spine = \case
   DEmpty -> []
   DCat a b -> spine a <> spine b
   d -> [d]
+
+-- | 'spine', with the variants resolved the way this layout will print them.
+spineAt :: Layout -> Doc -> [Doc]
+spineAt layout = go
+  where
+    go = \case
+      DEmpty -> []
+      DCat a b -> go a <> go b
+      DVariant flatD brokenD ->
+        go (case layout of Flat -> flatD; Broken -> brokenD)
+      d -> [d]
 
 -- | The longest run of elements two spines have in common, in order,
 -- allowing for anything either of them has that the other does not.

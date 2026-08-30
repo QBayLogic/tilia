@@ -3,10 +3,10 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 5002 formatted.
+5133 examples, 5006 formatted.
 
 ==========================================================================
-broken (54)
+broken (50)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/Termination/Monad.hs
@@ -247,18 +247,6 @@ Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Modality.hs
     +     . applyPolarityToContext (withStandardLock UnusedPolarity)
     +     . typeLevelReductions
     +     . localTC (\e -> e {envWorkingOnTypes
-
-Agda-2.8.0/src/full/Agda/TypeChecking/Serialise.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -164,6 +164,7 @@
-      #endif
-              <-
-              liftIO $ readIORef ioref
-    +
-      #ifdef DEBUG_SERIALISATION
-            tickN (kind ++ "  (fresh)") $ fromIntegral fresh
 
 Agda-2.8.0/src/full/Agda/TypeChecking/With.hs
     comments: `-- @Δ₁@             part of context needed for with arguments and their types.` became `--`
@@ -681,18 +669,6 @@ dlist-1.0/tests/ImportUnsafe.hs
       #error "Your GHC does not support Safe Haskell. That's okay!"
     
       #endif
-
-dlist-1.0/tests/Main.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -26,6 +26,7 @@
-      main :: IO ()
-      main = do
-        DListProperties.test
-    +
-      #if __GLASGOW_HASKELL__ >= 800
-        -- CPP: GHC >= 8 for DNonEmpty
 
 fay-0.24.2.0/src/haskell-names/Language/Haskell/Names/Types.hs
     comments: `--` became `-- possibly, does not even exist). For example:`
@@ -1210,7 +1186,7 @@ lens-5.3.6/src/Control/Lens/Internal/TH.hs
     @@ -68,8 +75,13 @@
       conAppsT conName = foldl AppT (ConT conName)
     
-    … and 239 more lines
+    … and 236 more lines
 
 pandoc-3.10.2/src/Text/Pandoc/ImageSize.hs
     formatting is non-idempotent
@@ -1575,18 +1551,6 @@ stm-2.5.3.1/Control/Concurrent/STM/TArray.hs
     
       #endif
 
-stm-2.5.3.1/testsuite/src/Issue17.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -20,6 +20,7 @@
-    
-        -- Same as above, except created within STM
-        queueSTM <- atomically $ newTBQueue 0
-    +
-      #if !MIN_VERSION_stm(2,5,0)
-        assertNoCapacityTBQueue queueSTM
-
 tasty-1.5.4/Test/Tasty/Core.hs
     comments, in one configuration: `-- See Note [Skipped tests]` became `--`
     --- input
@@ -1913,18 +1877,6 @@ typed-process-0.2.13.0/src/System/Process/Typed/Internal.hs
     + import Data.Typeable (Typeable)
     + import System.Exit (ExitCode)
     + import System.IO (Handle, IOMo
-
-unpacked-containers-0/utils/Internal/BitUtil.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -90,6 +90,7 @@
-            x3 = x2 .|. x2 `shiftRL` 2
-            x4 = x3 .|. x3 `shiftRL` 4
-            x5 = x4 .|. x4 `shiftRL` 8
-    +
-      #if !(defined(__GLASGOW_HASKELL__) && WORD_SIZE_IN_BITS==32)
-            x6 = x5 .|. x5 `shiftRL` 16
 
 vector-0.13.2.0/src/Data/Vector.hs
     formatting is non-idempotent
