@@ -210,7 +210,7 @@ widenTrigger c
   | otherwise = c
   where
     shiftOne l = case openerWidth l of
-      Just n -> let (o, r) = T.splitAt n l in o <> " " <> r
+      Just _ -> l
       Nothing -> " " <> l
 
 -- | Put a backslash in front of a doc comment's trigger.

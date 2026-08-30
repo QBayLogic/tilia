@@ -6,7 +6,7 @@
 
 formatted       Agda-2.8.0/src/agda-mode/Main.hs
 formatted       Agda-2.8.0/src/data/MAlonzo/src/MAlonzo/RTE.hs
-broken          Agda-2.8.0/src/data/MAlonzo/src/MAlonzo/RTE/Float.hs
+formatted       Agda-2.8.0/src/data/MAlonzo/src/MAlonzo/RTE/Float.hs
 formatted       Agda-2.8.0/src/full/Agda/Benchmarking.hs
 formatted       Agda-2.8.0/src/full/Agda/Compiler/Backend.hs
 formatted       Agda-2.8.0/src/full/Agda/Compiler/Backend/Base.hs
@@ -331,7 +331,7 @@ formatted       Agda-2.8.0/src/full/Agda/Utils/Fail.hs
 formatted       Agda-2.8.0/src/full/Agda/Utils/Favorites.hs
 formatted       Agda-2.8.0/src/full/Agda/Utils/FileId.hs
 formatted       Agda-2.8.0/src/full/Agda/Utils/FileName.hs
-broken          Agda-2.8.0/src/full/Agda/Utils/Float.hs
+formatted       Agda-2.8.0/src/full/Agda/Utils/Float.hs
 formatted       Agda-2.8.0/src/full/Agda/Utils/Function.hs
 formatted       Agda-2.8.0/src/full/Agda/Utils/Functor.hs
 formatted       Agda-2.8.0/src/full/Agda/Utils/GetOpt.hs
@@ -1529,7 +1529,7 @@ formatted       conduit-1.3.6.1/src/Data/Conduit/List.hs
 formatted       conduit-1.3.6.1/src/Data/Streaming/FileRead.hs
 formatted       conduit-1.3.6.1/src/Data/Streaming/Filesystem.hs
 formatted       conduit-1.3.6.1/test/Data/Conduit/Extra/ZipConduitSpec.hs
-broken          conduit-1.3.6.1/test/Data/Conduit/StreamSpec.hs
+formatted       conduit-1.3.6.1/test/Data/Conduit/StreamSpec.hs
 formatted       conduit-1.3.6.1/test/Spec.hs
 formatted       conduit-1.3.6.1/test/StreamSpec.hs
 formatted       conduit-1.3.6.1/test/doctests.hs
@@ -1799,7 +1799,7 @@ formatted       distributed-process-0.7.8/src/Control/Distributed/Process/Intern
 formatted       distributed-process-0.7.8/src/Control/Distributed/Process/Internal/StrictList.hs
 formatted       distributed-process-0.7.8/src/Control/Distributed/Process/Internal/StrictMVar.hs
 formatted       distributed-process-0.7.8/src/Control/Distributed/Process/Internal/Types.hs
-broken          distributed-process-0.7.8/src/Control/Distributed/Process/Internal/WeakTQueue.hs
+formatted       distributed-process-0.7.8/src/Control/Distributed/Process/Internal/WeakTQueue.hs
 formatted       distributed-process-0.7.8/src/Control/Distributed/Process/Management.hs
 formatted       distributed-process-0.7.8/src/Control/Distributed/Process/Management/Internal/Agent.hs
 formatted       distributed-process-0.7.8/src/Control/Distributed/Process/Management/Internal/Bus.hs
@@ -2533,7 +2533,7 @@ formatted       hspec-core-2.11.17/test/Test/Hspec/Core/TreeSpec.hs
 formatted       hspec-core-2.11.17/test/Test/Hspec/Core/UtilSpec.hs
 formatted       hspec-core-2.11.17/vendor/Data/Algorithm/Diff.hs
 partly-checked  hspec-core-2.11.17/vendor/async-2.2.5/Control/Concurrent/Async.hs
-broken          hspec-core-2.11.17/vendor/stm-2.5.0.1/Control/Concurrent/STM/TMVar.hs
+formatted       hspec-core-2.11.17/vendor/stm-2.5.0.1/Control/Concurrent/STM/TMVar.hs
 formatted       http-client-0.7.19/Data/KeyedPool.hs
 formatted       http-client-0.7.19/Network/HTTP/Client.hs
 formatted       http-client-0.7.19/Network/HTTP/Client/Body.hs
@@ -2623,7 +2623,7 @@ broken          idris-1.3.4/src/Idris/Core/Evaluate.hs
 formatted       idris-1.3.4/src/Idris/Core/Execute.hs
 formatted       idris-1.3.4/src/Idris/Core/ProofState.hs
 formatted       idris-1.3.4/src/Idris/Core/ProofTerm.hs
-broken          idris-1.3.4/src/Idris/Core/TT.hs
+formatted       idris-1.3.4/src/Idris/Core/TT.hs
 formatted       idris-1.3.4/src/Idris/Core/Typecheck.hs
 formatted       idris-1.3.4/src/Idris/Core/Unify.hs
 formatted       idris-1.3.4/src/Idris/Core/WHNF.hs
@@ -2676,7 +2676,7 @@ formatted       idris-1.3.4/src/Idris/Parser/Expr.hs
 formatted       idris-1.3.4/src/Idris/Parser/Helpers.hs
 formatted       idris-1.3.4/src/Idris/Parser/Ops.hs
 formatted       idris-1.3.4/src/Idris/Parser/Stack.hs
-broken          idris-1.3.4/src/Idris/PartialEval.hs
+formatted       idris-1.3.4/src/Idris/PartialEval.hs
 formatted       idris-1.3.4/src/Idris/Primitives.hs
 formatted       idris-1.3.4/src/Idris/ProofSearch.hs
 formatted       idris-1.3.4/src/Idris/Prover.hs
@@ -3117,7 +3117,7 @@ formatted       pandoc-3.10.2/src/Text/Pandoc/Readers/Roff.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Readers/Roff/Escape.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Readers/TWiki.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Readers/Textile.hs
-broken          pandoc-3.10.2/src/Text/Pandoc/Readers/TikiWiki.hs
+formatted       pandoc-3.10.2/src/Text/Pandoc/Readers/TikiWiki.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Readers/Txt2Tags.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Readers/Typst.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Readers/Typst/Math.hs
@@ -3146,7 +3146,7 @@ formatted       pandoc-3.10.2/src/Text/Pandoc/Version.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Writers.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/ANSI.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/AnnotatedTable.hs
-broken          pandoc-3.10.2/src/Text/Pandoc/Writers/AsciiDoc.hs
+formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/AsciiDoc.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/BBCode.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/BibTeX.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/Blaze.hs
@@ -3198,7 +3198,7 @@ formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/OPML.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/OpenDocument.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/Org.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/Powerpoint.hs
-broken          pandoc-3.10.2/src/Text/Pandoc/Writers/Powerpoint/Output.hs
+formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/Powerpoint/Output.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/Powerpoint/Presentation.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/RST.hs
 formatted       pandoc-3.10.2/src/Text/Pandoc/Writers/RTF.hs
@@ -3313,7 +3313,7 @@ formatted       parsec3-1.0.1.8/Text/Parsec/Prim.hs
 formatted       parsec3-1.0.1.8/Text/Parsec/String.hs
 formatted       parsec3-1.0.1.8/Text/Parsec/Text.hs
 formatted       parsec3-1.0.1.8/Text/Parsec/Text/Lazy.hs
-broken          parsec3-1.0.1.8/Text/Parsec/Token.hs
+formatted       parsec3-1.0.1.8/Text/Parsec/Token.hs
 formatted       parser-combinators-1.3.1/Control/Applicative/Combinators.hs
 formatted       parser-combinators-1.3.1/Control/Applicative/Combinators/NonEmpty.hs
 formatted       parser-combinators-1.3.1/Control/Applicative/Permutations.hs
@@ -4315,9 +4315,9 @@ formatted       statistics-0.16.5.0/tests/tests.hs
 formatted       stm-2.5.3.1/Control/Concurrent/STM.hs
 broken          stm-2.5.3.1/Control/Concurrent/STM/TArray.hs
 formatted       stm-2.5.3.1/Control/Concurrent/STM/TBQueue.hs
-broken          stm-2.5.3.1/Control/Concurrent/STM/TChan.hs
-broken          stm-2.5.3.1/Control/Concurrent/STM/TMVar.hs
-broken          stm-2.5.3.1/Control/Concurrent/STM/TQueue.hs
+formatted       stm-2.5.3.1/Control/Concurrent/STM/TChan.hs
+formatted       stm-2.5.3.1/Control/Concurrent/STM/TMVar.hs
+formatted       stm-2.5.3.1/Control/Concurrent/STM/TQueue.hs
 formatted       stm-2.5.3.1/Control/Concurrent/STM/TSem.hs
 formatted       stm-2.5.3.1/Control/Concurrent/STM/TVar.hs
 partly-checked  stm-2.5.3.1/Control/Monad/STM.hs
@@ -4822,7 +4822,7 @@ formatted       unpacked-containers-0/utils/Internal/StrictMaybe.hs
 formatted       unpacked-containers-0/utils/Internal/StrictPair.hs
 formatted       uuid-types-1.0.6.1/Setup.hs
 formatted       uuid-types-1.0.6.1/src/Data/UUID/Types.hs
-broken          uuid-types-1.0.6.1/src/Data/UUID/Types/Internal.hs
+formatted       uuid-types-1.0.6.1/src/Data/UUID/Types/Internal.hs
 formatted       uuid-types-1.0.6.1/src/Data/UUID/Types/Internal/Builder.hs
 formatted       uuid-types-1.0.6.1/tests/TestUUID.hs
 formatted       vector-0.13.2.0/Setup.hs
