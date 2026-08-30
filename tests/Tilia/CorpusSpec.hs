@@ -34,14 +34,16 @@ import Tilia.Diff (Colours, coloursFor, diff)
 import Tilia.Pragma (effectiveExtensions, movesPositions)
 import Tilia.Equivalence (commentDifference, syntaxDifference)
 import Tilia.Parser
-  ( ParsedModule (..),
+  ( ParseError (..),
+    ParsedModule (..),
     ParserConfig,
-    describeParseError,
     parseModule,
     parserConfigFor,
   )
 import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Render (RenderConfig, defaultRenderConfig, renderModule)
+import Tilia.Span (spanStartColumn, spanStartLine)
+import Tilia.Span.Ghc (spanOfSrcSpan)
 import Tilia.TestConfig (exampleRenderConfig)
 
 spec :: Spec
@@ -263,7 +265,7 @@ checkPure colours path package source expected
       Result Declined "a pragma that moves positions, which we do not rewrite" noDigest
   | usesCpp inForce source = checkCpp colours path package source expected
   | otherwise = case parseModule config path source of
-      Left problem -> Result DoesNotParse (describeParseError problem) noDigest
+      Left problem -> Result DoesNotParse (parseProblem problem) noDigest
       Right before ->
         let formatted = render before
             against name = diff colours ("input", name) source formatted
@@ -405,9 +407,16 @@ checkCpp colours path package source expected = case formatWithCpp parser render
         input = Map.fromList went
 
     sameProgram went came = case (parse went, parse came) of
-      (Nothing, _) -> Just "a configuration of the input does not parse"
-      (_, Nothing) -> Just "a configuration of the output does not parse"
-      (Just before, Just after)
+      (Left problem, _) ->
+        Just ("a configuration of the input does not parse: " <> parseProblem problem)
+      (_, Left problem) ->
+        Just
+          ( "a configuration of the output does not parse: "
+              <> parseProblem problem
+              <> "\n"
+              <> linesAround came problem
+          )
+      (Right before, Right after)
         | Just difference <- syntaxDifference (pmModule before) (pmModule after) ->
             Just ("a different program, in one configuration: " <> difference)
         | Just difference <-
@@ -418,10 +427,36 @@ checkCpp colours path package source expected = case formatWithCpp parser render
             Just ("comments, in one configuration: " <> difference)
         | otherwise -> Nothing
 
-    parse = either (const Nothing) Just . parseModule parser path
+    parse = parseModule parser path
 
     parser = parserConfigFor package
     render = renderConfigFor parser path package source
+
+-- | Why a parse failed, and where in the file, but not which file.
+--
+-- The example being reported already names it, and 'describeParseError'
+-- opens with the path in full.
+parseProblem :: ParseError -> Text
+parseProblem problem = at <> peProblem problem
+  where
+    at = case spanOfSrcSpan (peSpan problem) of
+      Nothing -> T.empty
+      Just s ->
+        T.pack (show (spanStartLine s))
+          <> ":"
+          <> T.pack (show (spanStartColumn s))
+          <> ": "
+
+-- | The lines of a configuration around the one a parse error names.
+linesAround :: Text -> ParseError -> Text
+linesAround text problem = case spanStartLine <$> spanOfSrcSpan (peSpan problem) of
+  Nothing -> T.empty
+  Just line ->
+    T.unlines
+      [ (if n == line then "> " else "  ") <> T.pack (show n) <> "  " <> l
+        | (n, l) <- zip [1 :: Int ..] (T.lines text),
+          abs (n - line) <= 4
+      ]
 
 -- | How many configurations one example gets compared over.
 configurationsToCheck :: Integer
