@@ -12,7 +12,8 @@ module Tilia.Comments.Attach
 where
 
 import Data.Bifunctor (first, second)
-import Data.List (mapAccumL)
+import Data.List (mapAccumL, unsnoc)
+import Data.Maybe (listToMaybe)
 import Data.List.NonEmpty qualified as NE
 import Data.Text (Text)
 import Tilia.Comments
@@ -54,8 +55,11 @@ walk = go
       DLocated s d ->
         let (mine, p') = takePlaced s p
             (d', p'') = go p' d
-            only' = only (endOfAConstruct s) mine
-         in (only' Before <> DLocated s d' <> only' After, p'')
+            write position cs =
+              foldMap (writtenAs (endOfAConstruct s) position) cs
+            before' = heldOffFrom d [c | (q, c) <- mine, q == Before]
+            after' = [c | (q, c) <- mine, q == After]
+         in (write Before before' <> DLocated s d' <> write After after', p'')
       DFence s d -> first (DFence s) (go p d)
       DCppChoice bs e ->
         let branch q (c, d) = let (d', q') = go q d in (q', (c, d'))
@@ -71,8 +75,32 @@ walk = go
          in (DVariant a' b', p')
       d -> (d, p)
 
-    only atTheEnd mine position =
-      foldMap (writtenAs atTheEnd position) [c | (q, c) <- mine, q == position]
+-- | Hold the last comment off a Haddock about to be written under it.
+heldOffFrom :: Doc -> [Comment] -> [Comment]
+heldOffFrom d cs = case unsnoc cs of
+  Just (earlier, c) | opensWithHaddock d -> earlier <> [c {commentGapBelow = True}]
+  _ -> cs
+
+-- | Does this region begin its first line with a Haddock?
+opensWithHaddock :: Doc -> Bool
+opensWithHaddock = maybe False opensHaddock . listToMaybe . fst . firstLine Broken
+  where
+    firstLine layout = \case
+      DText t -> ([t], False)
+      DCat a b -> case firstLine layout a of
+        (before, True) -> (before, True)
+        (before, False) -> first (before <>) (firstLine layout b)
+      DNest _ x -> firstLine layout x
+      DAlign x -> firstLine layout x
+      DLocated _ x -> firstLine layout x
+      DFence _ x -> firstLine layout x
+      DGroup l x -> firstLine l x
+      DVariant a b -> firstLine layout (case layout of Flat -> a; Broken -> b)
+      DHardBreak -> ([], True)
+      DCloseLine -> ([], True)
+      DBreak -> ([], layout == Broken)
+      DSoftBreak -> ([], layout == Broken)
+      _ -> ([], False)
 
 -- | Does this region stand for where a construct stops rather than for
 -- anything written?
@@ -91,7 +119,7 @@ writtenAs ::
   Doc
 writtenAs atTheEnd position c = case shapeOf position c of
   InPlace -> case position of
-    Before -> commentDoc c <> space
+    Before -> includeWhen (not (commentTrailing c)) space <> commentDoc c <> space
     After -> space <> commentDoc c <> space
   EndsTheLine -> space <> commentDoc c <> closeLine
   HeldBack -> holdBack (renderComment c)

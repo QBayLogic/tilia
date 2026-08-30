@@ -22,7 +22,7 @@ formatted       Agda-2.8.0/src/full/Agda/Compiler/MAlonzo/Compiler.hs
 formatted       Agda-2.8.0/src/full/Agda/Compiler/MAlonzo/Encode.hs
 formatted       Agda-2.8.0/src/full/Agda/Compiler/MAlonzo/HaskellTypes.hs
 formatted       Agda-2.8.0/src/full/Agda/Compiler/MAlonzo/Misc.hs
-broken          Agda-2.8.0/src/full/Agda/Compiler/MAlonzo/Pragmas.hs
+formatted       Agda-2.8.0/src/full/Agda/Compiler/MAlonzo/Pragmas.hs
 formatted       Agda-2.8.0/src/full/Agda/Compiler/MAlonzo/Pretty.hs
 formatted       Agda-2.8.0/src/full/Agda/Compiler/MAlonzo/Primitives.hs
 formatted       Agda-2.8.0/src/full/Agda/Compiler/MAlonzo/Strict.hs
@@ -48,7 +48,7 @@ formatted       Agda-2.8.0/src/full/Agda/Interaction/BasicOps.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/BuildLibrary.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/Command.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/CommandLine.hs
-broken          Agda-2.8.0/src/full/Agda/Interaction/EmacsCommand.hs
+formatted       Agda-2.8.0/src/full/Agda/Interaction/EmacsCommand.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/EmacsTop.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/ExitCode.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/FindFile.hs
@@ -84,7 +84,7 @@ formatted       Agda-2.8.0/src/full/Agda/Interaction/Options/Errors.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/Options/HasOptions.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/Options/Help.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/Options/Lenses.hs
-broken          Agda-2.8.0/src/full/Agda/Interaction/Options/Types.hs
+formatted       Agda-2.8.0/src/full/Agda/Interaction/Options/Types.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/Options/Warnings.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/Output.hs
 formatted       Agda-2.8.0/src/full/Agda/Interaction/Response.hs
@@ -93,7 +93,7 @@ formatted       Agda-2.8.0/src/full/Agda/Interaction/SearchAbout.hs
 declined        Agda-2.8.0/src/full/Agda/Main.hs
 formatted       Agda-2.8.0/src/full/Agda/Mimer/Mimer.hs
 formatted       Agda-2.8.0/src/full/Agda/Mimer/Options.hs
-broken          Agda-2.8.0/src/full/Agda/Syntax/Abstract.hs
+formatted       Agda-2.8.0/src/full/Agda/Syntax/Abstract.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Abstract/Name.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Abstract/Pattern.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Abstract/PatternSynonyms.hs
@@ -102,11 +102,11 @@ formatted       Agda-2.8.0/src/full/Agda/Syntax/Abstract/UsedNames.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Abstract/Views.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Builtin.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Common.hs
-broken          Agda-2.8.0/src/full/Agda/Syntax/Common/Aspect.hs
+formatted       Agda-2.8.0/src/full/Agda/Syntax/Common/Aspect.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Common/KeywordRange.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Common/Pretty.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Common/Pretty/ANSI.hs
-broken          Agda-2.8.0/src/full/Agda/Syntax/Concrete.hs
+formatted       Agda-2.8.0/src/full/Agda/Syntax/Concrete.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Concrete/Attribute.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Concrete/Definitions.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Concrete/Definitions/Errors.hs
@@ -147,7 +147,7 @@ formatted       Agda-2.8.0/src/full/Agda/Syntax/Parser/Literate.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Parser/LookAhead.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Parser/Monad.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Parser/StringLiterals.hs
-broken          Agda-2.8.0/src/full/Agda/Syntax/Parser/Tokens.hs
+formatted       Agda-2.8.0/src/full/Agda/Syntax/Parser/Tokens.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Position.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Reflected.hs
 formatted       Agda-2.8.0/src/full/Agda/Syntax/Scope/Base.hs
@@ -302,7 +302,7 @@ formatted       Agda-2.8.0/src/full/Agda/TypeChecking/SizedTypes/Syntax.hs
 formatted       Agda-2.8.0/src/full/Agda/TypeChecking/SizedTypes/Utils.hs
 formatted       Agda-2.8.0/src/full/Agda/TypeChecking/SizedTypes/WarshallSolver.hs
 formatted       Agda-2.8.0/src/full/Agda/TypeChecking/Sort.hs
-broken          Agda-2.8.0/src/full/Agda/TypeChecking/Substitute.hs
+formatted       Agda-2.8.0/src/full/Agda/TypeChecking/Substitute.hs
 formatted       Agda-2.8.0/src/full/Agda/TypeChecking/Substitute/Class.hs
 formatted       Agda-2.8.0/src/full/Agda/TypeChecking/Substitute/DeBruijn.hs
 formatted       Agda-2.8.0/src/full/Agda/TypeChecking/SyntacticEquality.hs
@@ -426,7 +426,7 @@ formatted       QuickCheck-2.18.0.0/src/Test/QuickCheck/Monoids.hs
 formatted       QuickCheck-2.18.0.0/src/Test/QuickCheck/Poly.hs
 declined        QuickCheck-2.18.0.0/src/Test/QuickCheck/Property.hs
 formatted       QuickCheck-2.18.0.0/src/Test/QuickCheck/Random.hs
-broken          QuickCheck-2.18.0.0/src/Test/QuickCheck/State.hs
+formatted       QuickCheck-2.18.0.0/src/Test/QuickCheck/State.hs
 formatted       QuickCheck-2.18.0.0/src/Test/QuickCheck/Test.hs
 formatted       QuickCheck-2.18.0.0/src/Test/QuickCheck/Text.hs
 formatted       QuickCheck-2.18.0.0/tests/CollectDataTypes.hs
@@ -853,7 +853,7 @@ formatted       brick-2.13/src/Brick/Themes.hs
 formatted       brick-2.13/src/Brick/Types.hs
 formatted       brick-2.13/src/Brick/Types/Common.hs
 formatted       brick-2.13/src/Brick/Types/EventM.hs
-broken          brick-2.13/src/Brick/Types/Internal.hs
+formatted       brick-2.13/src/Brick/Types/Internal.hs
 formatted       brick-2.13/src/Brick/Types/TH.hs
 formatted       brick-2.13/src/Brick/Util.hs
 formatted       brick-2.13/src/Brick/Widgets/Border.hs
@@ -1417,7 +1417,7 @@ formatted       brittany-0.14.0.2/source/library/Language/Haskell/Brittany/Inter
 formatted       brittany-0.14.0.2/source/library/Language/Haskell/Brittany/Internal/Backend.hs
 formatted       brittany-0.14.0.2/source/library/Language/Haskell/Brittany/Internal/BackendUtils.hs
 formatted       brittany-0.14.0.2/source/library/Language/Haskell/Brittany/Internal/Config.hs
-broken          brittany-0.14.0.2/source/library/Language/Haskell/Brittany/Internal/Config/Types.hs
+formatted       brittany-0.14.0.2/source/library/Language/Haskell/Brittany/Internal/Config/Types.hs
 formatted       brittany-0.14.0.2/source/library/Language/Haskell/Brittany/Internal/Config/Types/Instances.hs
 formatted       brittany-0.14.0.2/source/library/Language/Haskell/Brittany/Internal/ExactPrintUtils.hs
 formatted       brittany-0.14.0.2/source/library/Language/Haskell/Brittany/Internal/LayouterBasics.hs
@@ -2481,7 +2481,7 @@ formatted       hspec-core-2.11.17/src/Test/Hspec/Core/Formatters/V1.hs
 formatted       hspec-core-2.11.17/src/Test/Hspec/Core/Formatters/V1/Free.hs
 formatted       hspec-core-2.11.17/src/Test/Hspec/Core/Formatters/V1/Internal.hs
 formatted       hspec-core-2.11.17/src/Test/Hspec/Core/Formatters/V1/Monad.hs
-broken          hspec-core-2.11.17/src/Test/Hspec/Core/Formatters/V2.hs
+formatted       hspec-core-2.11.17/src/Test/Hspec/Core/Formatters/V2.hs
 formatted       hspec-core-2.11.17/src/Test/Hspec/Core/Hooks.hs
 formatted       hspec-core-2.11.17/src/Test/Hspec/Core/QuickCheck.hs
 formatted       hspec-core-2.11.17/src/Test/Hspec/Core/QuickCheck/Util.hs
@@ -3604,7 +3604,7 @@ formatted       purescript-0.15.15/src/Language/PureScript/Docs/Utils/MonoidExtr
 formatted       purescript-0.15.15/src/Language/PureScript/Environment.hs
 formatted       purescript-0.15.15/src/Language/PureScript/Errors.hs
 formatted       purescript-0.15.15/src/Language/PureScript/Errors/JSON.hs
-broken          purescript-0.15.15/src/Language/PureScript/Externs.hs
+formatted       purescript-0.15.15/src/Language/PureScript/Externs.hs
 formatted       purescript-0.15.15/src/Language/PureScript/Glob.hs
 formatted       purescript-0.15.15/src/Language/PureScript/Graph.hs
 formatted       purescript-0.15.15/src/Language/PureScript/Hierarchy.hs

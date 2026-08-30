@@ -18,6 +18,7 @@ import GHC.Hs.Extension (GhcPs)
 import GHC.LanguageExtensions.Type (Extension (..))
 import Tilia.Comments
   ( Comment (..),
+    commentTrailing,
     closesItself,
     documentsNothing,
     escapeTrigger,
@@ -95,7 +96,12 @@ heldOff :: [Comment] -> [Comment] -> [Comment]
 heldOff haddocks = map holdOff
   where
     ends = Set.fromList (map (spanEndLine . commentSpan) haddocks)
-    starts = Set.fromList (map (spanStartLine . commentSpan) haddocks)
+    starts =
+      Set.fromList
+        [ spanStartLine (commentSpan h)
+          | h <- haddocks,
+            not (commentTrailing h)
+        ]
     holdOff c =
       c
         { commentGapAbove =

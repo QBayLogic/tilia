@@ -17,6 +17,7 @@ module Tilia.Comments
     escapeTrigger,
     triggerEscaped,
     documentsNothing,
+    opensHaddock,
 
     -- * Pragmas
     Pragma (..),
@@ -269,6 +270,10 @@ triggered :: Text -> Bool
 triggered t = case T.uncons t of
   Just (ch, _) -> ch `elem` ("|^*$" :: String)
   Nothing -> False
+
+-- | Does this line open a Haddock?
+opensHaddock :: Text -> Bool
+opensHaddock = isJust . splitTrigger
 
 -- | Split a doc comment's opening line into everything up to and including
 -- its trigger, and whatever follows.
