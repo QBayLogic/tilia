@@ -229,7 +229,7 @@ formatted       25a69fe0b2e6  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Debug.
 formatted       e171cc504b07  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Env.hs
 formatted       80aecb84d70e  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Imports.hs
 formatted       1f2b7f206ac5  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/MetaVars.hs
-broken          20101b0f5096  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Modality.hs
+formatted       5d9486ab6943  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Modality.hs
 formatted       219de79701c4  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Mutual.hs
 formatted       3583a08cec65  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Open.hs
 formatted       4e4d159df7b7  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Options.hs
@@ -4462,7 +4462,7 @@ formatted       e9a5bd33783d  text-2.1.4/src/Data/Text/Internal/Measure.hs
 formatted       7635d57189ea  text-2.1.4/src/Data/Text/Internal/PrimCompat.hs
 formatted       634f3b2cbbde  text-2.1.4/src/Data/Text/Internal/Private.hs
 formatted       a41bd3d7edab  text-2.1.4/src/Data/Text/Internal/Read.hs
-formatted       c700f606ab0d  text-2.1.4/src/Data/Text/Internal/Reverse.hs
+formatted       eb255dc750fb  text-2.1.4/src/Data/Text/Internal/Reverse.hs
 formatted       eff6a5ffb928  text-2.1.4/src/Data/Text/Internal/Search.hs
 formatted       67bf06cca611  text-2.1.4/src/Data/Text/Internal/StrictBuilder.hs
 formatted       a739bca575a2  text-2.1.4/src/Data/Text/Internal/Transformation.hs

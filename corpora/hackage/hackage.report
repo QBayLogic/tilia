@@ -3,10 +3,10 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 5018 formatted.
+5133 examples, 5019 formatted.
 
 ==========================================================================
-broken (38)
+broken (37)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/Termination/Monad.hs
@@ -181,68 +181,6 @@ Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Base.hs
     - import Data.Set (Set, toList, fromList)
     - import qualified Data.Set as Set -- hiding (singleton, null, empty)
     - import Data.HashMap.Strict (Ha
-
-Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Modality.hs
-    a different program: HsModule > a different number of declarations
-    --- input
-    +++ output
-    @@ -14,27 +14,21 @@
-    
-      See "Agda.TypeChecking.Irrelevance".
-      -}
-    -
-      module Agda.TypeChecking.Monad.Modality where
-    
-    - import qualified Data.Map as Map
-    -
-      import Agda.Interaction.Options
-    -
-      import Agda.Syntax.Common
-    -
-      import Agda.TypeChecking.Monad.Base
-      import Agda.TypeChecking.Monad.Context
-      import Agda.TypeChecking.Monad.Debug
-      import Agda.TypeChecking.Monad.Env
-    -
-      import Agda.Utils.Function
-      import Agda.Utils.Lens
-      import Agda.Utils.Monad
-    + import qualified Data.Map as Map
-    
-      -- | data 'Relevance'
-      --   see "Agda.Syntax.Common".
-    -
-      -- * Operations on 'Dom'.
-    
-      -- | Prepare parts of a parameter telescope for abstraction in constructors
-    @@ -46,8 +40,9 @@
-    
-      -- | Modify the context whenever going from the l.h.s. (term side)
-      --   of the typing judgement to the r.h.s. (type side).
-    - workOnTypes :: (MonadTCEnv m, HasOptions m, MonadDebug m)
-    -             => m a -> m a
-    + workOnTypes ::
-    +   (MonadTCEnv m, HasOptions m, MonadDebug m) =>
-    +   m a -> m a
-      workOnTypes cont = do
-        allowed <- optExperimentalIrrelevance <$> pragmaOptions
-        verboseBracket "tc.irr" 60 "workOnTypes" $ workOnTypes' allowed cont
-    @@ -55,18 +50,22 @@
-      -- | Internal workhorse, expects value of --experimental-irrelevance flag
-      --   as argument.
-      workOnTypes' :: (MonadTCEnv m) => Bool -> m a -> m a
-    - workOnTypes' experimental
-    -   = applyWhen experimental (modifyContextInfo $ mapRelevance irrelevantToShapeIrrelevant)
-    -   . applyQuantityToJudgement zeroQuantity
-    -   . applyPolarityToContext (withStandardLock UnusedPolarity)
-    -   . typeLevelReductions
-    -   . localTC (\ e -> e { envWorkingOnTypes = True })
-    + workOnTypes' experimental =
-    +   applyWhen experimental (modifyContextInfo $ mapRelevance irrelevantToShapeIrrelevant)
-    +     . applyQuantityToJudgement zeroQuantity
-    +     . applyPolarityToContext (withStandardLock UnusedPolarity)
-    +     . typeLevelReductions
-    +     . localTC (\e -> e {envWorkingOnTypes
 
 Agda-2.8.0/src/full/Agda/TypeChecking/With.hs
     comments: `-- @Δ₁@             part of context needed for with arguments and their types.` became `--`

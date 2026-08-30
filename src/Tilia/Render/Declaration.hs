@@ -112,7 +112,7 @@ groupDecls ctx isSignatureFile (d : ds)
   | isDocNext (unLoc d) = case groupDecls ctx isSignatureFile ds of
       [] -> [d :| []]
       (g : gs)
-        | isDocNext (unLoc (NE.head g)) -> (d :| []) : g : gs
+        | isDoc (unLoc (NE.head g)) -> (d :| []) : g : gs
         | otherwise -> (d <| g) : gs
   | otherwise =
       let (together, rest) = span belongs (zip (d : ds) ds)
@@ -120,6 +120,9 @@ groupDecls ctx isSignatureFile (d : ds)
   where
     isDocNext = \case
       DocD _ (DocCommentNext _) -> True
+      _ -> False
+    isDoc = \case
+      DocD _ _ -> True
       _ -> False
     belongs (previous, current) =
       (not isSignatureFile && isSignatureSeries ctx previous current)
