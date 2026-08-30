@@ -163,7 +163,7 @@ formatted       2ae972608fb0  Agda-2.8.0/src/full/Agda/Syntax/Treeless.hs
 formatted       643d16ee2457  Agda-2.8.0/src/full/Agda/Termination/CallGraph.hs
 formatted       fec59f499d06  Agda-2.8.0/src/full/Agda/Termination/CallMatrix.hs
 formatted       ebc4ce14c917  Agda-2.8.0/src/full/Agda/Termination/CutOff.hs
-broken          7978d5a44013  Agda-2.8.0/src/full/Agda/Termination/Monad.hs
+formatted       7978d5a44013  Agda-2.8.0/src/full/Agda/Termination/Monad.hs
 formatted       9436ec427f9a  Agda-2.8.0/src/full/Agda/Termination/Order.hs
 formatted       0f8827158a99  Agda-2.8.0/src/full/Agda/Termination/RecCheck.hs
 formatted       b6a7543ba3d1  Agda-2.8.0/src/full/Agda/Termination/Semiring.hs
@@ -216,7 +216,7 @@ formatted       d997bed46460  Agda-2.8.0/src/full/Agda/TypeChecking/MetaVars/Men
 formatted       b8142e719029  Agda-2.8.0/src/full/Agda/TypeChecking/MetaVars/Occurs.hs
 formatted       a4be1ca0bbf7  Agda-2.8.0/src/full/Agda/TypeChecking/Modalities.hs
 formatted       1fd16a038ff2  Agda-2.8.0/src/full/Agda/TypeChecking/Monad.hs
-broken          5ac553bcec60  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Base.hs
+formatted       5ac553bcec60  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Base.hs
 formatted       d349fd5d15cf  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Base/Types.hs
 formatted       7860b2253820  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Base/Warning.hs
 formatted       79d1e1bfdd94  Agda-2.8.0/src/full/Agda/TypeChecking/Monad/Benchmark.hs
@@ -3018,7 +3018,7 @@ broken          fd7cafba4cb8  pandoc-3.10.2/src/Text/Pandoc/ImageSize.hs
 formatted       2aebfb9a4784  pandoc-3.10.2/src/Text/Pandoc/Logging.hs
 formatted       198eaaad0ea2  pandoc-3.10.2/src/Text/Pandoc/MIME.hs
 formatted       fc58bac11b5e  pandoc-3.10.2/src/Text/Pandoc/MediaBag.hs
-broken          cd7ca82c574c  pandoc-3.10.2/src/Text/Pandoc/Options.hs
+formatted       cd7ca82c574c  pandoc-3.10.2/src/Text/Pandoc/Options.hs
 formatted       1c86673f6ac1  pandoc-3.10.2/src/Text/Pandoc/PDF.hs
 formatted       1378d4b80344  pandoc-3.10.2/src/Text/Pandoc/Parsing.hs
 formatted       d0bfe0ebb5ca  pandoc-3.10.2/src/Text/Pandoc/Parsing/Capabilities.hs
@@ -3029,7 +3029,7 @@ formatted       ebf243a003b2  pandoc-3.10.2/src/Text/Pandoc/Parsing/GridTable.hs
 formatted       6ce0199477d0  pandoc-3.10.2/src/Text/Pandoc/Parsing/Lists.hs
 formatted       957cafdf0f36  pandoc-3.10.2/src/Text/Pandoc/Parsing/Math.hs
 formatted       fad3834b08e5  pandoc-3.10.2/src/Text/Pandoc/Parsing/Smart.hs
-broken          3a6f9d5669d3  pandoc-3.10.2/src/Text/Pandoc/Parsing/State.hs
+formatted       3a6f9d5669d3  pandoc-3.10.2/src/Text/Pandoc/Parsing/State.hs
 formatted       a83effd57b53  pandoc-3.10.2/src/Text/Pandoc/Process.hs
 formatted       5798ce9f1d3b  pandoc-3.10.2/src/Text/Pandoc/Readers.hs
 formatted       b0383bb6bbf3  pandoc-3.10.2/src/Text/Pandoc/Readers/AsciiDoc.hs
@@ -4362,7 +4362,7 @@ formatted       f18b52c06db0  tasty-1.5.4/Control/Concurrent/Async.hs
 formatted       e865ae48f11b  tasty-1.5.4/Setup.hs
 formatted       02df8ffe2eb3  tasty-1.5.4/Test/Tasty.hs
 formatted       244024ebd276  tasty-1.5.4/Test/Tasty/CmdLine.hs
-broken          aaf8f6f4fdaf  tasty-1.5.4/Test/Tasty/Core.hs
+formatted       aaf8f6f4fdaf  tasty-1.5.4/Test/Tasty/Core.hs
 formatted       1d3019e1fd14  tasty-1.5.4/Test/Tasty/Ingredients.hs
 formatted       9e13d30f1aac  tasty-1.5.4/Test/Tasty/Ingredients/Basic.hs
 formatted       c994c77ff564  tasty-1.5.4/Test/Tasty/Ingredients/ConsoleReporter.hs

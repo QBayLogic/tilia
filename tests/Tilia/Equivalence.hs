@@ -55,6 +55,7 @@ import GHC.Unit.Types (Unit)
 import Language.Haskell.Syntax.Module.Name (ModuleName)
 import Tilia.Comments
   ( Comment (..),
+    commentTrailing,
     CommentStyle (..),
     Pragma (..),
     commentPragma,
@@ -553,7 +554,7 @@ commentDifference (moduleBefore, moduleAfter) before0 after0
 
     belowHeader m = filter (not . inHeader m) . ordinary
     withinHeader m = filter (inHeader m) . ordinary
-    settled = sortOn commentBody
+    settled = sortOn bodyKey
 
     inHeader m c = case rearranged m of
       Nothing -> False
@@ -589,8 +590,33 @@ commentDifference (moduleBefore, moduleAfter) before0 after0
     diverge (b : _) [] = Just ("lost " <> quoted b)
     diverge [] (a : _) = Just ("gained " <> quoted a)
     diverge (b : bs) (a : as)
-      | commentBody b == commentBody a = diverge bs as
+      | bodyKey b == bodyKey a = diverge bs as
+      | Just (bs', as') <- crossed b bs (a : as) = diverge bs' as'
       | otherwise = Just (quoted b <> " became " <> quoted a)
+
+    -- A Haddock written after what it documents comes out before it, which
+    -- lifts its lines over a comment trailing the same construct:
+    --
+    -- >   _terSizeDepth :: Int  -- lazy by intention!
+    -- >     -- ^ How many @SIZELT@ relations are in the context
+    -- >     --   (= clause telescope).
+    --
+    -- The comment has not moved and neither has the documentation; they have
+    -- swapped, and the lines the Haddock runs on to are read here as
+    -- comments like any other. Only a comment that trails code may be
+    -- crossed, and only by a block that turns up whole and in order on the
+    -- other side, so this says \"these two swapped\" and not \"these are the
+    -- same comments in some order\".
+    crossed b bs beyond
+      | not (commentTrailing b) = Nothing
+      | otherwise = case [k | k <- [1 .. length bs], swaps k] of
+          (k : _) -> Just (drop k bs, drop (k + 1) beyond)
+          [] -> Nothing
+      where
+        swaps k =
+          all (not . commentTrailing) (take k bs)
+            && map bodyKey (take k bs) == map bodyKey (take k beyond)
+            && map bodyKey (take 1 (drop k beyond)) == [bodyKey b]
 
     quoted c = "`" <> T.intercalate "\\n" (NE.toList (commentBody c)) <> "`"
     tshow = T.pack . show
@@ -598,6 +624,12 @@ commentDifference (moduleBefore, moduleAfter) before0 after0
       T.intercalate ", "
         . map (\(n, b) -> "{-# " <> n <> " " <> b <> " #-}")
         . Set.toList
+
+-- | A comment's lines, as they are compared.
+bodyKey :: Comment -> NonEmpty Text
+bodyKey c = case commentBody c of
+  (l :| []) -> T.stripStart l :| []
+  ls -> ls
 
 -- | How far down the file the formatter rearranges things.
 --
