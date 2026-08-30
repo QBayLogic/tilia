@@ -3,10 +3,10 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 5026 formatted.
+5133 examples, 5027 formatted.
 
 ==========================================================================
-broken (30)
+broken (29)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/TypeChecking/Conversion.hs
@@ -392,72 +392,6 @@ dlist-1.0/tests/ImportUnsafe.hs
       #error "Your GHC does not support Safe Haskell. That's okay!"
     
       #endif
-
-fay-0.24.2.0/src/haskell-names/Language/Haskell/Names/Types.hs
-    comments: `--` became `-- possibly, does not even exist). For example:`
-    --- input
-    +++ output
-    @@ -1,43 +1,44 @@
-      {-# OPTIONS -fno-warn-name-shadowing #-}
-    - {-# LANGUAGE CPP                #-}
-    + {-# LANGUAGE CPP #-}
-      {-# LANGUAGE DeriveDataTypeable #-}
-    - {-# LANGUAGE DeriveFoldable     #-}
-    - {-# LANGUAGE DeriveFunctor      #-}
-    - {-# LANGUAGE DeriveTraversable  #-}
-    - {-# LANGUAGE NoImplicitPrelude  #-}
-    + {-# LANGUAGE DeriveFoldable #-}
-    + {-# LANGUAGE DeriveFunctor #-}
-    + {-# LANGUAGE DeriveTraversable #-}
-      {-# LANGUAGE StandaloneDeriving #-}
-    + {-# LANGUAGE NoImplicitPrelude #-}
-    +
-      module Language.Haskell.Names.Types
-    -   ( Error (..)
-    -   , ExtensionSet
-    -   , GName (..)
-    -   , HasOrigName (..)
-    -   , ModuleNameS
-    -   , NameInfo (..)
-    -   , NameS
-    -   , OrigName (..)
-    -   , Scoped (..)
-    -   , SymTypeInfo (..)
-    -   , SymValueInfo (..)
-    -   , Symbols (..)
-    -   , mkTy
-    -   , mkVal
-    -   , ppError
-    -   , ppGName
-    -   , ppOrigName
-    -   , sLoc
-    -   , tySyms
-    -   , valSyms
-    -   ) where
-    +   ( Error (..),
-    +     ExtensionSet,
-    +     GName (..),
-    +     HasOrigName (..),
-    +     ModuleNameS,
-    +     NameInfo (..),
-    +     NameS,
-    +     OrigName (..),
-    +     Scoped (..),
-    +     SymTypeInfo (..),
-    +     SymValueInfo (..),
-    +     Symbols (..),
-    +     mkTy,
-    +     mkVal,
-    +     ppError,
-    +     ppGName,
-    +     ppOrigName,
-    +     sLoc,
-    +     tySyms,
-    +     valSyms,
-    +   )
-    + where
-    
-    … and 327 more lines
 
 hakyll-4.17.0.0/lib/Hakyll/Core/Rules/Internal.hs
     formatting is non-idempotent

@@ -1936,7 +1936,7 @@ formatted       5830466c394d  fay-0.24.2.0/src/haskell-names/Language/Haskell/Na
 formatted       80dec7fda3fb  fay-0.24.2.0/src/haskell-names/Language/Haskell/Names/Recursive.hs
 formatted       0c478b11a301  fay-0.24.2.0/src/haskell-names/Language/Haskell/Names/ScopeUtils.hs
 formatted       0ad105ebc45d  fay-0.24.2.0/src/haskell-names/Language/Haskell/Names/SyntaxUtils.hs
-broken          2b1329bafe82  fay-0.24.2.0/src/haskell-names/Language/Haskell/Names/Types.hs
+formatted       2b1329bafe82  fay-0.24.2.0/src/haskell-names/Language/Haskell/Names/Types.hs
 formatted       a185a50b6e6a  fay-0.24.2.0/src/main/Main.hs
 formatted       b9c869a29067  fay-0.24.2.0/src/tests/Test/CommandLine.hs
 formatted       4aba97e21b8e  fay-0.24.2.0/src/tests/Test/Compile.hs

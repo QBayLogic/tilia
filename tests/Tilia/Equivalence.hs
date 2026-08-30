@@ -591,7 +591,7 @@ commentDifference (moduleBefore, moduleAfter) before0 after0
     diverge [] (a : _) = Just ("gained " <> quoted a)
     diverge (b : bs) (a : as)
       | bodyKey b == bodyKey a = diverge bs as
-      | Just (bs', as') <- crossed b bs (a : as) = diverge bs' as'
+      | Just (bs', as') <- crossed (b : bs) (a : as) = diverge bs' as'
       | otherwise = Just (quoted b <> " became " <> quoted a)
 
     -- A Haddock written after what it documents comes out before it, which
@@ -601,22 +601,24 @@ commentDifference (moduleBefore, moduleAfter) before0 after0
     -- >     -- ^ How many @SIZELT@ relations are in the context
     -- >     --   (= clause telescope).
     --
-    -- The comment has not moved and neither has the documentation; they have
-    -- swapped, and the lines the Haddock runs on to are read here as
-    -- comments like any other. Only a comment that trails code may be
-    -- crossed, and only by a block that turns up whole and in order on the
-    -- other side, so this says \"these two swapped\" and not \"these are the
-    -- same comments in some order\".
-    crossed b bs beyond
-      | not (commentTrailing b) = Nothing
-      | otherwise = case [k | k <- [1 .. length bs], swaps k] of
-          (k : _) -> Just (drop k bs, drop (k + 1) beyond)
-          [] -> Nothing
-      where
-        swaps k =
-          all (not . commentTrailing) (take k bs)
-            && map bodyKey (take k bs) == map bodyKey (take k beyond)
-            && map bodyKey (take 1 (drop k beyond)) == [bodyKey b]
+    -- The comments have not moved and neither has the documentation; they
+    -- have swapped, and the lines the Haddock runs on to are read here as
+    -- comments like any other. Only comments that trail code may be crossed,
+    -- only by comments that do not, and only where each block turns up whole
+    -- and in order on the other side—so this says \"these two swapped\" and
+    -- not \"these are the same comments in some order\".
+    crossed written printed =
+      listToMaybe
+        [ (drop (j + k) written, drop (j + k) printed)
+        | j <- [1 .. length (takeWhile commentTrailing written)],
+          let lifted = drop j written,
+          let shared = length (takeWhile id (zipWith alike printed lifted)),
+          k <- [shared, shared - 1 .. 1],
+          all (not . commentTrailing) (take k lifted),
+          map bodyKey (take j (drop k printed)) == map bodyKey (take j written)
+        ]
+
+    alike x y = bodyKey x == bodyKey y
 
     quoted c = "`" <> T.intercalate "\\n" (NE.toList (commentBody c)) <> "`"
     tshow = T.pack . show
