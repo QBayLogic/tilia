@@ -1791,7 +1791,7 @@ formatted       c98976ba0493  distributed-process-0.7.8/src/Control/Distributed/
 formatted       fe72c6f43347  distributed-process-0.7.8/src/Control/Distributed/Process/Internal/CQueue.hs
 formatted       2946b3a11a2f  distributed-process-0.7.8/src/Control/Distributed/Process/Internal/Closure/BuiltIn.hs
 formatted       a950bf8d3ff9  distributed-process-0.7.8/src/Control/Distributed/Process/Internal/Closure/Explicit.hs
-broken          f7de9337c4c8  distributed-process-0.7.8/src/Control/Distributed/Process/Internal/Closure/TH.hs
+formatted       53e4bcdd272f  distributed-process-0.7.8/src/Control/Distributed/Process/Internal/Closure/TH.hs
 formatted       4f632ae95bca  distributed-process-0.7.8/src/Control/Distributed/Process/Internal/Messaging.hs
 formatted       371d302bf97d  distributed-process-0.7.8/src/Control/Distributed/Process/Internal/Primitives.hs
 formatted       e8934f2fb775  distributed-process-0.7.8/src/Control/Distributed/Process/Internal/Spawn.hs
@@ -2818,7 +2818,7 @@ formatted       a9257a233659  lens-5.3.6/src/Control/Lens/Internal/Iso.hs
 formatted       93bb26a430db  lens-5.3.6/src/Control/Lens/Internal/Level.hs
 formatted       929b3db19b16  lens-5.3.6/src/Control/Lens/Internal/List.hs
 formatted       eae79aadfa29  lens-5.3.6/src/Control/Lens/Internal/Magma.hs
-formatted       72ecb69999f4  lens-5.3.6/src/Control/Lens/Internal/Prelude.hs
+formatted       0bead388f468  lens-5.3.6/src/Control/Lens/Internal/Prelude.hs
 formatted       d033545bb0fa  lens-5.3.6/src/Control/Lens/Internal/Prism.hs
 formatted       4dffbb5256da  lens-5.3.6/src/Control/Lens/Internal/PrismTH.hs
 formatted       a529e2b12e5a  lens-5.3.6/src/Control/Lens/Internal/Profunctor.hs
@@ -4816,7 +4816,7 @@ formatted       29c3c2a40e2f  unpacked-containers-0/src/Set/Internal.hs
 formatted       61140f1c6f0f  unpacked-containers-0/utils/Internal/BitQueue.hs
 formatted       0223b15d55ba  unpacked-containers-0/utils/Internal/BitUtil.hs
 formatted       a1134be4230d  unpacked-containers-0/utils/Internal/PtrEquality.hs
-formatted       da10f7a54e45  unpacked-containers-0/utils/Internal/State.hs
+formatted       5dd1b940181c  unpacked-containers-0/utils/Internal/State.hs
 formatted       ed12f1faf0ed  unpacked-containers-0/utils/Internal/StrictFold.hs
 formatted       621944df674c  unpacked-containers-0/utils/Internal/StrictMaybe.hs
 formatted       b7a091ef4c77  unpacked-containers-0/utils/Internal/StrictPair.hs
@@ -4842,7 +4842,7 @@ formatted       368deb66d310  vector-0.13.2.0/benchlib/Bench/Vector/TestData/Gra
 formatted       476c4f42945a  vector-0.13.2.0/benchlib/Bench/Vector/TestData/ParenTree.hs
 formatted       6b1b4aea2361  vector-0.13.2.0/benchmarks/Main.hs
 formatted       77ce7d3b1eda  vector-0.13.2.0/internal/GenUnboxTuple.hs
-broken          66fb1a197cb4  vector-0.13.2.0/src/Data/Vector.hs
+formatted       7e257cfd7468  vector-0.13.2.0/src/Data/Vector.hs
 formatted       16d1d0522130  vector-0.13.2.0/src/Data/Vector/Fusion/Bundle.hs
 formatted       9ffef9919e33  vector-0.13.2.0/src/Data/Vector/Fusion/Bundle/Monadic.hs
 formatted       281a320dd1fd  vector-0.13.2.0/src/Data/Vector/Fusion/Bundle/Size.hs
@@ -4855,12 +4855,12 @@ formatted       14ab0fea35a5  vector-0.13.2.0/src/Data/Vector/Generic/Mutable/Ba
 formatted       31ef8684e6a5  vector-0.13.2.0/src/Data/Vector/Generic/New.hs
 formatted       1842a6e1d83f  vector-0.13.2.0/src/Data/Vector/Internal/Check.hs
 formatted       3a331752a108  vector-0.13.2.0/src/Data/Vector/Mutable.hs
-broken          5f9e0ef3b941  vector-0.13.2.0/src/Data/Vector/Primitive.hs
-broken          59ae1f7b0ea3  vector-0.13.2.0/src/Data/Vector/Primitive/Mutable.hs
-broken          d91eb8f8af53  vector-0.13.2.0/src/Data/Vector/Storable.hs
+formatted       c77c6d8b48f1  vector-0.13.2.0/src/Data/Vector/Primitive.hs
+formatted       0bd7ca2c6b06  vector-0.13.2.0/src/Data/Vector/Primitive/Mutable.hs
+formatted       a8ebade54b10  vector-0.13.2.0/src/Data/Vector/Storable.hs
 formatted       f3208fa21c31  vector-0.13.2.0/src/Data/Vector/Storable/Internal.hs
 formatted       61099533f336  vector-0.13.2.0/src/Data/Vector/Storable/Mutable.hs
-broken          db16bb18a64e  vector-0.13.2.0/src/Data/Vector/Strict.hs
+formatted       ca6c3919dbe4  vector-0.13.2.0/src/Data/Vector/Strict.hs
 formatted       3bc69095cb4d  vector-0.13.2.0/src/Data/Vector/Strict/Mutable.hs
 formatted       5a349caedbaf  vector-0.13.2.0/src/Data/Vector/Unboxed.hs
 declined        -             vector-0.13.2.0/src/Data/Vector/Unboxed/Base.hs
@@ -4994,7 +4994,7 @@ formatted       4e0e4c27884b  yesod-core-1.7.0.0/src/Yesod/Core/Class/Dispatch/T
 formatted       c828e326655c  yesod-core-1.7.0.0/src/Yesod/Core/Class/Handler.hs
 formatted       b609ce0ae4aa  yesod-core-1.7.0.0/src/Yesod/Core/Class/Yesod.hs
 formatted       7b7185683c72  yesod-core-1.7.0.0/src/Yesod/Core/Content.hs
-broken          b3980d5c290c  yesod-core-1.7.0.0/src/Yesod/Core/Dispatch.hs
+formatted       8f8e6e5fb762  yesod-core-1.7.0.0/src/Yesod/Core/Dispatch.hs
 formatted       32fc089df99a  yesod-core-1.7.0.0/src/Yesod/Core/Handler.hs
 formatted       88d4d8c2323a  yesod-core-1.7.0.0/src/Yesod/Core/Internal.hs
 formatted       212235b50682  yesod-core-1.7.0.0/src/Yesod/Core/Internal/LiteApp.hs

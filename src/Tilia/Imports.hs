@@ -43,11 +43,22 @@ normalizeImports ::
   -- | Normalized imports
   [LImportDecl GhcPs]
 normalizeImports implicitPrelude barriers imports =
-  concatMap stretch (segmented barriers tidied)
+  concatMap stretch (segmented (dividing imports barriers) tidied)
   where
     prelude = if implicitPrelude then Refines else Provides
     tidied = map (fmap tidyList) imports
     stretch is = foldRuns fuse [(identity prelude i, i) | i <- is]
+
+-- | The lines that fall between imports, out of the lines that must not be
+-- sorted across.
+dividing :: [LImportDecl GhcPs] -> [Int] -> [Int]
+dividing imports = filter (not . within)
+  where
+    within l = any (\(from, to) -> from <= l && l <= to) spans'
+    spans' = [(srcLocLine from, srcLocLine to) | i <- imports, Just (from, to) <- [endsOf i]]
+    endsOf i = case (srcSpanStart (getLocA i), srcSpanEnd (getLocA i)) of
+      (RealSrcLoc from _, RealSrcLoc to _) -> Just (from, to)
+      _ -> Nothing
 
 -- | Cut a list of imports into the stretches the barriers leave between
 -- them, in order.

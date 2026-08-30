@@ -3,10 +3,10 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 5006 formatted.
+5133 examples, 5013 formatted.
 
 ==========================================================================
-broken (50)
+broken (43)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/Termination/Monad.hs
@@ -546,27 +546,6 @@ brittany-0.14.0.2/data/Test487.hs
     +
     + -- !
     +
-
-distributed-process-0.7.8/src/Control/Distributed/Process/Internal/Closure/TH.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -57,7 +57,6 @@
-          varE,
-          varT,
-        )
-    - import Prelude hiding (any, succ)
-      import Control.Distributed.Process.Internal.Closure.BuiltIn (staticDecode)
-      import Control.Distributed.Process.Internal.Types (Process)
-      import Control.Distributed.Process.Serializable
-    @@ -81,6 +80,7 @@
-          TypVar,
-          Zero,
-        )
-    + import Prelude hiding (any, succ)
-    
-      --------------------------------------------------------------------------------
-      -- User-level API                                                             --
 
 dlist-1.0/Data/DList.hs
     a configuration of the input does not parse
@@ -1877,163 +1856,6 @@ typed-process-0.2.13.0/src/System/Process/Typed/Internal.hs
     + import Data.Typeable (Typeable)
     + import System.Exit (ExitCode)
     + import System.IO (Handle, IOMo
-
-vector-0.13.2.0/src/Data/Vector.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -335,11 +335,11 @@
-          NFData1 (liftRnf),
-      #endif
-        )
-    + import Control.Monad (MonadPlus (..), ap, liftM)
-      import Data.Primitive.Array
-      import qualified Data.Vector.Fusion.Bundle as Bundle
-      import qualified Data.Vector.Generic as G
-      import Data.Vector.Mutable (MVector (..))
-    - import Control.Monad (MonadPlus (..), ap, liftM)
-      #if !MIN_VERSION_base(4,13,0)
-      import Control.Monad (fail)
-      #endif
-
-vector-0.13.2.0/src/Data/Vector/Primitive.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -302,19 +302,19 @@
-          NFData1 (liftRnf),
-      #endif
-        )
-    - import Data.Primitive (Prim, sizeOf)
-    - import Data.Primitive.ByteArray
-    - import qualified Data.Vector.Fusion.Bundle as Bundle
-    - import qualified Data.Vector.Generic as G
-    - import Data.Vector.Internal.Check
-    - import Data.Vector.Primitive.Mutable (MVector (..))
-      import Control.Monad (liftM)
-      import Control.Monad.Primitive
-      import Control.Monad.ST (ST)
-      import Data.Coerce
-      import Data.Data (Data (..))
-    + import Data.Primitive (Prim, sizeOf)
-    + import Data.Primitive.ByteArray
-      import Data.Semigroup (Semigroup (..))
-      import Data.Typeable (Typeable)
-    + import qualified Data.Vector.Fusion.Bundle as Bundle
-    + import qualified Data.Vector.Generic as G
-    + import Data.Vector.Internal.Check
-    + import Data.Vector.Primitive.Mutable (MVector (..))
-      import qualified GHC.Exts as Exts
-      import Text.Read (Read (..), readListPrecDefault)
-      import Unsafe.Coerce
-
-vector-0.13.2.0/src/Data/Vector/Primitive/Mutable.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -134,13 +134,13 @@
-        )
-      import Control.Monad (liftM)
-      import Control.Monad.Primitive
-    + import Data.Coerce
-      import Data.Primitive (Prim, sizeOf)
-      import Data.Primitive.ByteArray
-    + import Data.Typeable (Typeable)
-      import qualified Data.Vector.Generic.Mutable as G
-      import Data.Vector.Internal.Check
-      import Data.Word (Word8)
-    - import Data.Coerce
-    - import Data.Typeable (Typeable)
-      import Unsafe.Coerce
-      import Prelude
-        ( Bool,
-
-vector-0.13.2.0/src/Data/Vector/Storable.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -313,6 +313,12 @@
-          NFData1 (liftRnf),
-      #endif
-        )
-    + import Control.Monad.Primitive
-    + import Control.Monad.ST (ST)
-    + import Data.Coerce
-    + import Data.Data (Data (..))
-    + import Data.Semigroup (Semigroup (..))
-    + import Data.Typeable (Typeable)
-      import qualified Data.Vector.Fusion.Bundle as Bundle
-      import qualified Data.Vector.Generic as G
-      import Data.Vector.Storable.Internal
-    @@ -321,12 +327,6 @@
-      import Foreign.Marshal.Array (advancePtr, copyArray)
-      import Foreign.Ptr
-      import Foreign.Storable
-    - import Control.Monad.Primitive
-    - import Control.Monad.ST (ST)
-    - import Data.Coerce
-    - import Data.Data (Data (..))
-    - import Data.Semigroup (Semigroup (..))
-    - import Data.Typeable (Typeable)
-      import qualified GHC.Exts as Exts
-      import Text.Read (Read (..), readListPrecDefault)
-      import Unsafe.Coerce
-
-vector-0.13.2.0/src/Data/Vector/Strict.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -339,13 +339,13 @@
-          NFData1 (liftRnf),
-      #endif
-        )
-    + import Control.Monad (MonadPlus (..), ap)
-      import Data.Coerce
-      import Data.Primitive.Array
-      import qualified Data.Vector as V
-      import qualified Data.Vector.Fusion.Bundle as Bundle
-      import qualified Data.Vector.Generic as G
-      import Data.Vector.Strict.Mutable (MVector (..))
-    - import Control.Monad (MonadPlus (..), ap)
-      #if !MIN_VERSION_base(4,13,0)
-      import Control.Monad (fail)
-      #endif
-
-yesod-core-1.7.0.0/src/Yesod/Core/Dispatch.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -113,9 +113,16 @@
-      #endif
-          gzip,
-        )
-    + import Control.Monad (when)
-    + import Control.Monad.Logger
-    + import Data.Version (showVersion)
-    + import qualified Network.Wai.Handler.Warp
-    + import Network.Wai.Middleware.MethodOverride
-      import Network.Wai.Middleware.RequestLogger
-    + import qualified Paths_yesod_core
-      import System.Entropy (getEntropy)
-      import System.Environment (getEnvironment)
-    + import System.Log.FastLogger
-      import Text.Read (readMaybe)
-      import Yesod.Core.Class.Dispatch
-      import Yesod.Core.Class.Dispatch.ToParentRoute
-    @@ -124,13 +131,6 @@
-      import Yesod.Core.Types
-      import Yesod.Routes.Parse
-      import Yesod.Routes.TH (TyArgs (..))
-    - import Control.Monad (when)
-    - import Control.Monad.Logger
-    - import Data.Version (showVersion)
-    - import qualified Network.Wai.Handler.Warp
-    - import Network.Wai.Middleware.MethodOverride
-    - import qualified Paths_yesod_core
-    - import System.Log.FastLogger
-    
-      -- | Convert the given argument into a WAI application, executable with any WAI
-      -- handler. This function will provide no middlewares; if you want commonly
 
 yesod-core-1.7.0.0/test/YesodCoreTest.hs
     formatting is non-idempotent
