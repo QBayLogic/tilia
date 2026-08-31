@@ -165,7 +165,7 @@ exprBody ctx site here = \case
           (grhsSpan (unLoc g))
           (guardedRhs ctx Normal (siteBracing site) (ExprBody ctx) RightArrow (unLoc g))
   HsLet _ binds e -> letIn ctx (bodyIn (ExprBody ctx) (siteBracing site)) binds e
-  HsDo _ flavour es -> case flavour of
+  HsDo anns flavour es -> case flavour of
     DoExpr moduleName -> doBlock moduleName "do"
     MDoExpr moduleName -> doBlock moduleName "mdo"
     ListComp -> comprehension ctx site es
@@ -174,7 +174,7 @@ exprBody ctx site here = \case
     where
       doBlock moduleName keyword =
         foldMap (\m -> outputable m <> txt ".") moduleName
-          <> txt keyword
+          <> atSpan ctx (spanOfSrcSpan (locA (al_rest anns))) (txt keyword)
           <> statements ctx site (ExprBody ctx) es
   ExplicitList _ xs ->
     bracketsWith

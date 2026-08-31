@@ -3,23 +3,23 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 5029 formatted.
+5133 examples, 5032 formatted.
 
 ==========================================================================
-broken (27)
+broken (24)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/TypeChecking/Conversion.hs
-    a configuration of the output does not parse: 2241:17: parse error (possibly incorrect indentation or mismatched brackets)
-      2237                blocker = getBlocker s1b
-      2238            -- Jesper, 2019-12-27: SizeUniv is disabled at the moment.
-      2239            if
-      2240              {- sizedTypesEnabled || -} | propEnabled || cubicalEnabled ->
-    > 2241                  case funSort' s1 (Type l2) of
-      2242                    -- If the work we did makes the @funSort@ compute,
-      2243                    -- continue working.
-      2244                    Right s -> equalSort (Type l) s
-      2245                    -- Otherwise: postpone
+    a configuration of the output does not parse: 2240:17: parse error (possibly incorrect indentation or mismatched brackets)
+      2236                blocker = getBlocker s1b
+      2237            -- Jesper, 2019-12-27: SizeUniv is disabled at the moment.
+      2238            if
+      2239              {- sizedTypesEnabled || -} | propEnabled || cubicalEnabled ->
+    > 2240                  case funSort' s1 (Type l2) of
+      2241                    -- If the work we did makes the @funSort@ compute,
+      2242                    -- continue working.
+      2243                    Right s -> equalSort (Type l) s
+      2244                    -- Otherwise: postpone
     
     --- input
     +++ output
@@ -587,46 +587,6 @@ idris-1.3.4/src/Idris/AbsSyntax.hs
             PTerm
           en 0 (PLam fc n nfc t s)
 
-idris-1.3.4/src/Idris/Core/Evaluate.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -476,7 +476,8 @@
-                          let (ns, tree) = getCases cd
-                           in if blockSimplify ci n stk
-                                then liftM (VP Ref n) (ev ntimes stk top env ty)
-    -                           else do -- traceWhen runtime (show (n, ns, tree)) $
-    +                           else do
-    +                             -- traceWhen runtime (show (n, ns, tree)) $
-                                  c <- evCase ntimes n (n : stk) top env ns [] tree
-                                  case c of
-                                    (Nothing, _) -> liftM (VP Ref n) (ev ntimes stk top env ty)
-    @@ -604,7 +605,8 @@
-                          let (ns, tree) = getCases cd
-                           in if blockSimplify ci n stk
-                                then return $ unload env (VP Ref n ty) args
-    -                           else do -- traceWhen runtime (show (n, ns, tree)) $
-    +                           else do
-    +                             -- traceWhen runtime (show (n, ns, tree)) $
-                                  c <- evCase ntimes n (n : stk) top env ns args tree
-                                  case c of
-                                    (Nothing, _) -> return $ unload env (VP Ref n ty) args
-
-idris-1.3.4/src/Idris/Elab/Term.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -1077,7 +1077,8 @@
-                    $ Msg ("No explicit types on left hand side: " ++ show tm)
-                  --             trace (show (f, args_in, args)) $
-                  if (f `elem` map fstEnv env && length args == 1 && length args_in == 1)
-    -               then do -- simple app, as below
-    +               then do
-    +                 -- simple app, as below
-                      simple_app
-                        False
-                        (elabE (ina {e_isfn = True}) (Just fc) (PRef ffc hls f))
-
 leksah-0.16.2.2/src/IDE/Pane/PackageEditor.hs
     the output cannot be formatted again: too many configurations to format
 
@@ -818,21 +778,6 @@ lens-5.3.6/src/Control/Lens/Internal/TH.hs
       conAppsT conName = foldl AppT (ConT conName)
     
     … and 236 more lines
-
-pandoc-3.10.2/src/Text/Pandoc/ImageSize.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -345,7 +345,8 @@
-                        dpiY = 72
-                      }
-              )
-    -     <|> ( do -- if we encounter a compressed object stream, uncompress it (#10902)
-    +     <|> ( do
-    +             -- if we encounter a compressed object stream, uncompress it (#10902)
-                  A.string "/Type"
-                  A.skipSpace
-                  A.string "/ObjStm"
 
 scotty-0.30/test/Web/ScottySpec.hs
     formatting is non-idempotent
@@ -1030,7 +975,7 @@ th-abstraction-0.7.2.0/src/Language/Haskell/TH/Datatype.hs
     -   -- * 'DatatypeInfo' lookup functions
     -   , lookupByConstructorName
     -   , lookupByRecordName
-    … and 2606
+    … and 2605
 
 yesod-core-1.7.0.0/test/YesodCoreTest.hs
     formatting is non-idempotent
