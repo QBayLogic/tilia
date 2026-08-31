@@ -128,7 +128,7 @@ writtenAs atTheEnd position c = case shapeOf position c of
   InPlace -> case position of
     Before -> includeWhen (not (commentTrailing c)) space <> commentDoc c <> space
     After -> space <> commentDoc c <> space
-  EndsTheLine -> space <> commentDoc c <> closeLine
+  EndsTheLine -> space <> commentDoc c <> closeLine <> gapBelow
   HeldBack -> holdBack (renderComment c)
   OnItsOwnLines ->
     gapAbove <> closeLine <> commentDoc c <> closeLine <> gapBelow

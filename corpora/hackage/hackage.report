@@ -3,10 +3,10 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 5027 formatted.
+5133 examples, 5029 formatted.
 
 ==========================================================================
-broken (29)
+broken (27)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/TypeChecking/Conversion.hs
@@ -627,19 +627,6 @@ idris-1.3.4/src/Idris/Elab/Term.hs
                         False
                         (elabE (ina {e_isfn = True}) (Just fc) (PRef ffc hls f))
 
-intero-0.1.40/src/GhciMonad.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -471,6 +471,7 @@
-      initInterpBuffering :: Ghc ()
-      initInterpBuffering = do
-        -- make sure these are linked
-    +
-      #if __GLASGOW_HASKELL__ < 800
-        dflags <- GHC.getSessionDynFlags
-      #else
-
 leksah-0.16.2.2/src/IDE/Pane/PackageEditor.hs
     the output cannot be formatted again: too many configurations to format
 
@@ -1044,19 +1031,6 @@ th-abstraction-0.7.2.0/src/Language/Haskell/TH/Datatype.hs
     -   , lookupByConstructorName
     -   , lookupByRecordName
     … and 2606
-
-tls-2.4.3/Network/TLS/Context/Internal.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -148,6 +148,7 @@
-          ctxHandshakeSync :: HandshakeSync,
-          ctxQUICMode :: Bool,
-          -- Misc
-    +
-          -- | empty packet workaround for CBC guessability.
-          ctxNeedEmptyPacket :: IORef Bool,
-          -- | maximum size of plaintext fragments, val + 1 is used for TLS 1.3
 
 yesod-core-1.7.0.0/test/YesodCoreTest.hs
     formatting is non-idempotent

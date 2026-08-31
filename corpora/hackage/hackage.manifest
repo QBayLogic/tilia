@@ -273,7 +273,7 @@ formatted       996477d19b29  Agda-2.8.0/src/full/Agda/TypeChecking/Rewriting/No
 formatted       036542e5da71  Agda-2.8.0/src/full/Agda/TypeChecking/Rules/Application.hs
 formatted       dbb4bda7bd40  Agda-2.8.0/src/full/Agda/TypeChecking/Rules/Builtin.hs
 formatted       3fc85ca987d1  Agda-2.8.0/src/full/Agda/TypeChecking/Rules/Builtin/Coinduction.hs
-formatted       0105c6aca4d0  Agda-2.8.0/src/full/Agda/TypeChecking/Rules/Data.hs
+formatted       779d7253606b  Agda-2.8.0/src/full/Agda/TypeChecking/Rules/Data.hs
 formatted       b90307effc8a  Agda-2.8.0/src/full/Agda/TypeChecking/Rules/Decl.hs
 formatted       5bf0b534fbb1  Agda-2.8.0/src/full/Agda/TypeChecking/Rules/Def.hs
 formatted       cf342aa0175d  Agda-2.8.0/src/full/Agda/TypeChecking/Rules/Display.hs
@@ -620,7 +620,7 @@ formatted       c4481214d6c0  attoparsec-0.14.4/tests/QC/Buffer.hs
 formatted       ae7fa7b38a4b  attoparsec-0.14.4/tests/QC/ByteString.hs
 formatted       455e4866502a  attoparsec-0.14.4/tests/QC/Combinator.hs
 formatted       432dc39c009b  attoparsec-0.14.4/tests/QC/Common.hs
-formatted       69bc422794a3  attoparsec-0.14.4/tests/QC/IPv6/Internal.hs
+formatted       e1690783c200  attoparsec-0.14.4/tests/QC/IPv6/Internal.hs
 formatted       0692feda416d  attoparsec-0.14.4/tests/QC/IPv6/Types.hs
 formatted       08452f3d9508  attoparsec-0.14.4/tests/QC/Rechunked.hs
 formatted       0bab40e54197  attoparsec-0.14.4/tests/QC/Simple.hs
@@ -2648,7 +2648,7 @@ formatted       1aedb9991562  idris-1.3.4/src/Idris/Elab/RunElab.hs
 broken          edab5394f1f3  idris-1.3.4/src/Idris/Elab/Term.hs
 formatted       0883dc0ae293  idris-1.3.4/src/Idris/Elab/Transform.hs
 formatted       26f6a53369bb  idris-1.3.4/src/Idris/Elab/Type.hs
-formatted       52b485d8006b  idris-1.3.4/src/Idris/Elab/Utils.hs
+formatted       91c3871edfae  idris-1.3.4/src/Idris/Elab/Utils.hs
 formatted       9f4ab880839f  idris-1.3.4/src/Idris/Elab/Value.hs
 formatted       1216ba79966f  idris-1.3.4/src/Idris/ElabDecls.hs
 formatted       68025bd6dc21  idris-1.3.4/src/Idris/Erasure.hs
@@ -2702,7 +2702,7 @@ formatted       e865ae48f11b  intero-0.1.40/Setup.hs
 formatted       4bbbd2876ae9  intero-0.1.40/src/Completion.hs
 formatted       b9030b2f8182  intero-0.1.40/src/GhciFind.hs
 partly-checked  9b2d3e18989f  intero-0.1.40/src/GhciInfo.hs
-broken          6f0f850e9aac  intero-0.1.40/src/GhciMonad.hs
+formatted       655918948ca9  intero-0.1.40/src/GhciMonad.hs
 formatted       d20e7ef3248a  intero-0.1.40/src/GhciTags.hs
 formatted       72999d5c814e  intero-0.1.40/src/GhciTypes.hs
 declined        -             intero-0.1.40/src/InteractiveUI.hs
@@ -2829,7 +2829,7 @@ formatted       6dd407fb05f2  lens-5.3.6/src/Control/Lens/Internal/Zoom.hs
 formatted       2f3a17ce9de5  lens-5.3.6/src/Control/Lens/Iso.hs
 formatted       36da54b98207  lens-5.3.6/src/Control/Lens/Lens.hs
 formatted       bde563e05b67  lens-5.3.6/src/Control/Lens/Level.hs
-formatted       1b24416ce249  lens-5.3.6/src/Control/Lens/Operators.hs
+formatted       b84cf710176f  lens-5.3.6/src/Control/Lens/Operators.hs
 formatted       b20c10360395  lens-5.3.6/src/Control/Lens/Plated.hs
 formatted       cd556da34caa  lens-5.3.6/src/Control/Lens/Prism.hs
 formatted       b465099e5056  lens-5.3.6/src/Control/Lens/Profunctor.hs
@@ -3866,7 +3866,7 @@ formatted       a1a8fda2b1b9  random-1.3.1/test-legacy/RangeTest.hs
 formatted       4c1669996d8d  random-1.3.1/test-legacy/T7936.hs
 formatted       398febcc8a6f  random-1.3.1/test-legacy/TestRandomIOs.hs
 formatted       3ef25c06bdfc  random-1.3.1/test-legacy/TestRandomRs.hs
-formatted       5471aca3d9c0  random-1.3.1/test/Spec.hs
+formatted       170817d6d661  random-1.3.1/test/Spec.hs
 formatted       a65d68fad80b  random-1.3.1/test/Spec/Range.hs
 formatted       e0e7306312ea  random-1.3.1/test/Spec/Run.hs
 formatted       b3fd15d83ccf  random-1.3.1/test/Spec/Seed.hs
@@ -4609,7 +4609,7 @@ formatted       7ce1364dcb4a  tls-2.4.3/Network/TLS/Backend.hs
 formatted       f9d4f25241e6  tls-2.4.3/Network/TLS/Cipher.hs
 formatted       a0fa75894b05  tls-2.4.3/Network/TLS/Compression.hs
 formatted       1a706256562f  tls-2.4.3/Network/TLS/Context.hs
-broken          c56b55de1bc0  tls-2.4.3/Network/TLS/Context/Internal.hs
+formatted       1eeefa415421  tls-2.4.3/Network/TLS/Context/Internal.hs
 formatted       bbff565b3ae1  tls-2.4.3/Network/TLS/Core.hs
 formatted       b6823fd75110  tls-2.4.3/Network/TLS/Credentials.hs
 formatted       1e866a0b1add  tls-2.4.3/Network/TLS/Crypto.hs
