@@ -3,10 +3,10 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 5032 formatted.
+5133 examples, 5035 formatted.
 
 ==========================================================================
-broken (24)
+broken (21)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/TypeChecking/Conversion.hs
@@ -504,72 +504,6 @@ hspec-core-2.11.17/src/Test/Hspec/Core/Compat.hs
       isUnsupportedOperation :: IOError -> Bool
       isUnsupportedOperation e = ioe_type e == UnsupportedOperation
 
-hspec-core-2.11.17/src/Test/Hspec/Core/FailureReport.hs
-    a configuration of the output does not parse: 45:3: parse error (possibly incorrect indentation or mismatched brackets)
-      41  writeFailureReport config report = case configFailureReport config of
-      42    Just file -> writeFile file (show report)
-      43    Nothing ->
-      44  
-    > 45    do
-      46      -- on Windows this can throw an exception when the input is too large, hence
-      47      -- we use `safeTry` here
-      48      safeTry (setEnv "HSPEC_FAILURES" $ show report) >>= either onError return
-      49      where
-    
-    --- input
-    +++ output
-    @@ -1,46 +1,48 @@
-      {-# LANGUAGE CPP #-}
-    - module Test.Hspec.Core.FailureReport (
-    -   FailureReport (..)
-    - , writeFailureReport
-    - , readFailureReport
-    - ) where
-    
-    + module Test.Hspec.Core.FailureReport
-    +   ( FailureReport (..),
-    +     writeFailureReport,
-    +     readFailureReport,
-    +   )
-    + where
-    +
-      #if !defined(__GHCJS__) && !defined(__MHS__)
-      -- ghcjs currently does not support setting environment variables
-      -- (https://github.com/ghcjs/ghcjs/issues/263). Since writing a failure report
-      -- into the environment is a non-essential feature we just disable this to be
-      -- able to run hspec test-suites with ghcjs at all. Should be reverted once
-      -- the issue is fixed.
-    +
-      #define HAS_SET_ENV
-      #endif
-    
-    -
-    - import           Prelude ()
-    - import           Test.Hspec.Core.Compat
-    -
-    + import Prelude ()
-    + import Test.Hspec.Core.Compat
-      #ifdef HAS_SET_ENV
-    - import           System.Environment (setEnv)
-    - import           Test.Hspec.Core.Util (safeTry)
-    + import System.Environment (setEnv)
-    + import Test.Hspec.Core.Util (safeTry)
-      #endif
-    -
-    - import           System.IO
-    - import           System.Directory
-    - import           Test.Hspec.Core.Util (Path)
-    - import           Test.Hspec.Core.Config.Definition (Config(..))
-    + import System.Directory
-    + import System.IO
-    + import Test.Hspec.Core.Config.Definition (Config (..))
-    + import Test.Hspec.Core.Util (Path)
-    
-    - data FailureReport = FailureReport {
-    -   failureReportSeed :: Integer
-    - , failureReportMaxSuccess :: Int
-    - , fail
-
 idris-1.3.4/src/Idris/AbsSyntax.hs
     formatting is non-idempotent
     --- first pass
@@ -835,147 +769,6 @@ stm-2.5.3.1/Control/Concurrent/STM/TArray.hs
       #define HAS_UNLIFTED_ARRAY 1
     
       #endif
-
-tasty-1.5.4/Test/Tasty/Runners/Utils.hs
-    a configuration of the output does not parse: 78:1: parse error (possibly incorrect indentation or mismatched brackets)
-      74  -- @since 1.2.1
-      75  installSignalHandlers :: IO ()
-      76  installSignalHandlers =
-      77  
-    > 78  do
-      79    main_thread_id <- myThreadId
-      80    weak_tid <- mkWeakThreadId main_thread_id
-      81    forM_ [sigHUP, sigTERM, sigUSR1, sigUSR2, sigXCPU, sigXFSZ] $ \sig ->
-      82      installHandler sig (Catch $ send_exception weak_tid sig) Nothing
-    
-    --- input
-    +++ output
-    @@ -3,20 +3,19 @@
-      -- | Note: this module is re-exported as a whole from "Test.Tasty.Runners"
-      module Test.Tasty.Runners.Utils where
-    
-    - import Control.Exception
-      import Control.Concurrent (mkWeakThreadId, myThreadId)
-    + import Control.Exception
-      import Control.Monad (forM_)
-    - import Text.Printf
-      import Foreign.C (CInt)
-    -
-    + import Text.Printf
-      #if MIN_VERSION_base(4,11,0)
-      import GHC.Clock (getMonotonicTime)
-      #else
-      import Data.Time.Clock.POSIX (getPOSIXTime)
-      #endif
-    -
-      #ifdef VERSION_unix
-      #include "HsUnixConfig.h"
-    +
-      #ifdef HAVE_SIGNAL_H
-      #define INSTALL_HANDLERS 1
-      #else
-    @@ -27,10 +26,9 @@
-      #endif
-    
-      #if INSTALL_HANDLERS
-    - import System.Posix.Signals
-      import System.Mem.Weak (deRefWeak)
-    + import System.Posix.Signals
-      #endif
-    -
-      import Test.Tasty.Core (Time)
-    
-      -- | Catch possible exceptions that may arise when evaluating a string.
-    @@ -47,12 +45,12 @@
-        where
-          -- to avoid infinite recursion, we introduce the recursion limit
-          go :: Int -> String -> IO String
-    -     go 0        _ = return "exceptions keep throwing other exceptions!"
-    +     go 0 _ = return "exceptions keep throwing other exceptions!"
-          go recLimit msg = do
-            mbStr <- try $ evaluate $ forceElements msg
-            case mbStr of
-              Right () -> return msg
-    -         Left e' -> printf "message threw an exception: %s" <$> go (recLimit-1) (show (e' :: SomeException))
-    +         Left e' -> printf "message threw an exception: %s" <$> go (recLimit - 1) (show (e' :: SomeException))
-    
-      -- | Force e
-
-th-abstraction-0.7.2.0/src/Language/Haskell/TH/Datatype.hs
-    a configuration of the output does not parse: 695:5: parse error (possibly incorrect indentation or mismatched brackets)
-      691      normalizeMbKind :: Name -> [Type] -> Maybe Kind -> Q (Maybe Kind)
-      692      normalizeMbKind _name _instTys mbKind@(Just _) = return mbKind
-      693      normalizeMbKind name instTys Nothing =
-      694  
-    > 695      do
-      696        mbReifiedKind <- return Nothing `recover` fmap Just (reifyType name)
-      697        T.mapM normalizeKind mbReifiedKind
-      698        where
-      699          normalizeKind :: Kind -> Q Kind
-    
-    --- input
-    +++ output
-    @@ -1,10 +1,15 @@
-    - {-# Language CPP, DeriveDataTypeable, DeriveGeneric, ScopedTypeVariables, TupleSections #-}
-    -
-    + {-# LANGUAGE CPP #-}
-    + {-# LANGUAGE DeriveDataTypeable #-}
-    + {-# LANGUAGE DeriveGeneric #-}
-      #if MIN_VERSION_template_haskell(2,12,0)
-    - {-# Language Safe #-}
-    + {-# LANGUAGE Safe #-}
-    + #endif
-    + {-# LANGUAGE ScopedTypeVariables #-}
-    + #if MIN_VERSION_template_haskell(2,12,0)
-      #else
-    - {-# Language Trustworthy #-}
-    + {-# LANGUAGE Trustworthy #-}
-      #endif
-    + {-# LANGUAGE TupleSections #-}
-    
-      {-|
-      Module      : Language.Haskell.TH.Datatype
-    @@ -56,85 +61,85 @@
-    
-      -}
-      module Language.Haskell.TH.Datatype
-    -   (
-    -   -- * Types
-    -     DatatypeInfo(..)
-    -   , ConstructorInfo(..)
-    -   , DatatypeVariant(..)
-    -   , ConstructorVariant(..)
-    -   , FieldStrictness(..)
-    -   , Unpackedness(..)
-    -   , Strictness(..)
-    +   ( -- * Types
-    +     DatatypeInfo (..),
-    +     ConstructorInfo (..),
-    +     DatatypeVariant (..),
-    +     ConstructorVariant (..),
-    +     FieldStrictness (..),
-    +     Unpackedness (..),
-    +     Strictness (..),
-    
-    -   -- * Normalization functions
-    -   , reifyDatatype
-    -   , reifyConstructor
-    -   , reifyRecord
-    -   , normalizeInfo
-    -   , normalizeDec
-    -   , normalizeCon
-    +     -- * Normalization functions
-    +     reifyDatatype,
-    +     reifyConstructor,
-    +     reifyRecord,
-    +     normalizeInfo,
-    +     normalizeDec,
-    +     normalizeCon,
-    
-    -   -- * 'DatatypeInfo' lookup functions
-    -   , lookupByConstructorName
-    -   , lookupByRecordName
-    … and 2605
 
 yesod-core-1.7.0.0/test/YesodCoreTest.hs
     formatting is non-idempotent

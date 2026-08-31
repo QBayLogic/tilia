@@ -2460,7 +2460,7 @@ broken          043159a88536  hspec-core-2.11.17/src/Test/Hspec/Core/Compat.hs
 formatted       0599f76d3382  hspec-core-2.11.17/src/Test/Hspec/Core/Config.hs
 formatted       d4499d7a9df1  hspec-core-2.11.17/src/Test/Hspec/Core/Config/Definition.hs
 formatted       2c2affbefb39  hspec-core-2.11.17/src/Test/Hspec/Core/Config/Options.hs
-formatted       5c501e525171  hspec-core-2.11.17/src/Test/Hspec/Core/Example.hs
+formatted       d333d832e347  hspec-core-2.11.17/src/Test/Hspec/Core/Example.hs
 formatted       67abe1344a1b  hspec-core-2.11.17/src/Test/Hspec/Core/Example/Location.hs
 formatted       19c90134f072  hspec-core-2.11.17/src/Test/Hspec/Core/Extension.hs
 formatted       b5766e2580e3  hspec-core-2.11.17/src/Test/Hspec/Core/Extension/Config.hs
@@ -2469,7 +2469,7 @@ formatted       5eb7b97d332b  hspec-core-2.11.17/src/Test/Hspec/Core/Extension/I
 formatted       61fffea8ad44  hspec-core-2.11.17/src/Test/Hspec/Core/Extension/Option.hs
 formatted       2c1d2b4038d2  hspec-core-2.11.17/src/Test/Hspec/Core/Extension/Spec.hs
 formatted       090871045b95  hspec-core-2.11.17/src/Test/Hspec/Core/Extension/Tree.hs
-broken          e44887710d5d  hspec-core-2.11.17/src/Test/Hspec/Core/FailureReport.hs
+formatted       61ae83077245  hspec-core-2.11.17/src/Test/Hspec/Core/FailureReport.hs
 formatted       cb0511463c94  hspec-core-2.11.17/src/Test/Hspec/Core/Format.hs
 formatted       b8b03afd38ee  hspec-core-2.11.17/src/Test/Hspec/Core/Formatters.hs
 formatted       0f6c87760ec2  hspec-core-2.11.17/src/Test/Hspec/Core/Formatters/Diff.hs
@@ -2483,7 +2483,7 @@ formatted       2ade5a4b4c64  hspec-core-2.11.17/src/Test/Hspec/Core/Formatters/
 formatted       0879c2625e9f  hspec-core-2.11.17/src/Test/Hspec/Core/Formatters/V1/Monad.hs
 formatted       2b46e6d892ef  hspec-core-2.11.17/src/Test/Hspec/Core/Formatters/V2.hs
 formatted       de2f6f0279c1  hspec-core-2.11.17/src/Test/Hspec/Core/Hooks.hs
-formatted       750f62c63de7  hspec-core-2.11.17/src/Test/Hspec/Core/QuickCheck.hs
+formatted       e984ef4afa28  hspec-core-2.11.17/src/Test/Hspec/Core/QuickCheck.hs
 formatted       e8c000ca0db9  hspec-core-2.11.17/src/Test/Hspec/Core/QuickCheck/Util.hs
 formatted       24c9dad2d9bd  hspec-core-2.11.17/src/Test/Hspec/Core/Runner.hs
 formatted       ce1b03ea14a3  hspec-core-2.11.17/src/Test/Hspec/Core/Runner/Eval.hs
@@ -4383,7 +4383,7 @@ formatted       1e9dd494aa0d  tasty-1.5.4/Test/Tasty/Providers/ConsoleFormat.hs
 formatted       00b00e15f6b6  tasty-1.5.4/Test/Tasty/Run.hs
 formatted       cb5862c8ea8c  tasty-1.5.4/Test/Tasty/Runners.hs
 formatted       438874730c26  tasty-1.5.4/Test/Tasty/Runners/Reducers.hs
-broken          7b357fc076f9  tasty-1.5.4/Test/Tasty/Runners/Utils.hs
+formatted       64a9b7c40739  tasty-1.5.4/Test/Tasty/Runners/Utils.hs
 formatted       e865ae48f11b  tensorflow-0.2.0.1/Setup.hs
 formatted       1f1f98c9417e  tensorflow-0.2.0.1/src/TensorFlow/Build.hs
 formatted       6a8867b44ef1  tensorflow-0.2.0.1/src/TensorFlow/BuildOp.hs
@@ -4504,7 +4504,7 @@ declined        -             text-2.1.4/tests/Tests/ShareEmpty.hs
 formatted       f4e9f36f6be9  text-2.1.4/tests/Tests/SlowFunctions.hs
 formatted       375091fbe743  text-2.1.4/tests/Tests/Utils.hs
 formatted       e865ae48f11b  th-abstraction-0.7.2.0/Setup.hs
-broken          796682b178c2  th-abstraction-0.7.2.0/src/Language/Haskell/TH/Datatype.hs
+formatted       b607e89fd610  th-abstraction-0.7.2.0/src/Language/Haskell/TH/Datatype.hs
 formatted       62b0df6b45ca  th-abstraction-0.7.2.0/src/Language/Haskell/TH/Datatype/Internal.hs
 formatted       f600ddf975e6  th-abstraction-0.7.2.0/src/Language/Haskell/TH/Datatype/TyVarBndr.hs
 formatted       ede8a6d3e460  th-abstraction-0.7.2.0/test/Harness.hs

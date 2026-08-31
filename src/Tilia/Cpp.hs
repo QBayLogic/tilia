@@ -501,7 +501,50 @@ merge guards varied = go Broken
     middle layout ss@(s : rest)
       | all (alike layout s) rest = mconcat s
       | Just xs <- traverse only ss = go layout xs
-      | otherwise = choice (map mconcat ss)
+      | Just merged <- alongsideHeads layout ss,
+        weigh layout merged < weigh layout apart =
+          merged
+      | otherwise = apart
+      where
+        apart = choice (map mconcat ss)
+
+    alongsideHeads layout ss = do
+      heads <- traverse listToMaybe ss
+      let tails = map (drop 1) ss
+      case heads of
+        (h : hs)
+          | all (sameKind h) hs,
+            all breaksFirst tails ->
+              Just (joined (go layout heads) (middle layout tails))
+        _ -> Nothing
+      where
+        breaksFirst t = case dropWhile ((== 0) . weigh layout) t of
+          [] -> True
+          (d : _) -> opensWithBreak layout d
+
+    joined before after = case (endingChoice before, startingChoice after) of
+      (Just (opening, bs, e, gap), Just (gap', cs, e', closing))
+        | map fst bs == map fst cs ->
+            opening
+              <> Doc.cppChoice
+                [(g, x <> between <> y) | ((g, x), (_, y)) <- zip bs cs]
+                (e <> between <> e')
+              <> closing
+        where
+          between = gap <> gap'
+      _ -> before <> after
+
+    sameKind x y = case (x, y) of
+      (DLocated s t, DLocated u v) -> meets s u && bothWritten t v
+      (DFence s t, DFence u v) -> meets s u && bothWritten t v
+      (DNest n t, DNest m v) -> n == m && bothWritten t v
+      (DGroup _ t, DGroup _ v) -> bothWritten t v
+      (DAlign t, DAlign v) -> bothWritten t v
+      _ -> False
+      where
+        bothWritten t v = not (empty' t) && not (empty' v)
+        empty' DEmpty = True
+        empty' _ = False
 
     alike layout xs ys =
       length xs == length ys && and (zipWith (agree varied layout) xs ys)
@@ -707,6 +750,92 @@ overlapping (c : cs) = go [c] (chTo c) cs
     go acc end (x : xs)
       | chFrom x < end = go (x : acc) (max end (chTo x)) xs
       | otherwise = reverse acc : go [x] (chTo x) xs
+
+-- | What a document prints before its final choice, and that choice.
+endingChoice :: Doc -> Maybe (Doc, [(Text, Doc)], Doc, Doc)
+endingChoice d = case span onlySpacing (reverse (spine d)) of
+  (trailing, x : earlier) ->
+    let opening = mconcat (reverse earlier)
+        gap = mconcat (reverse trailing)
+        around w (o, bs, e, g) =
+          (opening <> w o, map (fmap w) bs, w e, w g <> gap)
+     in case x of
+          DCppChoice bs e -> Just (opening, bs, e, gap)
+          DGroup l y -> around (DGroup l) <$> endingChoice y
+          DNest n y -> around (DNest n) <$> endingChoice y
+          DLocated s y -> around (DLocated s) <$> endingChoice y
+          DFence s y -> around (DFence s) <$> endingChoice y
+          _ -> Nothing
+  _ -> Nothing
+
+-- | The mirror of 'endingChoice': a document's opening choice, and the rest.
+startingChoice :: Doc -> Maybe (Doc, [(Text, Doc)], Doc, Doc)
+startingChoice d = case span onlySpacing (spine d) of
+  (leading, x : later) ->
+    let gap = mconcat leading
+        closing = mconcat later
+        around w (g, bs, e, c) =
+          (gap <> w g, map (fmap w) bs, w e, w c <> closing)
+     in case x of
+          DCppChoice bs e -> Just (gap, bs, e, closing)
+          DGroup l y -> around (DGroup l) <$> startingChoice y
+          DNest n y -> around (DNest n) <$> startingChoice y
+          DLocated s y -> around (DLocated s) <$> startingChoice y
+          DFence s y -> around (DFence s) <$> startingChoice y
+          _ -> Nothing
+  _ -> Nothing
+
+-- | Nothing but the whitespace that separates one thing from the next.
+onlySpacing :: Doc -> Bool
+onlySpacing = \case
+  DEmpty -> True
+  DSpace -> True
+  DBreak -> True
+  DSoftBreak -> True
+  DHardBreak -> True
+  DCloseLine -> True
+  _ -> False
+
+-- | Does the first thing this document puts on the page end a line?
+opensWithBreak :: Layout -> Doc -> Bool
+opensWithBreak layout d = case dropWhile quiet (spineAt layout d) of
+  (x : _) -> case x of
+    DNest _ y -> opensWithBreak layout y
+    DAlign y -> opensWithBreak layout y
+    DGroup l y -> opensWithBreak l y
+    DLocated _ y -> opensWithBreak layout y
+    DFence _ y -> opensWithBreak layout y
+    DHardBreak -> True
+    DCloseLine -> True
+    DBreak -> layout == Broken
+    DSoftBreak -> layout == Broken
+    _ -> False
+  [] -> False
+  where
+    quiet = \case
+      DEmpty -> True
+      DSpace -> True
+      _ -> False
+
+-- | How much text this document holds, counting what a choice repeats once
+-- for each alternative that repeats it.
+weigh :: Layout -> Doc -> Int
+weigh layout = go
+  where
+    go = \case
+      DCat a b -> go a + go b
+      DNest _ d -> go d
+      DAlign d -> go d
+      DGroup l d -> weigh l d
+      DVariant flatD brokenD ->
+        go (case layout of Flat -> flatD; Broken -> brokenD)
+      DLocated _ d -> go d
+      DFence _ d -> go d
+      DCppChoice bs e -> sum (map (go . snd) bs) + go e
+      DText t -> T.length t
+      DCppDirective t -> T.length t
+      DHoldBack t -> T.length t
+      _ -> 0
 
 -- | A document as the sequence of things it concatenates.
 spine :: Doc -> [Doc]
