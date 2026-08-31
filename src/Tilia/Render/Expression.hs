@@ -172,9 +172,9 @@ exprBody ctx site here = \case
     MonadComp -> comprehension ctx site es
     GhciStmtCtxt -> error "Tilia: GhciStmtCtxt cannot occur in a source file"
     where
-      doBlock moduleName keyword =
+      doBlock moduleName word =
         foldMap (\m -> outputable m <> txt ".") moduleName
-          <> atSpan ctx (spanOfSrcSpan (locA (al_rest anns))) (txt keyword)
+          <> keywordAt ctx (doKeywordSpan anns) word
           <> statements ctx site (ExprBody ctx) es
   ExplicitList _ xs ->
     bracketsWith
@@ -533,7 +533,9 @@ cmdBody ctx site = \case
   HsCmdIf anns _ c t e ->
     ifThenElse ctx (bodyIn (CmdBody ctx) (siteBracing site)) anns c t e
   HsCmdLet _ binds c -> letIn ctx (bodyIn (CmdBody ctx) (siteBracing site)) binds c
-  HsCmdDo _ es -> txt "do" <> statements ctx site (CmdBody ctx) es
+  HsCmdDo anns es ->
+    keywordAt ctx (doKeywordSpan anns) "do"
+      <> statements ctx site (CmdBody ctx) es
 
 arrowText :: HsArrAppType -> Bool -> Text
 arrowText arrow rightToLeft = case (arrow, rightToLeft) of
@@ -818,8 +820,8 @@ ifThenElse ctx bodyOf AnnsIf {aiThen, aiElse} condition thenBody elseBody =
           <> branch (locA aiElse) "else" elseBody
       )
   where
-    branch written keyword body =
-      atSpan ctx keywordSpan (txt keyword)
+    branch written word body =
+      keywordAt ctx keywordSpan word
         <> space
         <> layoutFrom
           ctx
@@ -844,6 +846,11 @@ letIn ::
   Doc
 letIn ctx bodyOf binds body =
   align $
+    -- Neither keyword claims its span, unlike the @do@ of a block. Both have
+    -- something printed after them on their own line—the first binding, the
+    -- body—so a comment either of them claimed would be held back over that
+    -- and come out against it, which is further from where it was written
+    -- than where it lands by falling through.
     txt "let"
       <> space
       <> align (localBinds ctx NoBrace binds)
@@ -1070,7 +1077,7 @@ match ctx bracing mkBody style isInfix multAnn strict pats GRHSs {..} =
       EmptyLocalBinds _ -> mempty
       binds ->
         breakOrSpace
-          <> atSpan ctx (whereKeywordSpan binds) (txt "where")
+          <> keywordAt ctx (whereKeywordSpan binds) "where"
           <> includeUnless
             (isEmptyLocalBinds binds)
             (breakOrSpace <> indent (localBinds ctx bracing binds))
@@ -1239,6 +1246,10 @@ localBinds ctx bracing = \case
         | not (isZeroWidthSpan (locA al_anchor)) ->
             atSpan ctx (spanOfSrcSpan (locA al_anchor)) d
       _ -> d
+
+-- | Where a @do@ or @mdo@ was written.
+doKeywordSpan :: AnnList EpaLocation -> Maybe Span
+doKeywordSpan = spanOfSrcSpan . locA . al_rest
 
 -- | Where the @where@ keyword of a group of local bindings was.
 whereKeywordSpan :: HsLocalBinds GhcPs -> Maybe Span

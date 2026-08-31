@@ -72,7 +72,7 @@ classDecl ctx anns ctxt tyCon HsQTvs {..} fixity fdeps sigs binds families defau
               <> indent (funDeps ctx fdeps)
               <> includeUnless
                 (null members)
-                (breakOrSpace <> atSpan ctx whereSpan (txt "where"))
+                (breakOrSpace <> keywordAt ctx whereSpan "where")
           )
 
     classHead
@@ -155,7 +155,7 @@ clsInstDecl ctx ClsInstDecl {cid_ext = (warning, anns, _), ..} =
                   <> hsSigTypeBody ctx sigTy
                   <> includeUnless
                     (null members)
-                    (breakOrSpace <> atSpan ctx whereSpan (txt "where"))
+                    (breakOrSpace <> keywordAt ctx whereSpan "where")
           )
 
     body =

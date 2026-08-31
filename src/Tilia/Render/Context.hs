@@ -44,6 +44,7 @@ module Tilia.Render.Context
     at,
     at_,
     atSpan,
+    keywordAt,
     fenceWithin,
     layoutFrom,
     layoutWithin,
@@ -282,6 +283,16 @@ at_ ctx f l = at ctx l f
 atSpan :: Ctx -> Maybe Span -> Doc -> Doc
 atSpan _ Nothing d = d
 atSpan ctx (Just s) d = located s (grouped ctx s d)
+
+-- | A keyword, claiming the span it was written on.
+--
+-- A keyword is one of the things an author writes a comment against that
+-- the syntax tree gives no node for. Unless it claims its own span there is
+-- no region on that line for such a comment to trail, and it falls through
+-- to whatever construct begins next, to be printed above that on a line its
+-- author did not choose.
+keywordAt :: Ctx -> Maybe Span -> Text -> Doc
+keywordAt ctx s = atSpan ctx s . txt
 
 -- | Prevent comments inside the given region to float out of it and attach
 -- to elements outside.
