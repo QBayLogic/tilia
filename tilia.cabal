@@ -150,6 +150,7 @@ test-suite tests
   other-modules:
     Tilia.Comments.PlaceSpec
     Tilia.CommentsSpec
+    Tilia.Cpp.PropertiesSpec
     Tilia.CppSpec
     Tilia.Corpus
     Tilia.Corpus.Manifest
