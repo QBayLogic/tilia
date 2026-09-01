@@ -263,7 +263,7 @@ formatSingleConfig parser render path reached text =
       Right
         ( renderModule
             render {rcBlankedLines = blanked}
-            (truthfully blanked parsed)
+            (truthfully (reachedWritten reached) text parsed)
         )
   where
     blanked = blankedIn (reachedWritten reached) text
@@ -285,14 +285,22 @@ blankedIn written taken =
     ]
 
 -- | Put back what blanking took away.
-truthfully :: IntSet -> ParsedModule -> ParsedModule
-truthfully blanked parsed =
+truthfully :: Text -> Text -> ParsedModule -> ParsedModule
+truthfully written taken parsed =
   parsed {pmComments = map correct (pmComments parsed)}
   where
+    blanked = blankedIn written taken
+    lines' = Map.fromList (zip [1 :: Int ..] (T.lines written))
     correct c
-      | IntSet.member (spanStartLine (commentSpan c) - 1) blanked =
+      | emptied above, not (writtenBlank (beyond above)) =
           c {commentAbove = ContentAt 1, commentGapAbove = False}
       | otherwise = c
+      where
+        above = spanStartLine (commentSpan c) - 1
+    emptied n = IntSet.member n blanked
+    beyond n = if emptied n && wasDirective n then beyond (n - 1) else n
+    wasDirective n = maybe False isDirective (Map.lookup n lines')
+    writtenBlank n = maybe False (T.null . T.strip) (Map.lookup n lines')
 
 -- | How a configuration was reached, and what to call it.
 data Reached = Reached

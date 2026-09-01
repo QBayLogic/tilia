@@ -3,10 +3,10 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 5035 formatted.
+5133 examples, 5039 formatted.
 
 ==========================================================================
-broken (21)
+broken (17)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/TypeChecking/Conversion.hs
@@ -124,27 +124,6 @@ Agda-2.8.0/src/full/Agda/TypeChecking/With.hs
     + import Agda.Utils.List1 (List1, pattern (:|))
       import qualified Agda.Utils.List1 as List1
       import Agda.Utils.Ma
-
-Agda-2.8.0/src/setup/Agda/Setup.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -17,7 +17,6 @@
-      import Data.Functor ((<&>))
-      import Data.List (intercalate)
-      import Language.Haskell.TH.Syntax (qAddDependentFile, runIO)
-    -
-      #if !MIN_VERSION_bytestring(0,11,2)
-      -- Import instance Lift ByteString if not supplied by bytestring.
-    
-    @@ -26,7 +25,6 @@
-      import Agda.Setup.DataFiles (dataFiles, dataPath)
-      import Agda.VersionCommit (versionWithCommitInfo)
-      import qualified Paths_Agda as Paths
-    -
-      #if !MIN_VERSION_bytestring(0,11,2)
-      #else
-      -- Import instance Lift ByteString if not supplied by bytestring.
 
 blaze-markup-0.8.3.0/src/Text/Blaze.hs
     formatting is non-idempotent
@@ -356,55 +335,18 @@ dlist-1.0/Data/DList.hs
           toList,
           apply,
 
-dlist-1.0/Data/DList/Unsafe.hs
+hakyll-4.17.0.0/lib/Hakyll/Web/Pandoc.hs
     formatting is non-idempotent
     --- first pass
     +++ second pass
-    @@ -1,7 +1,6 @@
-      -----------------------------------------------------------------------------
+    @@ -270,6 +270,7 @@
+            -- Hakyll releases
     
-      {-# LANGUAGE CPP #-}
-    -
-      #if __GLASGOW_HASKELL__ >= 708
-      -- CPP: GHC >= 7.8 for Safe Haskell
-
-dlist-1.0/tests/DListProperties.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -6,7 +6,6 @@
-      #if __GLASGOW_HASKELL__ >= 708
-      -- For the IsList test
-      {-# LANGUAGE OverloadedLists #-}
-    -
-      #if __GLASGOW_HASKELL__ == 708
-      -- CPP: GHC == 7.8 for using pattern synonyms
-
-dlist-1.0/tests/ImportUnsafe.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -7,7 +7,6 @@
-      {-# LANGUAGE Safe #-}
-    
-      #else
-    -
-      #error "Your GHC does not support Safe Haskell. That's okay!"
-    
-      #endif
-
-hakyll-4.17.0.0/lib/Hakyll/Core/Rules/Internal.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -19,7 +19,6 @@
-      import Control.Monad.Fail (MonadFail)
-      #endif
-      import Control.Monad.RWS (RWST, runRWST)
-    -
-      #if !MIN_VERSION_base(4,13,0)
-      #else
-      --------------------------------------------------------------------------------
+      #if MIN_VERSION_pandoc(3,8,0)
+    +
+            -- Starting with pandoc 3.8, the highlighting
+            -- system was overhauled to have more than just Skylighting
+            -- styles
 
 hashable-1.5.1.0/tests/Regress.hs
     formatting changed how many configurations there are, from 6 to 8
@@ -471,6 +413,21 @@ hashable-1.5.1.0/tests/Regress.hs
     -         , testCase "4" $ nullaryCase 4 S4
     -         ]
     … and 214 more lines
+
+hledger-1.52.1/Hledger/Cli.hs
+    formatting is non-idempotent
+    --- first pass
+    +++ second pass
+    @@ -207,8 +207,8 @@
+      --
+      main :: IO ()
+      main = handleExit $ withGhcDebug' $ do
+    -
+      #if MIN_VERSION_base(4,20,0)
+    +
+        -- Control ghc 9.10+'s stack traces.
+        -- CostCentreBacktrace   - collect cost-centre stack backtraces (only available when built with profiling)
+        -- HasCallStackBacktrace - collect HasCallStack backtraces
 
 hspec-core-2.11.17/src/Test/Hspec/Core/Compat.hs
     formatting is non-idempotent
@@ -757,39 +714,26 @@ scotty-0.30/test/Web/ScottySpec.hs
     - import qualified Data.ByteString.Lazy as LBS
     - import Network.Socket (Family (..), SockAddr (..), Socket, SocketOption (..), SocketType (..), bind,
 
-stm-2.5.3.1/Control/Concurrent/STM/TArray.hs
+unliftio-0.2.25.1/src/UnliftIO/Internals/Async.hs
     formatting is non-idempotent
     --- first pass
     +++ second pass
-    @@ -21,7 +21,6 @@
-      {-# LANGUAGE UnboxedTuples #-}
+    @@ -291,6 +291,7 @@
+      --------------------------------------------------------------------------------
     
-      #else
-    -
-      #define HAS_UNLIFTED_ARRAY 1
+      #if MIN_VERSION_base(4,9,0)
+    +
+      --------------------------------------------------------------------------------
     
-      #endif
-
-yesod-core-1.7.0.0/test/YesodCoreTest.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -45,7 +45,6 @@
-      import qualified YesodCoreTest.WaiSubsite as WaiSubsite
-      import YesodCoreTest.Widget
-      import qualified YesodCoreTest.ZeroPieceShadowRuntime as ZeroPieceShadowRuntime
-    -
-      #ifndef WINDOWS
-      -- Skip on Windows, see https://github.com/yesodweb/yesod/issues/1523#issuecomment-398278450
+      -- | Only defined by @async@ for @base >= 4.9@.
+    @@ -366,6 +367,7 @@
+      --------------------------------------------------------------------------------
     
-    @@ -57,7 +56,6 @@
-      import qualified YesodCoreTest.LiteApp as LiteApp
-      import qualified YesodCoreTest.Reps as Reps
-      import qualified YesodCoreTest.Ssl as Ssl
-    -
-      #ifndef WINDOWS
-      #else
-      -- Skip on Windows, see https://github.com/yesodweb/yesod/issues/1523#issuecomment-398278450
+      #if MIN_VERSION_base(4,8,0)
+    +
+      --------------------------------------------------------------------------------
+    
+      -- | Executes a 'Traversable' container of items concurrently, it uses the 'Flat'
 
 ==========================================================================
 does-not-parse (2)

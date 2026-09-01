@@ -390,7 +390,7 @@ formatted       383866b27bb0  Agda-2.8.0/src/full/Agda/Utils/VarSet.hs
 formatted       9f0839da86cb  Agda-2.8.0/src/full/Agda/Utils/WithDefault.hs
 formatted       415a87aa2127  Agda-2.8.0/src/full/Agda/Utils/Zipper.hs
 formatted       86e923a357db  Agda-2.8.0/src/main/Main.hs
-broken          fbbd8731628c  Agda-2.8.0/src/setup/Agda/Setup.hs
+formatted       fbbd8731628c  Agda-2.8.0/src/setup/Agda/Setup.hs
 formatted       8561396c6a93  Agda-2.8.0/src/setup/Agda/Setup/DataFiles.hs
 formatted       42af21c8ecf8  Agda-2.8.0/src/setup/Agda/Setup/EmacsMode.hs
 formatted       acb74e0db7a5  Agda-2.8.0/src/setup/Agda/Version.hs
@@ -415,7 +415,7 @@ partly-checked  44c26620989c  QuickCheck-2.18.0.0/src/Test/QuickCheck.hs
 formatted       d4509e6743a4  QuickCheck-2.18.0.0/src/Test/QuickCheck/All.hs
 declined        -             QuickCheck-2.18.0.0/src/Test/QuickCheck/Arbitrary.hs
 formatted       b394fbd4debb  QuickCheck-2.18.0.0/src/Test/QuickCheck/Compat.hs
-partly-checked  3d21b9292db3  QuickCheck-2.18.0.0/src/Test/QuickCheck/Exception.hs
+partly-checked  0564f548e3a6  QuickCheck-2.18.0.0/src/Test/QuickCheck/Exception.hs
 formatted       682aa52bce46  QuickCheck-2.18.0.0/src/Test/QuickCheck/Features.hs
 declined        -             QuickCheck-2.18.0.0/src/Test/QuickCheck/Function.hs
 formatted       ed8bb148aefe  QuickCheck-2.18.0.0/src/Test/QuickCheck/Gen.hs
@@ -449,7 +449,7 @@ formatted       f856db0e58cd  ShellCheck-0.11.0/src/ShellCheck/Analytics.hs
 formatted       a37e7d6ad771  ShellCheck-0.11.0/src/ShellCheck/Analyzer.hs
 formatted       53f56d1c3ae1  ShellCheck-0.11.0/src/ShellCheck/AnalyzerLib.hs
 formatted       ae3b0ca5251a  ShellCheck-0.11.0/src/ShellCheck/CFG.hs
-formatted       436ed9ab8a14  ShellCheck-0.11.0/src/ShellCheck/CFGAnalysis.hs
+formatted       f0ca642cdd96  ShellCheck-0.11.0/src/ShellCheck/CFGAnalysis.hs
 formatted       64df5efa4dca  ShellCheck-0.11.0/src/ShellCheck/Checker.hs
 formatted       ca5d54071468  ShellCheck-0.11.0/src/ShellCheck/Checks/Commands.hs
 formatted       c5722fd33abb  ShellCheck-0.11.0/src/ShellCheck/Checks/ControlFlow.hs
@@ -1815,10 +1815,10 @@ broken          0ad6285ece3f  dlist-1.0/Data/DList.hs
 formatted       c7ac8ac303c6  dlist-1.0/Data/DList/DNonEmpty.hs
 formatted       6821e4ff56e5  dlist-1.0/Data/DList/DNonEmpty/Internal.hs
 declined        -             dlist-1.0/Data/DList/Internal.hs
-broken          2784071b59f8  dlist-1.0/Data/DList/Unsafe.hs
-broken          5236f91b5ece  dlist-1.0/tests/DListProperties.hs
+formatted       2784071b59f8  dlist-1.0/Data/DList/Unsafe.hs
+formatted       5236f91b5ece  dlist-1.0/tests/DListProperties.hs
 formatted       25ad006acda9  dlist-1.0/tests/DNonEmptyProperties.hs
-broken          e6a82f16cbab  dlist-1.0/tests/ImportUnsafe.hs
+formatted       e6a82f16cbab  dlist-1.0/tests/ImportUnsafe.hs
 formatted       0acdb3558dfe  dlist-1.0/tests/Main.hs
 formatted       043e74078b8b  dlist-1.0/tests/OverloadedStrings.hs
 formatted       83b330c74383  dlist-1.0/tests/QuickCheckUtil.hs
@@ -2184,7 +2184,7 @@ formatted       d080542e3185  hakyll-4.17.0.0/lib/Hakyll/Core/Provider/Metadata.
 formatted       0cfbeb9b73ba  hakyll-4.17.0.0/lib/Hakyll/Core/Provider/MetadataCache.hs
 formatted       b66bbdf4a200  hakyll-4.17.0.0/lib/Hakyll/Core/Routes.hs
 formatted       6fc04bfca9f2  hakyll-4.17.0.0/lib/Hakyll/Core/Rules.hs
-broken          305a56f369db  hakyll-4.17.0.0/lib/Hakyll/Core/Rules/Internal.hs
+formatted       305a56f369db  hakyll-4.17.0.0/lib/Hakyll/Core/Rules/Internal.hs
 formatted       3ff34b463d20  hakyll-4.17.0.0/lib/Hakyll/Core/Runtime.hs
 formatted       df1c2bd7e8fb  hakyll-4.17.0.0/lib/Hakyll/Core/Store.hs
 formatted       871d98a4302e  hakyll-4.17.0.0/lib/Hakyll/Core/UnixFilter.hs
@@ -2203,7 +2203,7 @@ formatted       0923e680c5d2  hakyll-4.17.0.0/lib/Hakyll/Web/Meta/JSONLD.hs
 formatted       a3dbe80d0b45  hakyll-4.17.0.0/lib/Hakyll/Web/Meta/OpenGraph.hs
 formatted       a3b6503b2c4a  hakyll-4.17.0.0/lib/Hakyll/Web/Meta/TwitterCard.hs
 formatted       47b99b2ffc3a  hakyll-4.17.0.0/lib/Hakyll/Web/Paginate.hs
-formatted       998f99391437  hakyll-4.17.0.0/lib/Hakyll/Web/Pandoc.hs
+broken          998f99391437  hakyll-4.17.0.0/lib/Hakyll/Web/Pandoc.hs
 formatted       5f46737f3756  hakyll-4.17.0.0/lib/Hakyll/Web/Pandoc/Biblio.hs
 formatted       63c711e3ed6f  hakyll-4.17.0.0/lib/Hakyll/Web/Pandoc/Binary.hs
 formatted       3d27f3335c23  hakyll-4.17.0.0/lib/Hakyll/Web/Pandoc/FileType.hs
@@ -2338,7 +2338,7 @@ formatted       4edd92333a33  hedgehog-1.7/test/Test/Hedgehog/Skip.hs
 formatted       d20ec251ab72  hedgehog-1.7/test/Test/Hedgehog/Text.hs
 formatted       2d3b2e9d7168  hedgehog-1.7/test/Test/Hedgehog/Zip.hs
 formatted       df799f9ffb57  hedgehog-1.7/test/test.hs
-formatted       63c560297e55  hledger-1.52.1/Hledger/Cli.hs
+broken          41eef616d33f  hledger-1.52.1/Hledger/Cli.hs
 formatted       2883f330eae3  hledger-1.52.1/Hledger/Cli/Anchor.hs
 formatted       8da9d899b517  hledger-1.52.1/Hledger/Cli/Anon.hs
 formatted       43e230af0dbc  hledger-1.52.1/Hledger/Cli/CliOptions.hs
@@ -3859,7 +3859,7 @@ formatted       b2c74156c6fd  random-1.3.1/src/System/Random/Internal.hs
 formatted       43cf9948fc9c  random-1.3.1/src/System/Random/Seed.hs
 formatted       0d9957bbf13d  random-1.3.1/src/System/Random/Stateful.hs
 formatted       0d72e1db2b6d  random-1.3.1/test-inspection/Spec.hs
-formatted       c6f769b56ab6  random-1.3.1/test-inspection/Spec/Inspection.hs
+formatted       ad60a71e2f93  random-1.3.1/test-inspection/Spec/Inspection.hs
 formatted       ed91342d3f30  random-1.3.1/test-legacy/Legacy.hs
 formatted       0160098f7cc5  random-1.3.1/test-legacy/Random1283.hs
 formatted       a1a8fda2b1b9  random-1.3.1/test-legacy/RangeTest.hs
@@ -4313,7 +4313,7 @@ formatted       d60faa0d5f6c  statistics-0.16.5.0/tests/Tests/Transform.hs
 formatted       55f699624c9d  statistics-0.16.5.0/tests/doctest.hs
 formatted       f0e3d45c9159  statistics-0.16.5.0/tests/tests.hs
 formatted       2c4811cee336  stm-2.5.3.1/Control/Concurrent/STM.hs
-broken          57c86c3ef151  stm-2.5.3.1/Control/Concurrent/STM/TArray.hs
+formatted       57c86c3ef151  stm-2.5.3.1/Control/Concurrent/STM/TArray.hs
 formatted       87af236e7376  stm-2.5.3.1/Control/Concurrent/STM/TBQueue.hs
 formatted       ec81ee22f760  stm-2.5.3.1/Control/Concurrent/STM/TChan.hs
 formatted       7c160a32f991  stm-2.5.3.1/Control/Concurrent/STM/TMVar.hs
@@ -4444,7 +4444,7 @@ formatted       7fa192160c9b  text-2.1.4/src/Data/Text/Internal/ByteStringCompat
 formatted       1b2249a7f28b  text-2.1.4/src/Data/Text/Internal/Encoding.hs
 formatted       43a1a670b3db  text-2.1.4/src/Data/Text/Internal/Encoding/Fusion.hs
 formatted       07ceae987c37  text-2.1.4/src/Data/Text/Internal/Encoding/Fusion/Common.hs
-formatted       875961737225  text-2.1.4/src/Data/Text/Internal/Encoding/Utf16.hs
+formatted       98f9fc80bc02  text-2.1.4/src/Data/Text/Internal/Encoding/Utf16.hs
 formatted       48ea4745d7e8  text-2.1.4/src/Data/Text/Internal/Encoding/Utf32.hs
 declined        -             text-2.1.4/src/Data/Text/Internal/Encoding/Utf8.hs
 formatted       9b74d0d7d95a  text-2.1.4/src/Data/Text/Internal/Fusion.hs
@@ -4535,7 +4535,7 @@ declined        -             time-1.16.0.1/lib/Data/Time/Clock/Internal/CTimeva
 formatted       fde88246f337  time-1.16.0.1/lib/Data/Time/Clock/Internal/DiffTime.hs
 formatted       130201256efa  time-1.16.0.1/lib/Data/Time/Clock/Internal/NominalDiffTime.hs
 formatted       8ef6afa040bc  time-1.16.0.1/lib/Data/Time/Clock/Internal/POSIXTime.hs
-formatted       e9a83d4e7327  time-1.16.0.1/lib/Data/Time/Clock/Internal/SystemTime.hs
+formatted       10ece804c25f  time-1.16.0.1/lib/Data/Time/Clock/Internal/SystemTime.hs
 formatted       310750655010  time-1.16.0.1/lib/Data/Time/Clock/Internal/UTCDiff.hs
 formatted       a58732cd7eb8  time-1.16.0.1/lib/Data/Time/Clock/Internal/UTCTime.hs
 formatted       acaedfdab698  time-1.16.0.1/lib/Data/Time/Clock/Internal/UniversalTime.hs
@@ -4553,7 +4553,7 @@ formatted       05a7f0bf5554  time-1.16.0.1/lib/Data/Time/Format/Parse/Class.hs
 formatted       cb2ccd8c40fd  time-1.16.0.1/lib/Data/Time/Format/Parse/Instances.hs
 formatted       4489a4cdab49  time-1.16.0.1/lib/Data/Time/LocalTime.hs
 formatted       93986a8450d1  time-1.16.0.1/lib/Data/Time/LocalTime/Internal/CalendarDiffTime.hs
-formatted       94f381fe1ad1  time-1.16.0.1/lib/Data/Time/LocalTime/Internal/Foreign.hs
+formatted       80f08413d6b8  time-1.16.0.1/lib/Data/Time/LocalTime/Internal/Foreign.hs
 formatted       ca98c37fb34c  time-1.16.0.1/lib/Data/Time/LocalTime/Internal/LocalTime.hs
 formatted       9200ebaf067a  time-1.16.0.1/lib/Data/Time/LocalTime/Internal/TimeOfDay.hs
 formatted       74496e557585  time-1.16.0.1/lib/Data/Time/LocalTime/Internal/TimeZone.hs
@@ -4758,7 +4758,7 @@ formatted       a64a8ea6c117  unliftio-0.2.25.1/src/UnliftIO/IO.hs
 formatted       6bd9d61eb350  unliftio-0.2.25.1/src/UnliftIO/IO/File.hs
 formatted       fff7f22a8cb5  unliftio-0.2.25.1/src/UnliftIO/IO/File/Posix.hs
 formatted       2688f4b976d8  unliftio-0.2.25.1/src/UnliftIO/IORef.hs
-formatted       38d4ce70ac93  unliftio-0.2.25.1/src/UnliftIO/Internals/Async.hs
+broken          38d4ce70ac93  unliftio-0.2.25.1/src/UnliftIO/Internals/Async.hs
 formatted       2e37ab380c8b  unliftio-0.2.25.1/src/UnliftIO/MVar.hs
 formatted       25ab39f4a7d1  unliftio-0.2.25.1/src/UnliftIO/Memoize.hs
 formatted       5803964631a0  unliftio-0.2.25.1/src/UnliftIO/Process.hs
@@ -4785,7 +4785,7 @@ formatted       b51d84ac0257  unordered-containers-0.2.21/Data/HashMap/Strict.hs
 formatted       d88b52d5dce2  unordered-containers-0.2.21/Data/HashSet.hs
 formatted       a238b77b05ef  unordered-containers-0.2.21/Data/HashSet/Internal.hs
 formatted       e865ae48f11b  unordered-containers-0.2.21/Setup.hs
-formatted       e85bc02778c3  unordered-containers-0.2.21/benchmarks/Benchmarks.hs
+formatted       7579d0951b85  unordered-containers-0.2.21/benchmarks/Benchmarks.hs
 formatted       0ed2a6102dba  unordered-containers-0.2.21/benchmarks/FineGrained.hs
 formatted       7e72d194e206  unordered-containers-0.2.21/benchmarks/Key/Bytes.hs
 formatted       de9c7b30da36  unordered-containers-0.2.21/benchmarks/Util/ByteString.hs
@@ -4813,7 +4813,7 @@ formatted       1da0e231433b  unpacked-containers-0/src/Map/Strict.hs
 formatted       9b01f9961f71  unpacked-containers-0/src/Map/Strict/Internal.hs
 formatted       bb6c9398369f  unpacked-containers-0/src/Set.hs
 formatted       cb11e5a3315d  unpacked-containers-0/src/Set/Internal.hs
-formatted       61140f1c6f0f  unpacked-containers-0/utils/Internal/BitQueue.hs
+formatted       4d22a9252479  unpacked-containers-0/utils/Internal/BitQueue.hs
 formatted       7c96e08090d5  unpacked-containers-0/utils/Internal/BitUtil.hs
 formatted       a1134be4230d  unpacked-containers-0/utils/Internal/PtrEquality.hs
 formatted       5dd1b940181c  unpacked-containers-0/utils/Internal/State.hs
@@ -5046,7 +5046,7 @@ formatted       1084d2ca990f  yesod-core-1.7.0.0/test/Route/RenderRouteSpec.hs
 formatted       5cf00838dae7  yesod-core-1.7.0.0/test/Route/RouteAttrSpec.hs
 formatted       9303c7a203b3  yesod-core-1.7.0.0/test/Route/SubDispatchAritySpec.hs
 formatted       141148a01530  yesod-core-1.7.0.0/test/RouteSpec.hs
-broken          549e37da7031  yesod-core-1.7.0.0/test/YesodCoreTest.hs
+formatted       549e37da7031  yesod-core-1.7.0.0/test/YesodCoreTest.hs
 formatted       f0034c742a78  yesod-core-1.7.0.0/test/YesodCoreTest/Auth.hs
 formatted       3a700bfeb45e  yesod-core-1.7.0.0/test/YesodCoreTest/BangSeparatorRuntime.hs
 formatted       33355032a6ea  yesod-core-1.7.0.0/test/YesodCoreTest/Breadcrumb.hs
