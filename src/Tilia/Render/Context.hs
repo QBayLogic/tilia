@@ -57,6 +57,8 @@ module Tilia.Render.Context
 where
 
 import Data.List.NonEmpty (NonEmpty)
+import Data.IntSet (IntSet)
+import Data.IntSet qualified as IntSet
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
@@ -144,6 +146,9 @@ data Ctx = Ctx
     -- with one written inside it cannot be put on one line, since the
     -- comment would swallow whatever followed it.
     ctxLineComments :: Map (Int, Int) Comment,
+    -- | Lines that are empty only because a branch was taken out of the
+    -- module to create a particular CPP configuration of it.
+    ctxBlankedLines :: IntSet,
     -- | The author's own text for each Haddock, by starting position.
     ctxHaddocks :: Map (Int, Int) Comment,
     -- | The knot.
@@ -250,9 +255,15 @@ commentBetween ctx a b = nextPrinted ctx a b /= b
 -- | Did the author leave an empty line directly after the first of these?
 separatedByBlank :: Ctx -> Maybe Span -> Maybe Span -> Bool
 separatedByBlank ctx ma@(Just a) mb = case nextPrinted ctx ma mb of
-  Just s -> spanStartLine s > spanEndLine a + 1
+  Just s -> any (writtenBlank ctx) [spanEndLine a + 1 .. spanStartLine s - 1]
   Nothing -> False
 separatedByBlank _ _ _ = False
+
+-- | Was this line empty because the author left it empty, as opposed to
+-- being blanked out by CPP machinery that separated one single
+-- configuration?
+writtenBlank :: Ctx -> Int -> Bool
+writtenBlank ctx n = not (IntSet.member n (ctxBlankedLines ctx))
 
 ----------------------------------------------------------------------------
 -- Entering the tree

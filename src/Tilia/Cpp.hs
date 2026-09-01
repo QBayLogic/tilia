@@ -27,6 +27,8 @@ where
 
 import Data.Char (isAsciiLower)
 import Data.List (sortOn, transpose, unsnoc)
+import Data.IntSet (IntSet)
+import Data.IntSet qualified as IntSet
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust, listToMaybe)
@@ -71,7 +73,7 @@ formatWithCpp parser render path source =
         parser
         (knowing render)
         path
-        noAnswers
+        (noAnswers source)
         configurationBudget
         source
   where
@@ -258,19 +260,39 @@ formatSingleConfig parser render path reached text =
   case parseModule parser path text of
     Left e -> Left (ConfigurationNotParsed (reachedAnswers reached) e)
     Right parsed ->
-      Right (renderModule render (truthfully (reachedLines reached) parsed))
+      Right
+        ( renderModule
+            render {rcBlankedLines = blanked}
+            (truthfully blanked parsed)
+        )
+  where
+    blanked = blankedIn (reachedWritten reached) text
+
+-- | Every line this configuration had emptied: the branches it does not
+-- take, and the directives themselves.
+blankedIn ::
+  -- | The module as it was written
+  Text ->
+  -- | One configuration of it
+  Text ->
+  IntSet
+blankedIn written taken =
+  IntSet.fromList
+    [ n
+      | (n, was, now) <- zip3 [1 ..] (T.lines written) (T.lines taken),
+        T.null (T.strip now),
+        not (T.null (T.strip was))
+    ]
 
 -- | Put back what blanking took away.
-truthfully :: [Int] -> ParsedModule -> ParsedModule
-truthfully directiveLines parsed =
+truthfully :: IntSet -> ParsedModule -> ParsedModule
+truthfully blanked parsed =
   parsed {pmComments = map correct (pmComments parsed)}
   where
     correct c
-      | above `elem` directiveLines =
+      | IntSet.member (spanStartLine (commentSpan c) - 1) blanked =
           c {commentAbove = ContentAt 1, commentGapAbove = False}
       | otherwise = c
-      where
-        above = spanStartLine (commentSpan c) - 1
 
 -- | How a configuration was reached, and what to call it.
 data Reached = Reached
@@ -278,12 +300,16 @@ data Reached = Reached
     -- 'truthfully', which is what needs them.
     reachedLines :: [Int],
     -- | Which branch each question was answered with, outermost first.
-    reachedAnswers :: [([Guard], Int)]
+    reachedAnswers :: [([Guard], Int)],
+    -- | The module as it was written, before any branch was taken out of
+    -- it. See 'blankedIn', which is what needs it.
+    reachedWritten :: Text
   }
 
 -- | The configuration nothing has been decided about yet.
-noAnswers :: Reached
-noAnswers = Reached {reachedLines = [], reachedAnswers = []}
+noAnswers :: Text -> Reached
+noAnswers source =
+  Reached {reachedLines = [], reachedAnswers = [], reachedWritten = source}
 
 -- | Blank more directive lines on the way into a group.
 widen :: [Int] -> Reached -> Reached

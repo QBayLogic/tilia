@@ -8,6 +8,8 @@ module Tilia.Render
   )
 where
 
+import Data.IntSet (IntSet)
+import Data.IntSet qualified as IntSet
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
@@ -49,7 +51,9 @@ data RenderConfig = RenderConfig
     -- | What the module can see, if it could be worked out.
     rcScope :: Maybe Scope,
     -- | Source lines the import block must not be sorted across.
-    rcImportBarriers :: [Int]
+    rcImportBarriers :: [Int],
+    -- | Lines left empty by blanking a CPP branch away.
+    rcBlankedLines :: IntSet
   }
 
 -- | A configuration that asserts nothing.
@@ -59,7 +63,8 @@ defaultRenderConfig =
     { rcExtensions = Set.empty,
       rcSourceType = ModuleSource,
       rcScope = Nothing,
-      rcImportBarriers = []
+      rcImportBarriers = [],
+      rcBlankedLines = IntSet.empty
     }
 
 -- | Render a parsed module, comments and all.
@@ -89,6 +94,7 @@ renderModule settings parsed =
         { ctxExtensions = rcExtensions settings,
           ctxSourceType = rcSourceType settings,
           ctxScope = rcScope settings,
+          ctxBlankedLines = rcBlankedLines settings,
           ctxLineComments = indexOn (filter (not . closesItself) loose),
           ctxHaddocks = indexOn haddocks,
           ctxKnot = knot
