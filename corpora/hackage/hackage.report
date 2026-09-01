@@ -3,10 +3,10 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 5039 formatted.
+5133 examples, 5042 formatted.
 
 ==========================================================================
-broken (17)
+broken (14)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/TypeChecking/Conversion.hs
@@ -335,19 +335,6 @@ dlist-1.0/Data/DList.hs
           toList,
           apply,
 
-hakyll-4.17.0.0/lib/Hakyll/Web/Pandoc.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -270,6 +270,7 @@
-            -- Hakyll releases
-    
-      #if MIN_VERSION_pandoc(3,8,0)
-    +
-            -- Starting with pandoc 3.8, the highlighting
-            -- system was overhauled to have more than just Skylighting
-            -- styles
-
 hashable-1.5.1.0/tests/Regress.hs
     formatting changed how many configurations there are, from 6 to 8
     --- input
@@ -413,21 +400,6 @@ hashable-1.5.1.0/tests/Regress.hs
     -         , testCase "4" $ nullaryCase 4 S4
     -         ]
     … and 214 more lines
-
-hledger-1.52.1/Hledger/Cli.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -207,8 +207,8 @@
-      --
-      main :: IO ()
-      main = handleExit $ withGhcDebug' $ do
-    -
-      #if MIN_VERSION_base(4,20,0)
-    +
-        -- Control ghc 9.10+'s stack traces.
-        -- CostCentreBacktrace   - collect cost-centre stack backtraces (only available when built with profiling)
-        -- HasCallStackBacktrace - collect HasCallStack backtraces
 
 hspec-core-2.11.17/src/Test/Hspec/Core/Compat.hs
     formatting is non-idempotent
@@ -713,27 +685,6 @@ scotty-0.30/test/Web/ScottySpec.hs
     - import qualified Data.ByteString as BS
     - import qualified Data.ByteString.Lazy as LBS
     - import Network.Socket (Family (..), SockAddr (..), Socket, SocketOption (..), SocketType (..), bind,
-
-unliftio-0.2.25.1/src/UnliftIO/Internals/Async.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -291,6 +291,7 @@
-      --------------------------------------------------------------------------------
-    
-      #if MIN_VERSION_base(4,9,0)
-    +
-      --------------------------------------------------------------------------------
-    
-      -- | Only defined by @async@ for @base >= 4.9@.
-    @@ -366,6 +367,7 @@
-      --------------------------------------------------------------------------------
-    
-      #if MIN_VERSION_base(4,8,0)
-    +
-      --------------------------------------------------------------------------------
-    
-      -- | Executes a 'Traversable' container of items concurrently, it uses the 'Flat'
 
 ==========================================================================
 does-not-parse (2)

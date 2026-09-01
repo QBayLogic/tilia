@@ -26,7 +26,7 @@ module Tilia.Cpp
 where
 
 import Data.Char (isAsciiLower)
-import Data.List (sortOn, transpose, unsnoc)
+import Data.List (isPrefixOf, sortOn, transpose, unsnoc)
 import Data.IntSet (IntSet)
 import Data.IntSet qualified as IntSet
 import Data.Map.Strict (Map)
@@ -584,12 +584,28 @@ merge guards varied = go Broken
       length xs == length ys && and (zipWith (agree varied layout) xs ys)
 
     hoisted ss = case map peel (filter (not . null) ss) of
-      peeled@((lead, _, trail) : _)
-        | all (\(l, _, r) -> l == lead && r == trail) peeled ->
-            (lead, map trimmed ss, trail)
+      peeled@(_ : _)
+        | Just lead <- agreed (map (\(l, _, _) -> l) peeled),
+          Just trail <- agreedEnding (map (\(_, _, r) -> r) peeled) ->
+            (lead, map (trimmed (length lead) (length trail)) ss, trail)
       _ -> ([], ss, [])
       where
-        trimmed s = if null s then [] else let (_, m, _) = peel s in m
+        trimmed opening closing s
+          | null s = []
+          | otherwise =
+              let (l, m, r) = peel s
+               in drop (min opening (length l)) l
+                    <> m
+                    <> take (length r - min closing (length r)) r
+
+        -- The longest of them, if every one of the others is a prefix of it.
+        agreed ls = case sortOn (negate . length) ls of
+          [] -> Just []
+          (longest : rest)
+            | all (`isPrefixOf` longest) rest -> Just longest
+            | otherwise -> Nothing
+
+        agreedEnding = fmap reverse . agreed . map reverse
 
     peel ds =
       let (l, rest) = span spacing ds
