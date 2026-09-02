@@ -280,6 +280,9 @@ spec = do
     it "is refused when the module is not Haskell without expanding it" $
       formatCpp macroDeclaration `shouldSatisfy` isLeft
 
+    xit "does not run a Haddock into the comment under it" $
+      roundTrip defineBetweenConditionals `shouldBe` Right ()
+
   describe "directives the prototype cannot read" $ do
     it "refuses a module whose conditionals do not balance" $
       formatCpp unbalanced `shouldSatisfy` isLeft
@@ -311,6 +314,28 @@ everyFixture =
     twoInOneExpression,
     splitExpression
   ]
+
+-- | A directive that asks nothing, between two conditionals that ask the
+-- same question.
+--
+-- The merge has no answer for this and wraps the module in a conditional
+-- rather than the conditionals in the module. See the held-back example that
+-- names it.
+defineBetweenConditionals :: Text
+defineBetweenConditionals =
+  T.unlines
+    [ "module M where",
+      "",
+      "-- | documentation",
+      "#if FLAG",
+      "-- a remark",
+      "f9 = 9",
+      "#endif",
+      "#define WIDE 1",
+      "#if FLAG",
+      "-- a remark",
+      "#endif"
+    ]
 
 -- | A conditional between two whole declarations, which is the case the
 -- design is meant to handle.
