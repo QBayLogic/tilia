@@ -15,13 +15,14 @@ module Tilia.Source
     -- * Its lines
     lineAt,
     blankAt,
+    directiveAt,
 
     -- * Its comments
     comments,
   )
 where
 
-import Data.Char (isSpace)
+import Data.Char (isAsciiLower, isSpace)
 import Data.IntMap.Strict (IntMap)
 import Data.IntMap.Strict qualified as IntMap
 import Data.Text (Text)
@@ -64,6 +65,14 @@ lineAt n = IntMap.lookup n . srcLines
 -- nothing above.
 blankAt :: Int -> Source -> Bool
 blankAt n = maybe False (T.all isSpace) . lineAt n
+
+-- | Does this line hold a preprocessor directive?
+directiveAt :: Int -> Source -> Bool
+directiveAt n = maybe False opensWithHash . lineAt n
+  where
+    opensWithHash l = case T.uncons (T.stripStart l) of
+      Just ('#', rest) -> maybe False (isAsciiLower . fst) (T.uncons (T.stripStart rest))
+      _ -> False
 
 -- | Every comment in the module, in source order.
 comments :: Source -> [Comment]

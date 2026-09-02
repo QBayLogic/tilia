@@ -74,7 +74,7 @@ renderModule settings parsed =
     (haddocks, loose') = splitHaddocks hsMod (comments (pmSource parsed))
     plain = heldOff haddocks loose'
     (stackHeader, rest) = takeStackHeader (pmHeaderEnd parsed) plain
-    (pragmas, uncovered) = takeHeaderPragmas (pmHeaderEnd parsed) rest
+    (pragmas, uncovered) = takeHeaderPragmas (pmSource parsed) (pmHeaderEnd parsed) rest
     loose = heldOffModuleDoc hsMod haddocks pragmas uncovered
 
     sorted m =

@@ -42,6 +42,7 @@ import Tilia.Render.Haddock
 import Tilia.Render.Layout
 import Tilia.Render.Name
 import Tilia.Render.Pragma (warningTxt)
+import Tilia.Source (Source, directiveAt)
 import Tilia.Span
 import Tilia.Span.Ghc
 
@@ -98,11 +99,13 @@ data ExtensionClass
 -- meaning it did not have, and it is left in the stream as the comment it
 -- is.
 takeHeaderPragmas ::
+  -- | The module as written
+  Source ->
   -- | Where the header ends
   Maybe Span ->
   [Comment] ->
   ([HeaderPragma], [Comment])
-takeHeaderPragmas headerEnd comments = (pragmas, plain)
+takeHeaderPragmas src headerEnd comments = (pragmas, plain)
   where
     recognised = [(c, headerPragma c) | c <- comments]
     pragmas = [entry c p | (c, Just p) <- recognised]
@@ -111,7 +114,8 @@ takeHeaderPragmas headerEnd comments = (pragmas, plain)
       | (c, Nothing) <- recognised
       ]
     rightAbovePragma c =
-      Set.member (spanEndLine (commentSpan c) + 1) pragmaStarts
+      Set.member (below (spanEndLine (commentSpan c) + 1)) pragmaStarts
+    below n = if directiveAt n src then below (n + 1) else n
     pragmaStarts =
       Set.fromList [spanStartLine (commentSpan c) | (c, Just _) <- recognised]
     airless c = c {commentGapAbove = False, commentGapBelow = False}
