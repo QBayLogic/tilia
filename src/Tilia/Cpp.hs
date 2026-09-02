@@ -27,26 +27,23 @@ where
 
 import Data.Char (isAsciiLower)
 import Data.List (isPrefixOf, sortOn, transpose, unsnoc)
-import Data.IntSet (IntSet)
-import Data.IntSet qualified as IntSet
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust, listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.LanguageExtensions.Type (Extension (..))
-import Tilia.Comments (Above (..), Comment (..))
 import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Doc.Combinators qualified as Doc
 import Tilia.Doc.Internal (Doc (..), Layout (..))
 import Tilia.Parser
   ( ParseError,
-    ParsedModule (..),
     ParserConfig,
     describeParseError,
-    parseModule
+    parseConfiguration,
   )
 import Tilia.Render (RenderConfig (..), renderModule)
+import Tilia.Source (Written (..))
 import Tilia.Span (Span, covers, meets, spanEndLine, spanStartLine)
 
 ----------------------------------------------------------------------------
@@ -257,60 +254,19 @@ formatSingleConfig ::
   Text ->
   Either CppError Doc
 formatSingleConfig parser render path reached text =
-  case parseModule parser path text of
+  case parseConfiguration parser path (Written (reachedWritten reached)) text of
     Left e -> Left (ConfigurationNotParsed (reachedAnswers reached) e)
-    Right parsed ->
-      Right
-        ( renderModule
-            render {rcBlankedLines = blanked}
-            (truthfully (reachedWritten reached) text parsed)
-        )
-  where
-    blanked = blankedIn (reachedWritten reached) text
-
--- | Every line this configuration had emptied: the branches it does not
--- take, and the directives themselves.
-blankedIn ::
-  -- | The module as it was written
-  Text ->
-  -- | One configuration of it
-  Text ->
-  IntSet
-blankedIn written taken =
-  IntSet.fromList
-    [ n
-      | (n, was, now) <- zip3 [1 ..] (T.lines written) (T.lines taken),
-        T.null (T.strip now),
-        not (T.null (T.strip was))
-    ]
-
--- | Put back what blanking took away.
-truthfully :: Text -> Text -> ParsedModule -> ParsedModule
-truthfully written taken parsed =
-  parsed {pmComments = map correct (pmComments parsed)}
-  where
-    blanked = blankedIn written taken
-    lines' = Map.fromList (zip [1 :: Int ..] (T.lines written))
-    correct c
-      | emptied above, not (writtenBlank (beyond above)) =
-          c {commentAbove = ContentAt 1, commentGapAbove = False}
-      | otherwise = c
-      where
-        above = spanStartLine (commentSpan c) - 1
-    emptied n = IntSet.member n blanked
-    beyond n = if emptied n && wasDirective n then beyond (n - 1) else n
-    wasDirective n = maybe False isDirective (Map.lookup n lines')
-    writtenBlank n = maybe False (T.null . T.strip) (Map.lookup n lines')
+    Right parsed -> Right (renderModule render parsed)
 
 -- | How a configuration was reached, and what to call it.
 data Reached = Reached
-  { -- | Directive lines blanked by the calls above this one. See
-    -- 'truthfully', which is what needs them.
+  { -- | Directive lines blanked by the calls above this one.
     reachedLines :: [Int],
     -- | Which branch each question was answered with, outermost first.
     reachedAnswers :: [([Guard], Int)],
     -- | The module as it was written, before any branch was taken out of
-    -- it. See 'blankedIn', which is what needs it.
+    -- it, which is what every question about the source is answered
+    -- against. See "Tilia.Source".
     reachedWritten :: Text
   }
 
@@ -1037,12 +993,6 @@ data Configurations = Configurations
     -- then one more for the @#else@.
     cfgTexts :: [Text],
     -- | The lines this group's own directives were on.
-    --
-    -- Blanking them keeps the line numbers, which is what the whole design
-    -- rests on, but it also tells the comment machinery that those lines
-    -- were empty. They were not, and a comment written directly under a
-    -- directive would otherwise be printed with a blank line above it that
-    -- its author never wrote. See 'truthfully'.
     cfgDirectives :: [Int],
     -- | From each tied group's @#if@ to its @#endif@, inclusive.
     --

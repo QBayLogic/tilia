@@ -18,6 +18,7 @@ module Tilia.Comments
     escapeTrigger,
     triggerEscaped,
     opensHaddock,
+    commentsWithin,
 
     -- * Pragmas
     Pragma (..),
@@ -37,29 +38,8 @@ import GHC.Hs (HsModule)
 import GHC.Hs.Extension (GhcPs)
 import GHC.Parser.Annotation qualified as GHC
 import GHC.Types.SrcLoc qualified as GHC
-import Tilia.Span (Span)
+import Tilia.Span (Span, endPoint, startPoint)
 import Tilia.Span.Ghc (spanOfReal)
-
--- | How a comment was written. The distinction is kept because it
--- constrains what may be done with the comment.
-data CommentStyle
-  = -- | @-- …@
-    LineComment
-  | -- | @{- … -}@
-    BlockComment
-  | -- | @-- |@, @-- ^@, @-- *@, @-- $@ and the block forms
-    DocComment
-  deriving (Eq, Show)
-
--- | What was on the line above a comment.
-data Above
-  = -- | Nothing was: the comment begins on the first line of the file.
-    TopOfFile
-  | -- | An empty line.
-    BlankLine
-  | -- | Something, beginning at this column.
-    ContentAt !Int
-  deriving (Eq, Show)
 
 -- | One comment.
 data Comment = Comment
@@ -89,23 +69,26 @@ data Comment = Comment
   }
   deriving (Eq, Show)
 
--- | Was the comment written after code on its line?
-commentTrailing :: Comment -> Bool
-commentTrailing = isJust . commentCodeBeforeStopsAt
+-- | How a comment was written. The distinction is kept because it
+-- constrains what may be done with the comment.
+data CommentStyle
+  = -- | @-- …@
+    LineComment
+  | -- | @{- … -}@
+    BlockComment
+  | -- | @-- |@, @-- ^@, @-- *@, @-- $@ and the block forms
+    DocComment
+  deriving (Eq, Show)
 
--- | Does this comment let code follow it on the same line?
-closesItself :: Comment -> Bool
-closesItself c = commentStyle c == BlockComment && singleLine c
-
--- | Was this comment written between brackets rather than as @--@ lines?
-bracketed :: Comment -> Bool
-bracketed c = "{-" `T.isPrefixOf` T.stripStart (NE.head (commentBody c))
-
--- | Is this comment a single line?
-singleLine :: Comment -> Bool
-singleLine c = case commentBody c of
-  (_ :| []) -> True
-  _ -> False
+-- | What was on the line above a comment.
+data Above
+  = -- | Nothing was: the comment begins on the first line of the file.
+    TopOfFile
+  | -- | An empty line.
+    BlankLine
+  | -- | Something, beginning at this column.
+    ContentAt !Int
+  deriving (Eq, Show)
 
 -- | Every comment in a module, in source order.
 commentsOf :: Text -> HsModule GhcPs -> [Comment]
@@ -199,6 +182,59 @@ normalizeBody startColumn style raw =
   where
     dedent l = T.drop (min startColumn (T.length (T.takeWhile isSpace l))) l
 
+-- | @--foo@ becomes @-- foo@; @----@ and @-- foo@ are left alone.
+--
+-- Only the opening line of a line comment is eligible. Inside a block
+-- comment a @--@ is just two characters the author wrote.
+spaceAfterDashes :: CommentStyle -> Text -> Text
+spaceAfterDashes BlockComment t = t
+spaceAfterDashes _ t = case T.stripPrefix "--" t of
+  Nothing -> t
+  Just rest -> case T.uncons rest of
+    Nothing -> t
+    Just (c, _)
+      | c == ' ' || c == '-' -> t
+      | otherwise -> "-- " <> rest
+
+-- | The text a span covers.
+sliceSpan :: [Text] -> GHC.RealSrcSpan -> Text
+sliceSpan sourceLines spn =
+  T.intercalate "\n" (zipWith clip [startLine ..] covered)
+  where
+    covered =
+      take (endLine - startLine + 1) (drop (startLine - 1) sourceLines)
+    clip n l =
+      (if n == startLine then T.drop (offsetOf l startCol) else id)
+        . (if n == endLine then T.take (offsetOf l endCol) else id)
+        $ l
+
+    startLine = GHC.srcSpanStartLine spn
+    endLine = GHC.srcSpanEndLine spn
+    startCol = GHC.srcSpanStartCol spn
+    endCol = GHC.srcSpanEndCol spn
+
+-- | Put a comment back together as it will appear in the output.
+renderComment :: Comment -> Text
+renderComment = T.intercalate "\n" . NE.toList . commentBody
+
+-- | Does this comment let code follow it on the same line?
+closesItself :: Comment -> Bool
+closesItself c = commentStyle c == BlockComment && singleLine c
+
+-- | Was this comment written between brackets rather than as @--@ lines?
+bracketed :: Comment -> Bool
+bracketed c = "{-" `T.isPrefixOf` T.stripStart (NE.head (commentBody c))
+
+-- | Was the comment written after code on its line?
+commentTrailing :: Comment -> Bool
+commentTrailing = isJust . commentCodeBeforeStopsAt
+
+-- | Is this comment a single line?
+singleLine :: Comment -> Bool
+singleLine c = case commentBody c of
+  (_ :| []) -> True
+  _ -> False
+
 -- | Put a space between a doc comment's trigger and the text after it, so
 -- that @-- |Foo@ comes out as @-- | Foo@.
 --
@@ -289,23 +325,11 @@ openerWidth l
   | "{-" `T.isPrefixOf` l = Just 2
   | otherwise = Nothing
 
--- | @--foo@ becomes @-- foo@; @----@ and @-- foo@ are left alone.
---
--- Only the opening line of a line comment is eligible. Inside a block
--- comment a @--@ is just two characters the author wrote.
-spaceAfterDashes :: CommentStyle -> Text -> Text
-spaceAfterDashes BlockComment t = t
-spaceAfterDashes _ t = case T.stripPrefix "--" t of
-  Nothing -> t
-  Just rest -> case T.uncons rest of
-    Nothing -> t
-    Just (c, _)
-      | c == ' ' || c == '-' -> t
-      | otherwise -> "-- " <> rest
-
--- | Put a comment back together as it will appear in the output.
-renderComment :: Comment -> Text
-renderComment = T.intercalate "\n" . NE.toList . commentBody
+-- | The comments written inside a region.
+commentsWithin :: Span -> [Comment] -> [Comment]
+commentsWithin s = filter (within . commentSpan)
+  where
+    within c = startPoint s <= startPoint c && endPoint c <= endPoint s
 
 ----------------------------------------------------------------------------
 -- Pragmas
@@ -340,23 +364,6 @@ commentPragma c = do
           }
   where
     oneLine = T.unwords (map T.strip (NE.toList (commentBody c)))
-
--- | The text a span covers.
-sliceSpan :: [Text] -> GHC.RealSrcSpan -> Text
-sliceSpan sourceLines spn =
-  T.intercalate "\n" (zipWith clip [startLine ..] covered)
-  where
-    covered =
-      take (endLine - startLine + 1) (drop (startLine - 1) sourceLines)
-    clip n l =
-      (if n == startLine then T.drop (offsetOf l startCol) else id)
-        . (if n == endLine then T.take (offsetOf l endCol) else id)
-        $ l
-
-    startLine = GHC.srcSpanStartLine spn
-    endLine = GHC.srcSpanEndLine spn
-    startCol = GHC.srcSpanStartCol spn
-    endCol = GHC.srcSpanEndCol spn
 
 ----------------------------------------------------------------------------
 -- Columns and offsets

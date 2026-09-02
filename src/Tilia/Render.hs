@@ -8,8 +8,6 @@ module Tilia.Render
   )
 where
 
-import Data.IntSet (IntSet)
-import Data.IntSet qualified as IntSet
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
@@ -31,6 +29,7 @@ import Tilia.Comments.Attach (attachComments)
 import Tilia.Fixity (Scope)
 import Tilia.Imports (normalizeImports)
 import Tilia.Parser (ParsedModule (..))
+import Tilia.Source (comments)
 import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Render.Declaration (decls, declsKeepingGroups)
@@ -51,9 +50,7 @@ data RenderConfig = RenderConfig
     -- | What the module can see, if it could be worked out.
     rcScope :: Maybe Scope,
     -- | Source lines the import block must not be sorted across.
-    rcImportBarriers :: [Int],
-    -- | Lines left empty by blanking a CPP branch away.
-    rcBlankedLines :: IntSet
+    rcImportBarriers :: [Int]
   }
 
 -- | A configuration that asserts nothing.
@@ -63,8 +60,7 @@ defaultRenderConfig =
     { rcExtensions = Set.empty,
       rcSourceType = ModuleSource,
       rcScope = Nothing,
-      rcImportBarriers = [],
-      rcBlankedLines = IntSet.empty
+      rcImportBarriers = []
     }
 
 -- | Render a parsed module, comments and all.
@@ -75,7 +71,7 @@ renderModule settings parsed =
     <> attachComments loose (hsModule ctx pragmas (sorted hsMod))
   where
     hsMod = pmModule parsed
-    (haddocks, loose') = splitHaddocks hsMod (pmComments parsed)
+    (haddocks, loose') = splitHaddocks hsMod (comments (pmSource parsed))
     plain = heldOff haddocks loose'
     (stackHeader, rest) = takeStackHeader (pmHeaderEnd parsed) plain
     (pragmas, uncovered) = takeHeaderPragmas (pmHeaderEnd parsed) rest
@@ -87,6 +83,7 @@ renderModule settings parsed =
             normalizeImports
               (Set.member ImplicitPrelude (rcExtensions settings))
               (rcImportBarriers settings)
+              (comments (pmSource parsed))
               (hsmodImports m)
         }
     ctx =
@@ -94,7 +91,7 @@ renderModule settings parsed =
         { ctxExtensions = rcExtensions settings,
           ctxSourceType = rcSourceType settings,
           ctxScope = rcScope settings,
-          ctxBlankedLines = rcBlankedLines settings,
+          ctxSource = pmSource parsed,
           ctxLineComments = indexOn (filter (not . closesItself) loose),
           ctxHaddocks = indexOn haddocks,
           ctxKnot = knot

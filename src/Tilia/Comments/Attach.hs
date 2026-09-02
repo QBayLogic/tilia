@@ -124,27 +124,38 @@ writtenAs ::
   Position ->
   Comment ->
   Doc
-writtenAs atTheEnd position c = case shapeOf position c of
+writtenAs atTheEnd position c = commentDoc c $ case shapeOf position c of
   InPlace -> case position of
-    Before -> includeWhen (not (commentTrailing c)) space <> commentDoc c <> space
-    After -> space <> commentDoc c <> space
-  EndsTheLine -> space <> commentDoc c <> closeLine <> gapBelow
+    Before -> includeWhen (not (commentTrailing c)) space <> body <> space
+    After -> space <> body <> space
+  EndsTheLine -> space <> body <> closeLine <> gapBelow
   HeldBack -> holdBack (renderComment c)
-  OnItsOwnLines ->
-    gapAbove <> closeLine <> commentDoc c <> closeLine <> gapBelow
+  OnItsOwnLines -> gapAbove <> closeLine <> body <> closeLine <> gapBelow
   where
+    body = commentText c
     gapAbove = includeWhen (commentGapAbove c) (closeLine <> blankLine)
     gapBelow = includeWhen (commentGapBelow c && not atTheEnd) blankLine
 
 -- | A comment nothing came to collect, written after everything.
 atEnd :: Comment -> Doc
-atEnd c = closeLine <> blankLine <> commentDoc c <> closeLine
+atEnd c = commentDoc c (closeLine <> blankLine <> commentText c <> closeLine)
 
--- | A comment as a document.
-commentDoc :: Comment -> Doc
-commentDoc c =
-  located (commentSpan c) . align $
-    sepBy (verbatimBreak AtIndent) (map txt (NE.toList (commentBody c)))
+-- | A comment, and the spacing that goes with it, as one region.
+--
+-- One region and not several, because the empty line a comment is held off
+-- by belongs to the comment and not to whatever it happens to sit next to.
+-- Anything that takes a document apart and puts it back together—the merge
+-- in "Tilia.Cpp" above all—works on what a region holds, and would
+-- otherwise be free to keep the spacing and move the comment, which is how
+-- a blank line comes to be left behind in a place that cannot produce it
+-- again.
+commentDoc :: Comment -> Doc -> Doc
+commentDoc = located . commentSpan
+
+-- | The text of a comment, laid out as it was written.
+commentText :: Comment -> Doc
+commentText c =
+  align $ sepBy (verbatimBreak AtIndent) (map txt (NE.toList (commentBody c)))
 
 ----------------------------------------------------------------------------
 -- The two document atoms that exist for comments

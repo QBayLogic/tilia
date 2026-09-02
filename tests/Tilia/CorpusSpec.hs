@@ -33,6 +33,7 @@ import Tilia.Cpp
 import Tilia.Diff (Colours, coloursFor, diff)
 import Tilia.Pragma (effectiveExtensions, movesPositions)
 import Tilia.Equivalence (commentDifference, syntaxDifference)
+import Tilia.Source (comments)
 import Tilia.Parser
   ( ParseError (..),
     ParsedModule (..),
@@ -288,8 +289,8 @@ checkPure colours path package source expected
                 | Just difference <-
                     commentDifference
                       (pmModule before, pmModule after)
-                      (pmComments before)
-                      (pmComments after) ->
+                      (comments (pmSource before))
+                      (comments (pmSource after)) ->
                     told formatted
                       Broken
                       ( "comments: "
@@ -422,8 +423,8 @@ checkCpp colours path package source expected = case formatWithCpp parser render
         | Just difference <-
             commentDifference
               (pmModule before, pmModule after)
-              (pmComments before)
-              (pmComments after) ->
+              (comments (pmSource before))
+              (comments (pmSource after)) ->
             Just ("comments, in one configuration: " <> difference)
         | otherwise -> Nothing
 

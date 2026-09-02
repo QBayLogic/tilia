@@ -20,6 +20,9 @@ import GHC.Types.Name.Reader (RdrName, rdrNameOcc)
 import GHC.Types.PkgQual (RawPkgQual (..))
 import GHC.Types.SourceText (StringLiteral (..))
 import GHC.Types.SrcLoc
+import Tilia.Comments (Comment (..), commentTrailing, commentsWithin)
+import Tilia.Span (endPoint, startPoint)
+import Tilia.Span.Ghc (spanOf)
 
 -- | Whether an explicit @import Prelude@ is telling the reader anything.
 data PreludeImport
@@ -38,16 +41,42 @@ normalizeImports ::
   Bool ->
   -- | Source lines the block must not be sorted across
   [Int] ->
+  -- | The module's comments
+  [Comment] ->
   -- | Original imports
   [LImportDecl GhcPs] ->
   -- | Normalized imports
   [LImportDecl GhcPs]
-normalizeImports implicitPrelude barriers imports =
+normalizeImports implicitPrelude barriers written imports =
   concatMap stretch (segmented (dividing imports barriers) tidied)
   where
     prelude = if implicitPrelude then Refines else Provides
     tidied = map (fmap tidyList) imports
-    stretch is = foldRuns fuse [(identity prelude i, i) | i <- is]
+    stretch is = foldRuns fuse [((identity prelude i, alone i), i) | i <- is]
+    alone i
+      | any strands (spanOf i) = startLineOf i
+      | otherwise = 0
+      where
+        strands s =
+          any (unanchored (itemStarts i)) (filter loose (commentsWithin s written))
+        loose = not . commentTrailing
+    unanchored starts c = not (any (> endPoint (commentSpan c)) starts)
+    startLineOf i = case srcSpanStart (getLocA i) of
+      RealSrcLoc l _ -> srcLocLine l
+      _ -> 0
+
+-- | Where every name an import lists begins, the names inside a thing's own
+-- brackets among them.
+itemStarts :: LImportDecl GhcPs -> [(Int, Int)]
+itemStarts (L _ decl) = case ideclImportList decl of
+  Nothing -> []
+  Just (_, L _ items) -> concatMap starts items
+  where
+    starts item = foldMap ((: []) . startPoint) (spanOf item) <> inside (unLoc item)
+    inside = \case
+      IEThingWith _ _ _ members _ ->
+        concatMap (foldMap ((: []) . startPoint) . spanOf) members
+      _ -> []
 
 -- | The lines that fall between imports, out of the lines that must not be
 -- sorted across.

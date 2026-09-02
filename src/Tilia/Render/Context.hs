@@ -57,8 +57,6 @@ module Tilia.Render.Context
 where
 
 import Data.List.NonEmpty (NonEmpty)
-import Data.IntSet (IntSet)
-import Data.IntSet qualified as IntSet
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
@@ -79,6 +77,7 @@ import Tilia.Fixity
     Scope,
     lookupFixity,
   )
+import Tilia.Source (Source, blankAt)
 import Tilia.Span
 import Tilia.Span.Ghc
 import Tilia.Doc.Combinators
@@ -146,9 +145,8 @@ data Ctx = Ctx
     -- with one written inside it cannot be put on one line, since the
     -- comment would swallow whatever followed it.
     ctxLineComments :: Map (Int, Int) Comment,
-    -- | Lines that are empty only because a branch was taken out of the
-    -- module to create a particular CPP configuration of it.
-    ctxBlankedLines :: IntSet,
+    -- | The module as its author wrote it.
+    ctxSource :: Source,
     -- | The author's own text for each Haddock, by starting position.
     ctxHaddocks :: Map (Int, Int) Comment,
     -- | The knot.
@@ -259,11 +257,13 @@ separatedByBlank ctx ma@(Just a) mb = case nextPrinted ctx ma mb of
   Nothing -> False
 separatedByBlank _ _ _ = False
 
--- | Was this line empty because the author left it empty, as opposed to
--- being blanked out by CPP machinery that separated one single
--- configuration?
+-- | Did the author leave this line empty?
+--
+-- Asked of the module as written, so that a line the preprocessor support
+-- emptied to make one configuration does not read as one the author left
+-- blank.
 writtenBlank :: Ctx -> Int -> Bool
-writtenBlank ctx n = not (IntSet.member n (ctxBlankedLines ctx))
+writtenBlank ctx n = blankAt n (ctxSource ctx)
 
 ----------------------------------------------------------------------------
 -- Entering the tree

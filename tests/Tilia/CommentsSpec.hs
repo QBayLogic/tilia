@@ -10,6 +10,7 @@ import Data.Text qualified as T
 import Test.Hspec
 import Tilia.Comments
 import Tilia.Comments.Attach
+import Tilia.Source (comments)
 import Tilia.Parser
 import Tilia.Doc
 import Tilia.Doc.Combinators
@@ -208,7 +209,7 @@ commentsIn :: Text -> [Comment]
 commentsIn src =
   case parseModule defaultParserConfig "test.hs" src of
     Left _ -> error "the test input did not parse"
-    Right pm -> pmComments pm
+    Right pm -> comments (pmSource pm)
 
 bodies :: Text -> [[Text]]
 bodies = map (NE.toList . commentBody) . commentsIn

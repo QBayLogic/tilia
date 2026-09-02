@@ -7,6 +7,7 @@ import Data.Text (Text)
 import Test.Hspec
 import Tilia.Comments (Comment (..), renderComment)
 import Tilia.Comments.Place
+import Tilia.Source (comments)
 import Tilia.Parser
 import Tilia.Span
 
@@ -226,4 +227,4 @@ firstComment src = case commentsIn src of
 commentsIn :: Text -> [Comment]
 commentsIn src = case parseModule defaultParserConfig "test.hs" src of
   Left _ -> error "the test input did not parse"
-  Right pm -> pmComments pm
+  Right pm -> comments (pmSource pm)

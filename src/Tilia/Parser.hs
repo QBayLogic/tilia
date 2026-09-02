@@ -5,6 +5,7 @@
 module Tilia.Parser
   ( ParsedModule (..),
     parseModule,
+    parseConfiguration,
     ParseError (..),
     describeParseError,
     ParserConfig (..),
@@ -32,8 +33,8 @@ import GHC.Types.SrcLoc qualified as GHC
 import GHC.Unit.Module.Warnings (emptyWarningCategorySet)
 import GHC.Utils.Error qualified as GHC
 import GHC.Utils.Outputable qualified as GHC
-import Tilia.Comments (Comment, commentsOf)
 import Tilia.Pragma (effectiveExtensions)
+import Tilia.Source (Source, Written (..), sourceOf)
 import Tilia.Span (Span (..))
 import Tilia.Span.Ghc (spanOfReal)
 
@@ -41,13 +42,8 @@ import Tilia.Span.Ghc (spanOfReal)
 data ParsedModule = ParsedModule
   { -- | The syntax tree, exactly as GHC produced it.
     pmModule :: HsModule GhcPs,
-    -- | Every comment in the module, in source order.
-    --
-    -- Haddocks are here too. GHC also puts them in the syntax tree, but
-    -- reconstructing one from what it puts there cannot reproduce what the
-    -- author wrote, so the text is taken from the comment stream and the
-    -- tree is used only to know which comments are Haddocks.
-    pmComments :: [Comment],
+    -- | The module as its author wrote it.
+    pmSource :: Source,
     -- | The lines above the module that the parser never sees.
     --
     -- The lexer skips a @#!@ line, which puts it in no annotation and no
@@ -74,6 +70,24 @@ parseModule ::
   Text ->
   Either ParseError ParsedModule
 parseModule config path source =
+  parseConfiguration config path (Written source) source
+
+-- | Parse one configuration of a module.
+--
+-- The text to parse is one configuration of the module; the 'Written' text
+-- is the module the author wrote, which is what every question about the
+-- source is answered against. Without the preprocessor the two are the same
+-- text and this is 'parseModule'.
+parseConfiguration ::
+  ParserConfig ->
+  -- | Path, used only in positions reported back
+  FilePath ->
+  -- | The module as written
+  Written ->
+  -- | The configuration of it to parse
+  Text ->
+  Either ParseError ParsedModule
+parseConfiguration config path written@(Written writtenText) source =
   case GHC.unP GHC.parseModule initialState of
     GHC.PFailed pstate -> Left (whyNot pstate)
     GHC.POk pstate (GHC.L _ hsModule)
@@ -83,8 +97,8 @@ parseModule config path source =
           Right
             ParsedModule
               { pmModule = hsModule,
-                pmComments = commentsOf source hsModule,
-                pmPrologue = prologueOf source,
+                pmSource = sourceOf written hsModule,
+                pmPrologue = prologueOf writtenText,
                 pmHeaderEnd = headerEndOf hsModule
               }
   where

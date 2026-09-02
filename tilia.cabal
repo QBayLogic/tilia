@@ -71,6 +71,7 @@ library
     Tilia.Render.Pragma
     Tilia.Render.Signature
     Tilia.Render.Type
+    Tilia.Source
     Tilia.Span
     Tilia.Span.Ghc
     Tilia.Utils

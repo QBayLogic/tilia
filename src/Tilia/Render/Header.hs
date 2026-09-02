@@ -306,7 +306,7 @@ ieItem ctx here withComma = \case
       ( exportWarning warning
           <> at ctx n (wrappedName ctx)
           <> breakOrSpace
-          <> indent (parens (commaSep (align <$> withWildcard)))
+          <> indent (parens (insideBrackets here (commaSep (align <$> withWildcard))))
           <> comma'
       )
       <> itemDocumentation doc

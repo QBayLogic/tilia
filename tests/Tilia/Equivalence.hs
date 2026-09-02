@@ -393,7 +393,7 @@ asImports path x y = case (cast x, cast y) of
     -- it does not matter what is said about the Prelude, only that the same
     -- thing is said about both sides.
     normalised :: [LImportDecl GhcPs] -> [LImportDecl GhcPs]
-    normalised = normalizeImports True []
+    normalised = normalizeImports True [] []
 
     -- Compared one import at a time rather than as two lists, because a
     -- list of imports is what this function is called on: handing it back

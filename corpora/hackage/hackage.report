@@ -3,10 +3,10 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5133 examples, 5042 formatted.
+5133 examples, 5044 formatted.
 
 ==========================================================================
-broken (14)
+broken (12)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/TypeChecking/Conversion.hs
@@ -125,175 +125,11 @@ Agda-2.8.0/src/full/Agda/TypeChecking/With.hs
       import qualified Agda.Utils.List1 as List1
       import Agda.Utils.Ma
 
-blaze-markup-0.8.3.0/src/Text/Blaze.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -92,13 +92,13 @@
-      where
-    
-      import Data.Int (Int32, Int64)
-    - import Data.Monoid (mconcat)
-    - import Data.Word (Word, Word32, Word64)
-    - import Numeric.Natural (Natural)
-      import Data.List.NonEmpty (NonEmpty (..))
-    + import Data.Monoid (mconcat)
-      import Data.Text (Text)
-      import qualified Data.Text.Lazy as LT
-      import qualified Data.Text.Lazy.Builder as LTB
-    + import Data.Word (Word, Word32, Word64)
-    + import Numeric.Natural (Natural)
-      import Text.Blaze.Internal
-    
-      -- | Class allowing us to use a single function for Markup values
-    @@ -381,11 +381,11 @@
-    
-      import Data.Int (Int32, Int64)
-      import Data.Monoid (mconcat)
-    - import Data.Word (Word, Word32, Word64)
-    - import Numeric.Natural (Natural)
-      import Data.Text (Text)
-      import qualified Data.Text.Lazy as LT
-      import qualified Data.Text.Lazy.Builder as LTB
-    + import Data.Word (Word, Word32, Word64)
-    + import Numeric.Natural (Natural)
-      import Text.Blaze.Internal
-    
-      -- | Class allowing us to use a single function for Markup values
-    @@ -662,12 +662,12 @@
-      where
-    
-      import Data.Int (Int32, Int64)
-    - import Data.Monoid (mconcat)
-    - import Data.Word (Word, Word32, Word64)
-      import Data.List.NonEmpty (NonEmpty (..))
-    + import Data.Monoid (mconcat)
-      import Data.Text (Text)
-      import qualified Data.Text.Lazy as LT
-      import qualified Data.Text.Lazy.Builder as LTB
-    + import Data.Word (Word, Word32, Word64)
-      import Text.Blaze.Internal
-    
-      -- | Class allowing us to use a single function for Markup values
-    @@ -946,10 +946,10 @@
-    
-      import Data.Int (Int32, Int64)
-      import Data.Monoid (mconcat)
-    - import Data.Word (Word, Word32, Word64)
-      import Data.Text (Text)
-      import qualified Data.Text.Lazy as LT
-      import qualified Data.Text.Lazy.Builder as LTB
-    + import Data.Word (Word, Word32, Word64)
-      import Text.Blaze.Internal
-    
-      -- | Class allowing us to use a single function for Markup values
-
-brittany-0.14.0.2/data/Test170.hs
-    comments: gained `-- !`
-    --- input
-    +++ output
-    @@ -1,19 +1,14 @@
-    - import           Test                                     ( Thing
-    -                                                             ( -- Comments
-    -                                                             )
-    -                                                           )
-    - import           Test                                     ( Thing
-    -                                                             ( Item
-    -                                                             -- and Comment
-    -                                                             )
-    -                                                           )
-    - import           Test                                     ( Thing
-    -                                                             ( With
-    -                                                             -- Comments
-    -                                                             , and
-    -                                                             -- also
-    -                                                             , items
-    -                                                             -- !
-    -                                                             )
-    -                                                           )
-    + import Test
-    +   ( Thing
-    +       ( Item,
-    +         -- and Comment
-    +         With,
-    +         -- Comments
-    +         and,
-    +         -- also
-    +         items
-    +       ), -- Comments
-    +   )
-    
-    + -- !
-    +
-
-brittany-0.14.0.2/data/Test487.hs
-    comments: gained `-- and Comment`
-    --- input
-    +++ output
-    @@ -1,28 +1,21 @@
-      -- brittany { lconfig_columnAlignMode: { tag: ColumnAlignModeDisabled }, lconfig_indentPolicy: IndentPolicyLeft }
-      import Test
-        ( Thing
-    -     ( With
-    -     -- Comments
-    -     , and
-    -     -- also
-    -     , items
-    +       ( Item,
-    +         With,
-    +         -- Comments
-    +         and,
-    +         -- also
-    +         items
-    +       ),
-          -- !
-    -     )
-        )
-    - import Test
-    -   ( Thing
-    -     ( Item
-    -     -- and Comment
-    -     )
-    -   )
-    - import Test
-    -   ( Thing
-    -     ( With
-    -     -- Comments
-    -     , and
-    -     -- also
-    -     , items
-    -     -- !
-    -     )
-    -   )
-    
-    + -- and Comment
-    +
-    + -- Comments
-    +
-    + -- also
-    +
-    + -- !
-    +
-
 dlist-1.0/Data/DList.hs
     a configuration of the input does not parse: 54:13: parse error on input `Nil'
     --- input
     +++ output
-    @@ -2,11 +2,13 @@
-      {-# LANGUAGE CPP #-}
-    
-      -- CPP: GHC >= 7.8 && <= 8 for 'pattern' required in the export list
-    +
-      #if __GLASGOW_HASKELL__ >= 708 && __GLASGOW_HASKELL__ < 800
-      {-# LANGUAGE PatternSynonyms #-}
-      #endif
-    
-      -- CPP: GHC >= 7.8 for Safe Haskell
-    +
-      #if __GLASGOW_HASKELL__ >= 708
-      {-
-    
-    @@ -41,23 +43,35 @@
+    @@ -41,23 +41,33 @@
     
       module Data.DList
         ( -- * Difference List Type
@@ -302,14 +138,12 @@ dlist-1.0/Data/DList.hs
       #if __GLASGOW_HASKELL__ >= 800
     +
     +     -- CPP: GHC >= 8 for pattern synonyms allowed in the constructor
-    +
           DList (Nil, Cons),
     +
     +     -- * Conversion
       #else
     +
     +     -- CPP: GHC >= 8 for pattern synonyms allowed in the constructor
-    +
           DList,
     
     - -- CPP: GHC >= 7.8 && <= 8 for 'pattern' required in the export list
@@ -334,6 +168,32 @@ dlist-1.0/Data/DList.hs
           fromList,
           toList,
           apply,
+
+dlist-1.0/tests/DListProperties.hs
+    formatting is non-idempotent
+    --- first pass
+    +++ second pass
+    @@ -6,7 +6,6 @@
+      -- For the IsList test
+      {-# LANGUAGE OverloadedLists #-}
+      #if __GLASGOW_HASKELL__ == 708
+    -
+      -- CPP: GHC == 7.8 for using pattern synonyms
+      {-# LANGUAGE PatternSynonyms #-}
+      #endif
+
+dlist-1.0/tests/QuickCheckUtil.hs
+    formatting is non-idempotent
+    --- first pass
+    +++ second pass
+    @@ -2,7 +2,6 @@
+    
+      {-# LANGUAGE CPP #-}
+      #if __GLASGOW_HASKELL__ >= 708
+    -
+      -- CPP: GHC >= 7.8 for Safe Haskell
+      {-# LANGUAGE Safe #-}
+      #endif
 
 hashable-1.5.1.0/tests/Regress.hs
     formatting changed how many configurations there are, from 6 to 8
@@ -641,50 +501,6 @@ lens-5.3.6/src/Control/Lens/Internal/TH.hs
       conAppsT conName = foldl AppT (ConT conName)
     
     … and 236 more lines
-
-scotty-0.30/test/Web/ScottySpec.hs
-    formatting is non-idempotent
-    --- first pass
-    +++ second pass
-    @@ -7,9 +7,14 @@
-      module Web.ScottySpec (main, spec) where
-    
-      import Control.Applicative
-    + import Control.Concurrent.Async (withAsync)
-    + import Control.Exception (bracketOnError)
-      import qualified Control.Exception as E
-      import qualified Control.Exception.Lifted as EL
-      import Control.Monad
-    + import Data.ByteString (ByteString)
-    + import qualified Data.ByteString as BS
-    + import qualified Data.ByteString.Lazy as LBS
-      import Data.Char
-      import Data.String
-      import qualified Data.Text as T
-    @@ -21,10 +26,13 @@
-      import Data.Time.Clock (secondsToDiffTime)
-      import GHC.Generics (Generic)
-      import Network.HTTP.Types
-    + import Network.Socket (Family (..), SockAddr (..), Socket, SocketOption (..), SocketType (..), bind, close, connect, listen, maxListenQueue, setSocketOption, socket)
-    + import Network.Socket.ByteString (recv, send)
-      import Network.Wai (Application, Request (queryString), responseLBS)
-      import Network.Wai.Middleware.ValidateHeaders (defaultValidateHeadersSettings, validateHeadersMiddleware)
-      import Network.Wai.Parse (defaultParseRequestBodyOptions)
-      import Network.Wai.Test (SResponse)
-    + import System.Directory (removeFile)
-      import Test.Hspec
-      import Test.Hspec.Wai (WaiSession, delete, get, matchBody, matchHeaders, matchStatus, options, patch, post, put, request, shouldRespondWith, with, (<:>))
-      import Test.Hspec.Wai.Extra (FileMeta (..), postMultipartForm)
-    @@ -34,14 +42,6 @@
-      import qualified Web.Scotty as Scotty
-      import qualified Web.Scotty.Cookie as SC (deleteCookie, getCookie, setSimpleCookie)
-      import Web.Scotty.Trans (scottyAppT) -- for testing JSON mode with custom Options
-    - import Control.Concurrent.Async (withAsync)
-    - import Control.Exception (bracketOnError)
-    - import Data.ByteString (ByteString)
-    - import qualified Data.ByteString as BS
-    - import qualified Data.ByteString.Lazy as LBS
-    - import Network.Socket (Family (..), SockAddr (..), Socket, SocketOption (..), SocketType (..), bind,
 
 ==========================================================================
 does-not-parse (2)
