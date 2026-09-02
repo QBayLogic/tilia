@@ -22,7 +22,7 @@ import GHC.Types.SourceText (StringLiteral (..))
 import GHC.Types.SrcLoc
 import Tilia.Comments (Comment (..), commentTrailing, commentsWithin)
 import Tilia.Span (endPoint, startPoint)
-import Tilia.Span.Ghc (spanOf)
+import Tilia.Span.Ghc (spanOf, spanOfSrcSpan)
 
 -- | Whether an explicit @import Prelude@ is telling the reader anything.
 data PreludeImport
@@ -51,8 +51,8 @@ normalizeImports implicitPrelude barriers written imports =
   concatMap stretch (segmented (dividing imports barriers) tidied)
   where
     prelude = if implicitPrelude then Refines else Provides
-    tidied = map (fmap tidyList) imports
-    stretch is = foldRuns fuse [((identity prelude i, alone i), i) | i <- is]
+    tidied = map (fmap (tidyList written)) imports
+    stretch is = foldRuns (fuse written) [((identity prelude i, alone i), i) | i <- is]
     alone i
       | any strands (spanOf i) = startLineOf i
       | otherwise = 0
@@ -171,34 +171,34 @@ identity prelude (L _ decl) =
 -- written between the two has to land inside the declaration that replaces
 -- them, and a folded import claiming only the first one's span would leave
 -- it nowhere to go.
-fuse :: LImportDecl GhcPs -> LImportDecl GhcPs -> LImportDecl GhcPs
-fuse (L ann kept) (L other folded) =
+fuse :: [Comment] -> LImportDecl GhcPs -> LImportDecl GhcPs -> LImportDecl GhcPs
+fuse written (L ann kept) (L other folded) =
   L
     ann {entry = EpaSpan (combineSrcSpans (locA ann) (locA other))}
     kept {ideclImportList = both (ideclImportList kept) (ideclImportList folded)}
   where
-    both (Just (interpretation, L l xs)) (Just (_, L _ ys)) =
-      Just (interpretation, L l (tidyItems (xs <> ys)))
+    both (Just (interpretation, L l xs)) (Just (_, L l' ys)) =
+      Just (interpretation, L (widened written l l') (tidyItems written (xs <> ys)))
     both _ _ = Nothing
 
 ----------------------------------------------------------------------------
 -- The names inside an import list
 
-tidyList :: ImportDecl GhcPs -> ImportDecl GhcPs
-tidyList decl =
-  decl {ideclImportList = fmap (fmap tidyItems) <$> ideclImportList decl}
+tidyList :: [Comment] -> ImportDecl GhcPs -> ImportDecl GhcPs
+tidyList written decl =
+  decl {ideclImportList = fmap (fmap (tidyItems written)) <$> ideclImportList decl}
 
 -- | Sort an import list and fold together the entries naming one thing.
 --
 -- @import M (T (A), T (B))@ names one type twice and comes out as @import M
 -- (T (A, B))@.
-tidyItems :: [LIE GhcPs] -> [LIE GhcPs]
-tidyItems items
+tidyItems :: [Comment] -> [LIE GhcPs] -> [LIE GhcPs]
+tidyItems written items
   -- An import list should hold nothing but names, and the parser will accept
   -- things there that the compiler goes on to reject—@import M (module N)@
   -- among them. Sorting a list we cannot read would be guessing.
   | any (unnameable . unLoc) items = items
-  | otherwise = foldRuns wider [(nameOf (unLoc i), fmap sortSubnames i) | i <- items]
+  | otherwise = foldRuns (wider written) [(nameOf (unLoc i), fmap sortSubnames i) | i <- items]
   where
     unnameable = \case
       IEVar {} -> False
@@ -207,14 +207,34 @@ tidyItems items
       IEThingWith {} -> False
       _ -> True
 
+-- | Cover both of these regions, if anything was written between them.
+--
+-- A region says two things at once: where a comment written inside it
+-- belongs, and how the construct was laid out. What comes out of folding was
+-- never written, so it has no layout of its own, and taking the region that
+-- covers everything folded in would have it laid out across all the lines
+-- those names were spread over—several lines for a name or two.
+--
+-- So the region grows only where growing it is the point: when a comment
+-- falls between the two, and would otherwise be left outside the entry that
+-- now holds the names it was written among.
+widened :: [Comment] -> EpAnn ann -> EpAnn ann -> EpAnn ann
+widened written a b
+  | any holdsComment (spanOfSrcSpan combined) = a {entry = EpaSpan combined}
+  | otherwise = a
+  where
+    combined = combineSrcSpans (locA a) (locA b)
+    holdsComment s = not (null (commentsWithin s written))
+
 -- | Of two entries naming one thing, the one that brings in more of it.
 --
 -- Naming all of a type beats naming some of its pieces, which beats naming
 -- the type alone. Where both name some, the two lists go together. The
 -- documentation is dropped whenever two entries are folded: it was written
 -- against one of them and would become a claim about both.
-wider :: LIE GhcPs -> LIE GhcPs -> LIE GhcPs
-wider (L ann kept) (L _ folded) = L ann (combine kept folded)
+wider :: [Comment] -> LIE GhcPs -> LIE GhcPs -> LIE GhcPs
+wider written (L ann kept) (L other folded) =
+  L (widened written ann other) (combine kept folded)
   where
     combine a b = case (a, b) of
       (IEThingAll x n _, _) -> IEThingAll x n Nothing
