@@ -10,12 +10,13 @@ module Tilia.Parser
     describeParseError,
     ParserConfig (..),
     defaultParserConfig,
+    sourceTypeOf,
     parserConfigFor,
   )
 where
 
 import Data.Foldable (toList)
-import Data.List (nub, sortOn)
+import Data.List (isSuffixOf, nub, sortOn)
 import Data.Text (Text)
 import GHC.Driver.Session qualified as GHC
 import Data.Text qualified as T
@@ -34,7 +35,7 @@ import GHC.Unit.Module.Warnings (emptyWarningCategorySet)
 import GHC.Utils.Error qualified as GHC
 import GHC.Utils.Outputable qualified as GHC
 import Tilia.Pragma (effectiveExtensions)
-import Tilia.Source (Source, Written (..), sourceOf)
+import Tilia.Source (Source, SourceType (..), Written (..), sourceOf)
 import Tilia.Span (Span (..))
 import Tilia.Span.Ghc (spanOfReal)
 
@@ -44,6 +45,8 @@ data ParsedModule = ParsedModule
     pmModule :: HsModule GhcPs,
     -- | The module as its author wrote it.
     pmSource :: Source,
+    -- | Whether GHC read this as a module or as a Backpack signature.
+    pmSourceType :: SourceType,
     -- | The lines above the module that the parser never sees.
     --
     -- The lexer skips a @#!@ line, which puts it in no annotation and no
@@ -88,7 +91,7 @@ parseConfiguration ::
   Text ->
   Either ParseError ParsedModule
 parseConfiguration config path written@(Written writtenText) source =
-  case GHC.unP GHC.parseModule initialState of
+  case GHC.unP entryPoint initialState of
     GHC.PFailed pstate -> Left (whyNot pstate)
     GHC.POk pstate (GHC.L _ hsModule)
       | not (GHC.isEmptyMessages (GHC.getPsErrorMessages pstate)) ->
@@ -97,11 +100,22 @@ parseConfiguration config path written@(Written writtenText) source =
           Right
             ParsedModule
               { pmModule = hsModule,
-                pmSource = sourceOf written hsModule,
+                pmSource = sourceOf written (headerComments pstate) hsModule,
+                pmSourceType = sourceType,
                 pmPrologue = prologueOf writtenText,
                 pmHeaderEnd = headerEndOf hsModule
               }
   where
+    -- Everything above the @signature@ keyword: the parser leaves those
+    -- here rather than in the tree. A module's are in both.
+    headerComments = concat . GHC.header_comments
+
+    sourceType = sourceTypeOf path
+
+    entryPoint = case sourceType of
+      ModuleSource -> GHC.parseModule
+      SignatureSource -> GHC.parseSignature
+
     whyNot pstate =
       case sortOn at (toList (GHC.getMessages (GHC.getPsErrorMessages pstate))) of
         m : _ -> ParseError {peSpan = GHC.errMsgSpan m, peProblem = saying m}
@@ -229,6 +243,16 @@ parserConfigFor ::
   [Extension] ->
   -- | The resulting parser config
   ParserConfig
-parserConfigFor [] =
-  ParserConfig {pcExtensions = GHC.languageExtensions (Just GHC.GHC2021)}
-parserConfigFor package = ParserConfig {pcExtensions = package}
+parserConfigFor package =
+  ParserConfig
+    { pcExtensions =
+        if null package
+          then GHC.languageExtensions (Just GHC.GHC2021)
+          else package
+    }
+
+-- | What a file's name says it holds.
+sourceTypeOf :: FilePath -> SourceType
+sourceTypeOf path
+  | ".hsig" `isSuffixOf` path = SignatureSource
+  | otherwise = ModuleSource

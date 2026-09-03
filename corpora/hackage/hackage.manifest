@@ -3785,10 +3785,17 @@ formatted       13457dbdf0af  purescript-0.15.15/tests/TestPsci/EvalTest.hs
 formatted       3f4962adf647  purescript-0.15.15/tests/TestPsci/TestEnv.hs
 formatted       30b67f7ea80c  purescript-0.15.15/tests/TestSourceMaps.hs
 formatted       a302616fcb40  purescript-0.15.15/tests/TestUtils.hs
+formatted       002d52c424b7  raaz-0.3.11/api/aead/Auth/Implementation.hsig
+formatted       4a86cd34c9e7  raaz-0.3.11/api/aead/Cipher/Implementation.hsig
 formatted       16fa84cb7ae5  raaz-0.3.11/api/aead/Interface.hs
+formatted       a346882029b3  raaz-0.3.11/api/auth/Implementation.hsig
 formatted       77a977c85c0d  raaz-0.3.11/api/auth/Interface.hs
+formatted       29b7f7e93ae5  raaz-0.3.11/api/digest/Implementation.hsig
 formatted       7b45644314ef  raaz-0.3.11/api/digest/Interface.hs
+formatted       711ebf2e3620  raaz-0.3.11/api/encrypt/Implementation.hsig
 formatted       abdae110e56a  raaz-0.3.11/api/encrypt/Interface.hs
+formatted       10d5d9d622cd  raaz-0.3.11/api/random/Entropy.hsig
+formatted       83b376fec166  raaz-0.3.11/api/random/Implementation.hsig
 formatted       ffc859b186af  raaz-0.3.11/api/random/Internal.hs
 formatted       8dfc8a50cfda  raaz-0.3.11/api/random/PRGenerator.hs
 formatted       d4e767dc817c  raaz-0.3.11/benchmarks/Main.hs
@@ -3840,10 +3847,14 @@ formatted       a59c773526b4  raaz-0.3.11/implementation/Sha512/CHandWritten.hs
 formatted       53529d47a59f  raaz-0.3.11/implementation/Sha512/CPortable.hs
 formatted       e5d101450ea0  raaz-0.3.11/implementation/entropy/arc4random/Entropy.hs
 formatted       fe1af598e9b2  raaz-0.3.11/implementation/entropy/urandom/Entropy.hs
+formatted       0a7a863b87f6  raaz-0.3.11/indef/Implementation.hsig
 formatted       5b5f82999259  raaz-0.3.11/indef/Utils.hs
 formatted       666dcbf885e6  raaz-0.3.11/indef/buffer/Buffer.hs
 formatted       4d0bd2b93b60  raaz-0.3.11/indef/buffer/Context.hs
+formatted       d34b17eeb2fb  raaz-0.3.11/indef/buffer/Implementation.hsig
+formatted       a79a9dc1ec44  raaz-0.3.11/indef/chacha20/Implementation.hsig
 formatted       496eb8d3a6e9  raaz-0.3.11/indef/chacha20/XChaCha20/Implementation.hs
+formatted       a2c11b61575b  raaz-0.3.11/indef/keyed/hash/Implementation.hsig
 formatted       875f23f8f911  raaz-0.3.11/indef/keyed/hash/Mac/Implementation.hs
 formatted       fd3b4278ccc5  raaz-0.3.11/libverse/Raaz/Verse/Blake2b/C/Portable.hs
 formatted       44b600e76f74  raaz-0.3.11/libverse/Raaz/Verse/ChaCha20/C/Portable.hs
@@ -3882,6 +3893,7 @@ formatted       c02b8c155a58  raaz-0.3.11/tests/Raaz/Digest/Sha512Spec.hs
 formatted       57a10ec0221b  raaz-0.3.11/tests/Raaz/Mac/Poly1305Spec.hs
 formatted       6cdc5c00b3a8  raaz-0.3.11/tests/Raaz/RandomSpec.hs
 formatted       2fbd14b119a4  raaz-0.3.11/tests/Spec.hs
+formatted       b1a4cba13110  raaz-0.3.11/tests/auth/Implementation.hsig
 formatted       ae7499e9f1a2  raaz-0.3.11/tests/auth/Tests/Auth.hs
 formatted       146a3742af4d  raaz-0.3.11/tests/auth/implementation/Auth/Mac/Blake2b.hs
 formatted       1400f8497a4b  raaz-0.3.11/tests/auth/implementation/Auth/Mac/Blake2s.hs
@@ -3901,6 +3913,7 @@ formatted       9a4da070ca55  raaz-0.3.11/tests/core/Tests/Core.hs
 formatted       2249765a4b51  raaz-0.3.11/tests/core/Tests/Core/Imports.hs
 formatted       c746b6855fd8  raaz-0.3.11/tests/core/Tests/Core/Instances.hs
 formatted       f1835ccfe602  raaz-0.3.11/tests/core/Tests/Core/Utils.hs
+formatted       bcc780e22f03  raaz-0.3.11/tests/message-digest/Implementation.hsig
 formatted       2bb252395b85  raaz-0.3.11/tests/message-digest/Tests/Digest.hs
 formatted       4a8ac51676df  random-1.3.1/Setup.hs
 formatted       f81df0c89774  random-1.3.1/bench-legacy/BinSearch.hs
@@ -4858,6 +4871,7 @@ formatted       00cf0a5ee0ea  unordered-containers-0.2.21/tests/Util/Key.hs
 formatted       e865ae48f11b  unpacked-containers-0/Setup.hs
 formatted       8523e9d3c669  unpacked-containers-0/example/Int.hs
 formatted       ba3a254765ca  unpacked-containers-0/example/Main.hs
+formatted       941a76a7e532  unpacked-containers-0/src/Key.hsig
 formatted       0ab7b95772b1  unpacked-containers-0/src/Map.hs
 formatted       4ab593177929  unpacked-containers-0/src/Map/Internal.hs
 formatted       412fdc3e3871  unpacked-containers-0/src/Map/Internal/Debug.hs

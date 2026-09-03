@@ -94,16 +94,20 @@ data Above
 commentsOf ::
   -- | The module's lines, which every comment is read against
   [Text] ->
+  -- | Comments the tree does not carry
+  --
+  -- Everything above a signature's @signature@ keyword: the parser leaves
+  -- those in its own state rather than in an annotation.
+  [GHC.LEpaComment] ->
   -- | Parsed module
   HsModule GhcPs ->
   [Comment]
-commentsOf sourceLines hsModule =
+commentsOf sourceLines loose hsModule =
   map (uncurry (mkComment sourceLines))
     . dedupeOnSpan
     . sortOn (GHC.realSrcSpanStart . fst)
     . mapMaybe located
-    . concatMap annComments
-    $ listify anyAnnComments hsModule
+    $ loose <> concatMap annComments (listify anyAnnComments hsModule)
   where
     dedupeOnSpan = \case
       (x : y : rest) | fst x == fst y -> dedupeOnSpan (x : rest)

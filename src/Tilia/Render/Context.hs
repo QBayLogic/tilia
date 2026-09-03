@@ -19,8 +19,8 @@
 module Tilia.Render.Context
   ( -- * The context
     Ctx (..),
-    Knot (..),
     SourceType (..),
+    Knot (..),
     FamilyStyle (..),
 
     -- * Where a node stands
@@ -77,7 +77,7 @@ import Tilia.Fixity
     Scope,
     lookupFixity,
   )
-import Tilia.Source (Source, blankAt)
+import Tilia.Source (Source, SourceType (..), blankAt)
 import Tilia.Span
 import Tilia.Span.Ghc
 import Tilia.Doc.Combinators
@@ -85,15 +85,6 @@ import Tilia.Render.Layout (Bracing (..))
 
 ----------------------------------------------------------------------------
 -- The context
-
--- | Whether the file being printed is a module or a Backpack signature.
---
--- The two differ in one word and in one layout rule, which is not enough to
--- justify two printers but is enough that the printer has to be told.
-data SourceType
-  = ModuleSource
-  | SignatureSource
-  deriving (Eq, Show)
 
 -- | Whether a family or data declaration stands on its own or inside a
 -- class.

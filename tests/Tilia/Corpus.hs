@@ -365,7 +365,9 @@ ormoluUnreadable =
 -- | GHC test suite files GHC's own parser cannot read.
 ghcUnreadable :: [FilePath]
 ghcUnreadable =
-  [ "annotations" </> "should_fail" </> "T19374b.hs",
+  [ "cabal" </> "sigcabal01" </> "p" </> "Map.hsig",
+    "driver" </> "dynamicToo" </> "dynamicToo005" </> "A005.hsig",
+    "annotations" </> "should_fail" </> "T19374b.hs",
     "annotations" </> "should_fail" </> "T19374c.hs",
     "annotations" </> "should_fail" </> "annfail13.hs",
     "arrows" </> "should_fail" </> "T2111.hs",
@@ -983,7 +985,7 @@ packageReaderFor corpus
 
 -- | The extensions an example may be written with.
 haskellExtensions :: [String]
-haskellExtensions = [".hs", ".hs-boot"]
+haskellExtensions = [".hs", ".hs-boot", ".hsig"]
 
 haskellFilesIn :: FilePath -> IO [FilePath]
 haskellFilesIn dir = do

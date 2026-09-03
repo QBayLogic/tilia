@@ -45,8 +45,6 @@ data RenderConfig = RenderConfig
   { -- | Extensions in force, from the module's own pragmas and from the
     -- package it belongs to.
     rcExtensions :: Set Extension,
-    -- | Whether this is a module or a Backpack signature.
-    rcSourceType :: SourceType,
     -- | What the module can see, if it could be worked out.
     rcScope :: Maybe Scope,
     -- | Source lines the import block must not be sorted across.
@@ -58,7 +56,6 @@ defaultRenderConfig :: RenderConfig
 defaultRenderConfig =
   RenderConfig
     { rcExtensions = Set.empty,
-      rcSourceType = ModuleSource,
       rcScope = Nothing,
       rcImportBarriers = []
     }
@@ -89,7 +86,7 @@ renderModule settings parsed =
     ctx =
       Ctx
         { ctxExtensions = rcExtensions settings,
-          ctxSourceType = rcSourceType settings,
+          ctxSourceType = pmSourceType parsed,
           ctxScope = rcScope settings,
           ctxSource = pmSource parsed,
           ctxLineComments = indexOn (filter (not . closesItself) loose),

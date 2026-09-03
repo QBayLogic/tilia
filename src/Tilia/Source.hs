@@ -9,6 +9,7 @@
 -- single place here.
 module Tilia.Source
   ( -- * The source
+    SourceType (..),
     Written (..),
     Source,
     sourceOf,
@@ -29,8 +30,15 @@ import Data.IntMap.Strict qualified as IntMap
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Hs (HsModule)
+import GHC.Parser.Annotation (LEpaComment)
 import GHC.Hs.Extension (GhcPs)
 import Tilia.Comments (Comment, commentsOf)
+
+-- | Whether a file is a module or a Backpack signature.
+data SourceType
+  = ModuleSource
+  | SignatureSource
+  deriving (Eq, Show)
 
 -- | The text of a module as its author wrote it.
 --
@@ -48,11 +56,18 @@ data Source = Source
   }
 
 -- | Read a module's source.
-sourceOf :: Written -> HsModule GhcPs -> Source
-sourceOf (Written text) hsModule =
+sourceOf ::
+  -- | The input as written
+  Written ->
+  -- | Comments the syntax tree does not carry. See 'commentsOf'.
+  [LEpaComment] ->
+  -- | The result of parsing
+  HsModule GhcPs ->
+  Source
+sourceOf (Written text) loose hsModule =
   Source
     { srcLines = IntMap.fromList (zip [1 ..] ls),
-      srcComments = commentsOf ls hsModule
+      srcComments = commentsOf ls loose hsModule
     }
   where
     ls = T.lines text
