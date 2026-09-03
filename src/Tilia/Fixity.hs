@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Working out the fixity of the operators a module uses.
@@ -28,6 +29,11 @@ module Tilia.Fixity
     Provenance (..),
     Resolution (..),
     lookupFixity,
+
+    -- * What could not be answered
+    Unknown (..),
+    operatorsUsed,
+    unknownOperators,
   )
 where
 
@@ -44,7 +50,7 @@ import Data.Text qualified as T
 import GHC.Hs hiding (Fixity, OpName)
 import GHC.Types.Fixity qualified as GHC
 import GHC.Types.Name.Occurrence (occNameString)
-import GHC.Types.Name.Reader (RdrName, rdrNameOcc)
+import GHC.Types.Name.Reader (RdrName (..), rdrNameOcc)
 import GHC.Types.SrcLoc (GenLocated (..), unLoc)
 
 ----------------------------------------------------------------------------
@@ -403,3 +409,57 @@ lookupFixity scope qualifier op =
       Just q ->
         Map.lookup (q, op) (scopeQualified scope)
           <|> Map.lookup op (scopeUnqualified scope)
+
+----------------------------------------------------------------------------
+-- What could not be answered
+
+-- | Why an operator's fixity could not be settled.
+data Unknown
+  = -- | These modules in scope could not be read, and the declaration the
+    -- answer depends on may be in any of them.
+    NotRead [Text]
+  | -- | Two modules in scope bring it in with different fixities, so which
+    -- one applies cannot be read off the imports alone.
+    Ambiguous
+  deriving (Eq, Show)
+
+-- | Every operator the module uses where its fixity decides the layout.
+--
+-- Only these positions. An operator chain in an expression and one in a type
+-- are regrouped by precedence, so getting the precedence wrong changes what
+-- the code means. Everywhere else—a section, the left-hand side of a
+-- definition, an @infix@ declaration—the operator stands on its own and
+-- nothing is regrouped around it.
+operatorsUsed :: HsModule GhcPs -> [(Maybe Text, OpName)]
+operatorsUsed hsModule = map named (inExpressions <> inTypes)
+  where
+    inExpressions =
+      [ n
+        | e :: HsExpr GhcPs <- listify (const True) hsModule,
+          OpApp _ _ op _ <- [e],
+          HsVar _ (L _ n) <- [unLoc op]
+      ]
+    inTypes =
+      [ n
+        | t :: HsType GhcPs <- listify (const True) hsModule,
+          HsOpTy _ _ _ (L _ n) _ <- [t]
+      ]
+    named n = (qualifierOf n, OpName (T.pack (occNameString (rdrNameOcc n))))
+    qualifierOf = \case
+      Qual m _ -> Just (T.pack (moduleNameString m))
+      _ -> Nothing
+
+-- | The operators this module uses that the scope cannot settle.
+--
+-- Empty is the only acceptable answer: an operator whose fixity is not
+-- known cannot be laid out, only guessed at.
+unknownOperators :: Scope -> HsModule GhcPs -> [(OpName, Unknown)]
+unknownOperators scope hsModule =
+  Map.toList (Map.fromList (mapMaybe unsettled (operatorsUsed hsModule)))
+  where
+    ambiguous = Set.fromList (scopeAmbiguous scope)
+    unsettled (qualifier, op) = case lookupFixity scope qualifier op of
+      Unresolved missing -> Just (op, NotRead missing)
+      Resolved _ _
+        | Nothing <- qualifier, Set.member op ambiguous -> Just (op, Ambiguous)
+        | otherwise -> Nothing

@@ -512,7 +512,12 @@ withReexports reach visiting modName hsModule =
     defined = declaredNames hsModule
     wantedNames items = [op | ExportName op <- items, not (Set.member op defined)]
     wantedModules items =
-      Set.toList (Set.fromList [m | ExportModule m <- items, not (isSelf m)])
+      Set.toList . Set.fromList $
+        concat [under m | ExportModule m <- items, not (isSelf m)]
+    under m = case [importModule i | i <- imports, importAlias i == m] of
+      [] -> [m]
+      aliased -> aliased
+    imports = moduleImports hsModule
     isSelf m = Just m == moduleName hsModule || m == modName
     fromModule m
       | m `Set.member` visiting = pure (Just Map.empty)
@@ -532,10 +537,10 @@ readModule tarball modName = quietly Nothing $ do
           Just (T.decodeUtf8Lenient (BL.toStrict content))
       | otherwise = acc
 
-
 -- | How far a chain of re-exports is followed.
 reexportDepth :: Int
 reexportDepth = 6
+
 ----------------------------------------------------------------------------
 -- Readiness
 

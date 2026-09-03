@@ -18,6 +18,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
 import Tilia.Cpp (CppError (..), blankCpp, describeCppError, formatWithCpp, usesCpp)
+import Tilia.Fixity (OpName (..), Unknown (..), unknownOperators)
 import Tilia.Fixity.Plan (loadPlan, newResolver, scopeFor)
 import Tilia.Parser
   ( ParseError,
@@ -51,6 +52,8 @@ data FormatError
     PositionPragmas FilePath
   | -- | The file uses the preprocessor in a way we cannot handle.
     CppUnsupported FilePath CppError
+  | -- | An operator the file uses has a fixity we could not establish.
+    UnknownFixity FilePath [(OpName, Unknown)]
 
 -- | Say what went wrong, in one line.
 describeFormatError :: FormatError -> Text
@@ -69,6 +72,18 @@ describeFormatError = \case
     "will not format " <> T.pack path <> ": it uses {-# LINE #-} pragmas, and no reformatting can leave those true"
   CppUnsupported path why ->
     "will not format " <> T.pack path <> ": " <> describeCppError why
+  UnknownFixity path unknown ->
+    "will not format "
+      <> T.pack path
+      <> ": the fixity of "
+      <> T.intercalate ", " (map saying unknown)
+    where
+      saying (OpName op, why) = op <> " " <> because why
+      because = \case
+        NotRead [] -> "is not declared anywhere in scope"
+        NotRead missing ->
+          "may be declared in " <> T.intercalate " or " missing <> ", which could not be read"
+        Ambiguous -> "is declared differently by two modules in scope"
 
 -- | The exit status a failure should leave behind.
 formatErrorExitCode :: FormatError -> Int
@@ -82,6 +97,7 @@ formatErrorExitCode = \case
     PackageUnreadable {} -> 6
     PackageMalformed {} -> 7
     FileUnclaimed {} -> 8
+  UnknownFixity {} -> 15
   CppUnsupported _ why -> case why of
     UnhandledDirective {} -> 9
     UnsplittableConditional -> 10
@@ -109,12 +125,16 @@ formatFile askPackage path = runExceptT $ do
   let extensionsInForce = effectiveExtensions package source
       config = parserConfigFor package
       extensions = Set.fromList extensionsInForce
-      renderConfigFor hsModule = liftIO $ do
-        scope <- scopeFor resolve hsModule
-        pure defaultRenderConfig
-          { rcExtensions = extensions,
-            rcScope = Just scope
-          }
+      renderConfigFor hsModule = do
+        scope <- liftIO (scopeFor resolve hsModule)
+        case unknownOperators scope hsModule of
+          [] ->
+            pure
+              defaultRenderConfig
+                { rcExtensions = extensions,
+                  rcScope = Just scope
+                }
+          unknown -> throwE (UnknownFixity path unknown)
   if usesCpp extensionsInForce source
     then do
       render <- case parseModule config path (blankCpp source) of
