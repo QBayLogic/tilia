@@ -66,9 +66,39 @@ extensionsByName =
 -- | What every @{-# … #-}@ in a module has between its braces, each on one
 -- line.
 pragmaBodies :: Text -> [Text]
-pragmaBodies source = case T.breakOn "{-#" source of
-  (_, rest)
-    | T.null rest -> []
-    | otherwise -> case T.breakOn "#-}" (T.drop 3 rest) of
-        (_, after) | T.null after -> []
-        (inner, after) -> T.unwords (T.words inner) : pragmaBodies (T.drop 3 after)
+pragmaBodies = go
+  where
+    go = step . T.dropWhile (\c -> c /= '{' && c /= '-' && c /= '"')
+
+    step t
+      | T.null t = []
+      | Just body <- T.stripPrefix "{-#" t = case T.breakOn "#-}" body of
+          (_, after) | T.null after -> []
+          (inner, after) -> T.unwords (T.words inner) : go (T.drop 3 after)
+      | Just after <- T.stripPrefix "{-" t = go (skipBlock (1 :: Int) after)
+      | opensLineComment t = go (T.dropWhile (/= '\n') t)
+      | Just after <- T.stripPrefix "\"" t = go (skipString after)
+      | otherwise = go (T.drop 1 t)
+
+    opensLineComment t = case T.stripPrefix "--" t of
+      Nothing -> False
+      Just rest -> maybe True (not . symbolic . fst) (T.uncons rest)
+
+    symbolic c = c `elem` ("!#$%&*+./<=>?@\\^|-~:" :: String)
+
+    skipBlock 0 t = t
+    skipBlock n t0 = inBlock n (T.dropWhile (\c -> c /= '{' && c /= '-') t0)
+
+    inBlock n t
+      | T.null t = t
+      | Just after <- T.stripPrefix "{-" t = skipBlock (n + 1) after
+      | Just after <- T.stripPrefix "-}" t = skipBlock (n - 1) after
+      | otherwise = skipBlock n (T.drop 1 t)
+
+    skipString = inString . T.dropWhile (\c -> c /= '"' && c /= '\\')
+
+    inString t
+      | T.null t = t
+      | Just after <- T.stripPrefix "\\" t = skipString (T.drop 1 after)
+      | Just after <- T.stripPrefix "\"" t = after
+      | otherwise = skipString (T.drop 1 t)
