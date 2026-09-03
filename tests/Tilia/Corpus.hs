@@ -155,14 +155,14 @@ ghcTestSuite =
     { corpusName = "ghc-9.10.1-testsuite",
       corpusSource =
         Fetched
-          ( https "gitlab.haskell.org"
+          ( https "codeload.github.com"
               /: "ghc"
               /: "ghc"
-              /: "-"
-              /: "archive"
-              /: "ghc-9.10.1-release"
-              /: "ghc.tar.gz",
-            "path" =: ("testsuite/tests" :: Text)
+              /: "tar.gz"
+              /: "refs"
+              /: "tags"
+              /: "ghc-9.10.1-release",
+            mempty
           )
           ("testsuite" </> "tests"),
       corpusReference = NoReference,
