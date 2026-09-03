@@ -918,9 +918,13 @@ usesCpp extensions source =
 
 -- | Blank out the directive lines, keeping every branch.
 blankCpp :: Text -> Text
-blankCpp = T.unlines . map blank . T.lines
+blankCpp = T.unlines . go False . T.lines
   where
-    blank l = if isDirective l then "" else l
+    go _ [] = []
+    go continuing (l : ls)
+      | continuing || isDirective l = "" : go (runsOn l) ls
+      | otherwise = l : go False ls
+    runsOn = T.isSuffixOf "\\" . T.stripEnd
 
 -- | Why a module using the preprocessor could not be formatted.
 data CppError
