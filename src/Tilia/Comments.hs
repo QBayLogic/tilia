@@ -91,8 +91,13 @@ data Above
   deriving (Eq, Show)
 
 -- | Every comment in a module, in source order.
-commentsOf :: Text -> HsModule GhcPs -> [Comment]
-commentsOf source hsModule =
+commentsOf ::
+  -- | The module's lines, which every comment is read against
+  [Text] ->
+  -- | Parsed module
+  HsModule GhcPs ->
+  [Comment]
+commentsOf sourceLines hsModule =
   map (uncurry (mkComment sourceLines))
     . dedupeOnSpan
     . sortOn (GHC.realSrcSpanStart . fst)
@@ -100,23 +105,15 @@ commentsOf source hsModule =
     . concatMap annComments
     $ listify anyAnnComments hsModule
   where
-    sourceLines = T.lines source
-
-    -- The tree is walked for annotations rather than for comments, and one
-    -- comment can be reachable through more than one annotation, so the
-    -- same span can come back twice.
     dedupeOnSpan = \case
       (x : y : rest) | fst x == fst y -> dedupeOnSpan (x : rest)
       (x : rest) -> x : dedupeOnSpan rest
       [] -> []
-
     anyAnnComments :: GHC.EpAnnComments -> Bool
     anyAnnComments _ = True
-
     annComments = \case
       GHC.EpaComments xs -> xs
       GHC.EpaCommentsBalanced xs ys -> xs <> ys
-
     located (GHC.L anchor (GHC.EpaComment tok _)) = case anchor of
       GHC.EpaSpan (GHC.RealSrcSpan s _) -> Just (s, tok)
       _ -> Nothing

@@ -4,8 +4,9 @@
 --
 -- Almost everything the formatter decides about layout is a question about
 -- the source: what is on the line above a comment, whether two constructs
--- had an empty line between them, whether a comment was written inside this
--- import. All these questions are asked in a single place here.
+-- had an empty line between them, whether a directive stands between a
+-- comment and the pragma under it. All these questions are asked in a
+-- single place here.
 module Tilia.Source
   ( -- * The source
     Written (..),
@@ -50,9 +51,11 @@ data Source = Source
 sourceOf :: Written -> HsModule GhcPs -> Source
 sourceOf (Written text) hsModule =
   Source
-    { srcLines = IntMap.fromList (zip [1 ..] (T.lines text)),
-      srcComments = commentsOf text hsModule
+    { srcLines = IntMap.fromList (zip [1 ..] ls),
+      srcComments = commentsOf ls hsModule
     }
+  where
+    ls = T.lines text
 
 -- | The text of a line, if the module has one.
 lineAt :: Int -> Source -> Maybe Text

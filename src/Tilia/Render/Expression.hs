@@ -28,14 +28,8 @@ module Tilia.Render.Expression
 
     -- * Bindings
     valDecl,
-    localBinds,
-    matchGroup,
     MatchStyle (..),
     GuardStyle (..),
-    guardedRhs,
-
-    -- * Statements
-    hsStmt,
 
     -- * Splices
     untypedSplice,
@@ -1266,7 +1260,7 @@ isEmptyLocalBinds = \case
   _ -> False
 
 ----------------------------------------------------------------------------
--- Splices and quotations
+-- Splices
 
 -- | An untyped splice, either @$x@ or a quasi-quotation.
 untypedSplice :: Ctx -> SpliceDecoration -> HsUntypedSplice GhcPs -> Doc

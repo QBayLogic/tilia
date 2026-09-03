@@ -18,7 +18,6 @@
 module Tilia.Render.Declaration
   ( decls,
     declsKeepingGroups,
-    hsDecl,
   )
 where
 

@@ -26,12 +26,10 @@ module Tilia.Render.Type
     outerBndrs,
 
     -- * Record fields
-    recordFields,
     recordFieldsAt,
     conDeclField,
     documentedConDeclField,
     strictness,
-    unpackPragma,
 
     -- * Arguments
     typeArgument,

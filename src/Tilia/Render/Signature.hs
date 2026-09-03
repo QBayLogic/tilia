@@ -8,7 +8,6 @@ module Tilia.Render.Signature
   ( sigDecl,
     standaloneKindSig,
     ruleDecls,
-    ruleBinders,
     specialisedName,
   )
 where

@@ -10,7 +10,6 @@ module Tilia.Render.Operator
 
     -- * Asking about a chain
     chainSpan,
-    firstOperand,
     lastOperand,
     isSeparator,
   )
@@ -121,12 +120,6 @@ chainSpan spanOfOperand = \case
   where
     join' (Just a) (Just b) = Just (a <> b)
     join' a b = maybe b Just a
-
--- | The leftmost operand of a chain.
-firstOperand :: OpChain a op -> a
-firstOperand = \case
-  Operand x -> x
-  Chain xs _ -> firstOperand (NE.head xs)
 
 -- | The rightmost operand of a chain.
 lastOperand :: OpChain a op -> a

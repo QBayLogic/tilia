@@ -48,7 +48,6 @@ module Tilia.Fixity.Plan
     Readiness (..),
     planPathFor,
     checkReadiness,
-    prepare,
     loadPlan,
 
     -- * Resolving

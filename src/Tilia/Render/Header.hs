@@ -18,8 +18,6 @@ module Tilia.Render.Header
 
     -- * The module
     hsModule,
-    exportList,
-    importDecl,
   )
 where
 

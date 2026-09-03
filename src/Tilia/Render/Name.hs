@@ -11,7 +11,6 @@ module Tilia.Render.Name
 
     -- * Names
     name,
-    qualifiedName,
     moduleHeadName,
     wrappedName,
     namespaceSpec,

@@ -102,7 +102,7 @@ formatAllConfigs parser render path reached budget source = case variations sour
             parser
             render
             path
-            reached {reachedLines = reachedLines reached <> map opLine opaque}
+            reached
             left
         (,budget - 1) <$> replacing (reachedAnswers reached) opaque document
     where
@@ -122,7 +122,7 @@ formatAllConfigs parser render path reached budget source = case variations sour
             (configurations source)
   where
     linearly v =
-      case separately parser render path (widen (vaDirectives v) reached) budget v of
+      case separately parser render path reached budget v of
         Left why -> Left (Refused why, budget)
         Right (baseDoc, merged, budget') ->
           case combine Broken baseDoc (zip (map cfgWholes (vaGroups v)) merged) of
@@ -143,9 +143,7 @@ data Variation = Variation
   { -- | Every question answered with its first branch.
     vaBaseline :: Text,
     -- | One question varied, with all the others held at the baseline.
-    vaGroups :: [Configurations],
-    -- | Every line any of their directives sat on.
-    vaDirectives :: [Int]
+    vaGroups :: [Configurations]
   }
 
 -- | Split a module on every conditional at its top level, one at a time.
@@ -170,12 +168,10 @@ variations source = do
                           [ held (\j -> if j == k then i else 0)
                             | i <- [0 .. gsCount gs - 1]
                           ],
-                        cfgDirectives = concatMap gsOwnLines dim,
                         cfgWholes = Varied (map gsWhole dim)
                       }
                     | (k, dim@(gs : _)) <- zip [0 :: Int ..] dimensions
-                  ],
-                vaDirectives = concatMap gsOwnLines (concat dimensions)
+                  ]
               }
 
 -- | Vary each conditional on its own, holding the others at their first
@@ -233,7 +229,7 @@ together parser render path reached budget c = do
   (docs, budget') <- eachBranch budget (zip [0 ..] (cfgTexts c))
   pure (merge (cfgGuards c) (cfgWholes c) docs, budget')
   where
-    inside = widen (cfgDirectives c) reached
+    inside = reached
     eachBranch b [] = Right ([], b)
     eachBranch b ((i, t) : ts) = do
       (d, b') <- formatAllConfigs parser render path (answering c i inside) b t
@@ -260,9 +256,7 @@ formatSingleConfig parser render path reached text =
 
 -- | How a configuration was reached, and what to call it.
 data Reached = Reached
-  { -- | Directive lines blanked by the calls above this one.
-    reachedLines :: [Int],
-    -- | Which branch each question was answered with, outermost first.
+  { -- | Which branch each question was answered with, outermost first.
     reachedAnswers :: [([Guard], Int)],
     -- | The module as it was written, before any branch was taken out of
     -- it, which is what every question about the source is answered
@@ -273,11 +267,7 @@ data Reached = Reached
 -- | The configuration nothing has been decided about yet.
 noAnswers :: Text -> Reached
 noAnswers source =
-  Reached {reachedLines = [], reachedAnswers = [], reachedWritten = source}
-
--- | Blank more directive lines on the way into a group.
-widen :: [Int] -> Reached -> Reached
-widen ls reached = reached {reachedLines = reachedLines reached <> ls}
+  Reached {reachedAnswers = [], reachedWritten = source}
 
 -- | Answer one group's question with the branch at the given index.
 answering :: Configurations -> Int -> Reached -> Reached
@@ -992,8 +982,6 @@ data Configurations = Configurations
     -- | One module text per branch, in the same order as the directives, and
     -- then one more for the @#else@.
     cfgTexts :: [Text],
-    -- | The lines this group's own directives were on.
-    cfgDirectives :: [Int],
     -- | From each tied group's @#if@ to its @#endif@, inclusive.
     --
     -- Everything a branch of this conditional can be responsible for lies
@@ -1018,7 +1006,6 @@ configurations source = do
           [ blanking (concatMap (`blankingFor` i) tied) source
           | i <- [0 .. gsCount gs - 1]
           ],
-        cfgDirectives = concatMap gsOwnLines tied,
         cfgWholes = Varied (map gsWhole tied)
       }
 

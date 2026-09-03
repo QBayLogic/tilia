@@ -28,7 +28,6 @@ module Tilia.Fixity
     Provenance (..),
     Resolution (..),
     lookupFixity,
-    resolvedFixity,
   )
 where
 
@@ -404,9 +403,3 @@ lookupFixity scope qualifier op =
       Just q ->
         Map.lookup (q, op) (scopeQualified scope)
           <|> Map.lookup op (scopeUnqualified scope)
-
--- | The fixity of a resolution, if it has one.
-resolvedFixity :: Resolution -> Maybe Fixity
-resolvedFixity = \case
-  Resolved f _ -> Just f
-  Unresolved _ -> Nothing

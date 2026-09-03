@@ -6,7 +6,6 @@
 -- | Patterns.
 module Tilia.Render.Pattern
   ( hsPat,
-    hsPatIn,
     fieldOcc,
     unboxedSum,
   )

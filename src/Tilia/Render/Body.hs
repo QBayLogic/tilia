@@ -23,7 +23,6 @@ module Tilia.Render.Body
     -- * The table
     exprHangs,
     operatorName,
-    cmdHangs,
     cmdTopHangs,
   )
 where

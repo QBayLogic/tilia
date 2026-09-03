@@ -17,7 +17,6 @@ module Tilia.Render.Class
     dataFamInstDecl,
     standaloneDerivDecl,
     famDecl,
-    tyFamInstEqn,
     roleAnnot,
   )
 where
