@@ -29,6 +29,7 @@ module Tilia.Fixity
     Provenance (..),
     Resolution (..),
     lookupFixity,
+    unreadFor,
 
     -- * What could not be answered
     Unknown (..),
@@ -282,12 +283,13 @@ data Scope = Scope
     scopeUnqualified :: Map OpName (Fixity, Provenance),
     -- | Reachable as @M.op@, keyed by the alias actually written.
     scopeQualified :: Map (Text, OpName) (Fixity, Provenance),
-    -- | Imported modules whose declarations could not be read.
+    -- | The imports whose modules could not be read.
     --
-    -- While this is non-empty nothing can be said with certainty about an
-    -- operator that was not found: the answer might be in here. It is what
-    -- separates \"no declaration exists\" from \"we did not manage to look\".
-    scopeUnreadable :: [Text],
+    -- These are what separate \"no declaration exists\" from \"we did not
+    -- manage to look\". An operator that was not found is settled only if no
+    -- unread import could have brought it in, and deciding that needs the
+    -- whole import rather than the module's name: see 'unreadFor'.
+    scopeUnread :: [Import],
     -- | Operators brought into unqualified scope with two different
     -- fixities. See the note in the module header: this should be empty for
     -- anything that compiles.
@@ -315,15 +317,14 @@ resolveScope exportsOf hsModule =
   Scope
     { scopeUnqualified = Map.union own (Map.map fst unqualified),
       scopeQualified = qualified,
-      scopeUnreadable = unreadable,
+      scopeUnread = unread,
       scopeAmbiguous = Map.keys (Map.filter snd unqualified)
     }
   where
     own = Map.map (,DeclaredHere) (declaredFixities hsModule)
     imports = moduleImports hsModule
 
-    unreadable =
-      [importModule i | i <- imports, Nothing <- [exportsOf (importModule i)]]
+    unread = [i | i <- imports, Nothing <- [exportsOf (importModule i)]]
 
     -- Paired with a flag saying whether two imports disagreed about it.
     unqualified =
@@ -343,7 +344,7 @@ resolveScope exportsOf hsModule =
 
     -- What one import actually brings in, after its list is applied. A
     -- module we could not read brings in nothing, and is recorded in
-    -- 'scopeUnreadable' so that its absence is not mistaken for emptiness.
+    -- 'scopeUnread' so that its absence is not mistaken for emptiness.
     visible i =
       let exported =
             Map.map (,DeclaredIn (importModule i)) $
@@ -398,9 +399,9 @@ lookupFixity ::
 lookupFixity scope qualifier op =
   case found of
     Just (fixity, provenance) -> Resolved fixity provenance
-    Nothing -> case scopeUnreadable scope of
-      -- Every module in scope was read and none declares it, so the
-      -- Report's default is not a guess but a conclusion.
+    Nothing -> case unreadFor scope qualifier op of
+      -- Nothing that could have declared it went unread, so the Report's
+      -- default is not a guess but a conclusion.
       [] -> Resolved defaultFixity ReportDefault
       missing -> Unresolved missing
   where
@@ -409,6 +410,35 @@ lookupFixity scope qualifier op =
       Just q ->
         Map.lookup (q, op) (scopeQualified scope)
           <|> Map.lookup op (scopeUnqualified scope)
+
+-- | The modules of the unread imports that could have settled this use.
+--
+-- Empty means an operator that was not found really is undeclared, rather
+-- than declared somewhere we failed to look. Getting this narrow matters:
+-- an import that is @qualified as M@ has no bearing on an operator written
+-- without a qualifier, and one with an import list has none on an operator
+-- the list does not name. Were every unread import to count against every
+-- operator, one unreachable package deep in a dependency tree would
+-- unsettle a whole file.
+unreadFor ::
+  -- | The scope
+  Scope ->
+  -- | The qualifier written at the use site, if any
+  Maybe Text ->
+  -- | Operator being resolved
+  OpName ->
+  -- | The modules that could hold the answer
+  [Text]
+unreadFor scope qualifier op =
+  [importModule i | i <- scopeUnread scope, reaches i, brings i]
+  where
+    reaches i = case qualifier of
+      Nothing -> not (importQualified i)
+      Just q -> q == importAlias i
+    brings i = case importNames i of
+      Nothing -> True
+      Just (True, hidden) -> op `notElem` hidden
+      Just (False, shown) -> op `elem` shown
 
 ----------------------------------------------------------------------------
 -- What could not be answered

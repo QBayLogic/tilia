@@ -4,6 +4,7 @@
 -- | Reading a package's exposed modules out of its @.cabal@ file.
 module Tilia.Fixity.Cabal
   ( packageModules,
+    findCabalFile,
     exposedModules,
     containedModules,
     sourceDirs,

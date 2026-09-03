@@ -314,6 +314,6 @@ arithmetic =
             (OpName "*", (Fixity LeftAssoc 7, DeclaredHere))
           ],
       scopeQualified = Map.empty,
-      scopeUnreadable = [],
+      scopeUnread = [],
       scopeAmbiguous = []
     }

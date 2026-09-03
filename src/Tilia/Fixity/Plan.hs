@@ -66,7 +66,7 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BL
 import Data.IORef
 import Data.List (isSuffixOf)
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, listToMaybe)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
@@ -89,7 +89,7 @@ import System.Process (readCreateProcessWithExitCode, proc, cwd)
 import Tilia.Cpp (blankCpp)
 import Tilia.Fixity
 import Tilia.Fixity.Builtin (builtinFixities)
-import Tilia.Fixity.Cabal (containedModules, packageModules, sourceDirs)
+import Tilia.Fixity.Cabal (containedModules, findCabalFile, packageModules, sourceDirs)
 import Tilia.Fixity.Cache
 import Tilia.Fixity.PackageDb
 import Tilia.Parser
@@ -522,15 +522,25 @@ withReexports reach visiting modName hsModule =
 readModule :: FilePath -> Text -> IO (Maybe Text)
 readModule tarball modName = quietly Nothing $ do
   bytes <- BL.readFile tarball
-  let entries = Tar.read (GZip.decompress bytes)
-  pure (Tar.foldEntries step Nothing (const Nothing) entries)
+  let dirs = maybe [] sourceDirs (findCabalFile (Tar.read (GZip.decompress bytes)))
+  pure (pick dirs (matching (Tar.read (GZip.decompress bytes))))
   where
     suffix = "/" <> T.unpack (T.replace "." "/" modName) <> ".hs"
-    step entry acc
-      | suffix `isSuffixOf` Tar.entryPath entry,
-        Tar.NormalFile content _ <- Tar.entryContent entry =
-          Just (T.decodeUtf8Lenient (BL.toStrict content))
-      | otherwise = acc
+    matching = go []
+      where
+        go found = \case
+          Tar.Next entry rest
+            | suffix `isSuffixOf` Tar.entryPath entry,
+              Tar.NormalFile content _ <- Tar.entryContent entry ->
+                go ((Tar.entryPath entry, decode content) : found) rest
+            | otherwise -> go found rest
+          _ -> reverse found
+    pick dirs found = snd <$> listToMaybe (under dirs found <> found)
+    under dirs found = [e | d <- dirs, e <- found, inDir d (fst e)]
+    inDir d path
+      | d == "." = takeWhile (/= '/') path <> suffix == path
+      | otherwise = ("/" <> T.unpack d <> suffix) `isSuffixOf` path
+    decode = T.decodeUtf8Lenient . BL.toStrict
 
 -- | How far a chain of re-exports is followed.
 reexportDepth :: Int
