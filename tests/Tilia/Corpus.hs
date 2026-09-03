@@ -28,7 +28,7 @@ import Control.Exception (SomeException, try)
 import Control.Monad (forM)
 import Data.ByteString.Lazy qualified as BL
 import Data.List (isPrefixOf, isSuffixOf, sort, stripPrefix)
-import Data.Maybe (fromMaybe, maybeToList)
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe, maybeToList)
 import Data.Text (Text)
 import Data.Text qualified as T
 import System.Directory
@@ -925,7 +925,7 @@ unpackTo archive dest = do
       case Tar.entryContent entry of
         Tar.NormalFile content _
           | Just path <- beneathTop (Tar.entryPath entry),
-            any (`isSuffixOf` path) [".hs", ".cabal"] -> do
+            any (`isSuffixOf` path) (".cabal" : haskellExtensions) -> do
               createDirectoryIfMissing True (takeDirectory (staging </> path))
               BL.writeFile (staging </> path) content
         _ -> pure ()
@@ -951,7 +951,7 @@ examplesIn corpus root = do
       if suffix `isSuffixOf` f
         then example f (Just f)
         else do
-          let reference = take (length f - length (".hs" :: String)) f <> suffix
+          let reference = stemOf f <> suffix
           there <- doesFileExist reference
           example f (if there then Just reference else Nothing)
   where
@@ -970,6 +970,8 @@ examplesIn corpus root = do
     withoutSuffix suffix name
       | suffix `isSuffixOf` name = Just (take (length name - length suffix) name)
       | otherwise = Nothing
+    stemOf f =
+      fromMaybe f (listToMaybe (mapMaybe (`withoutSuffix` f) haskellExtensions))
 
 -- | What each of a corpus's examples has in force before its own pragmas.
 packageReaderFor :: Corpus -> IO (FilePath -> IO [Extension])
@@ -979,11 +981,15 @@ packageReaderFor corpus
       reader <- newPackageReader
       pure (fmap (either (const []) id) . reader)
 
+-- | The extensions an example may be written with.
+haskellExtensions :: [String]
+haskellExtensions = [".hs", ".hs-boot"]
+
 haskellFilesIn :: FilePath -> IO [FilePath]
 haskellFilesIn dir = do
   isDir <- doesDirectoryExist dir
   if not isDir
-    then pure [dir | ".hs" `isSuffixOf` dir]
+    then pure [dir | any (`isSuffixOf` dir) haskellExtensions]
     else do
       entries <- quietly [] (listDirectory dir)
       concat <$> traverse (haskellFilesIn . (dir </>)) entries
