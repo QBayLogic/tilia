@@ -66,6 +66,7 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BL
 import Data.IORef
 import Data.List (isSuffixOf)
+import Data.Maybe (catMaybes)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
@@ -88,7 +89,7 @@ import System.Process (readCreateProcessWithExitCode, proc, cwd)
 import Tilia.Cpp (blankCpp)
 import Tilia.Fixity
 import Tilia.Fixity.Builtin (builtinFixities)
-import Tilia.Fixity.Cabal (exposedModules, packageModules, sourceDirs)
+import Tilia.Fixity.Cabal (containedModules, packageModules, sourceDirs)
 import Tilia.Fixity.Cache
 import Tilia.Fixity.PackageDb
 import Tilia.Parser
@@ -316,22 +317,16 @@ buildModuleIndex ::
 buildModuleIndex cache installed tarballs =
   Map.fromListWith (\_ first' -> first') . concat <$> traverse one tarballs
   where
-    -- What the compiler reports, by name and version, so that a package can
-    -- be looked up without trusting how the plan classified it.
     byNameVersion =
       Map.fromList [((ipName i, ipVersion i), ipModules i) | i <- installed]
-
     one (p, tarball) = do
       let key = cacheKey p
-      modules <- case Map.lookup (ppName p, ppVersion p) byNameVersion of
-        -- The compiler knows. This is the fast path and the only one that
-        -- works where the plan calls everything pre-existing.
-        Just ms -> pure (Just ms)
-        -- It does not, so read the package's own @.cabal@ out of its
-        -- tarball. This covers a dependency that has been downloaded but
-        -- not yet built.
-        Nothing -> fromCabalFile cache key tarball p
-      pure [(m, (key, tarball)) | m <- concat modules]
+      let exposed = Map.lookup (ppName p, ppVersion p) byNameVersion
+      held <- fromCabalFile cache key tarball p
+      let modules = case (exposed, held) of
+            (Nothing, Nothing) -> []
+            (a, b) -> concat (catMaybes [a, b])
+      pure [(m, (key, tarball)) | m <- modules]
 
 -- | A package's module list from the @.cabal@ file in its tarball.
 fromCabalFile ::
@@ -455,7 +450,7 @@ localModules plan =
             Nothing -> pure Map.empty
             Just text ->
               Map.fromList . concat
-                <$> traverse (locate dir (sourceDirs text)) (exposedModules text)
+                <$> traverse (locate dir (sourceDirs text)) (containedModules text)
 
     -- A package may list several source directories and the @.cabal@ file
     -- does not say which one holds which module, so they are tried in turn

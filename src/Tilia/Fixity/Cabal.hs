@@ -5,6 +5,7 @@
 module Tilia.Fixity.Cabal
   ( packageModules,
     exposedModules,
+    containedModules,
     sourceDirs,
   )
 where
@@ -26,7 +27,7 @@ import Tilia.Utils (quietly)
 packageModules :: FilePath -> IO (Maybe [Text])
 packageModules tarball = quietly Nothing $ do
   bytes <- BL.readFile tarball
-  pure (exposedModules <$> findCabalFile (Tar.read (GZip.decompress bytes)))
+  pure (containedModules <$> findCabalFile (Tar.read (GZip.decompress bytes)))
 
 -- | The first @.cabal@ file at the top level of an archive.
 --
@@ -55,8 +56,21 @@ findCabalFile = \case
 -- opposite reason—the modules it names live in another package, and looking
 -- there is a separate step this does not take.
 exposedModules :: Text -> [Text]
-exposedModules =
-  concatMap moduleNames . fieldsNamed "exposed-modules" . T.lines
+exposedModules = modulesUnder "exposed-modules"
+
+-- | Every module a package holds, whether it exposes it or not.
+--
+-- A package's internals are worth knowing about because its exposed modules
+-- pass names on from them: @base@ re-exports from @GHC.Internal.*@, none of
+-- which it exposes. Reading only the exposed list leaves those unreachable,
+-- and a re-export that cannot be followed is an answer thrown away.
+containedModules :: Text -> [Text]
+containedModules t =
+  modulesUnder "exposed-modules" t <> modulesUnder "other-modules" t
+
+modulesUnder :: Text -> Text -> [Text]
+modulesUnder field =
+  concatMap moduleNames . fieldsNamed field . T.lines
   where
     moduleNames =
       filter looksLikeModule
@@ -105,4 +119,3 @@ fieldsNamed name = go
 
     deeperThan n l = T.null (T.strip l) || indentOf l > n
     indentOf = T.length . T.takeWhile isSpace
-
