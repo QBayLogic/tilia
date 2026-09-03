@@ -57,10 +57,10 @@ data Reference
   = -- | It does not, so only the properties that hold of any input can be
     -- checked.
     NoReference
-  | -- | It does, in a file whose name is the input's with @.hs@ replaced by
-    -- the given suffix. A file already carrying that suffix is its own
-    -- reference: it is what the formatter is supposed to settle on.
-    ReferenceSuffix String
+  | -- | It does, in a file whose name is the input's with the given mark
+    -- put before the extension. A file already carrying that mark is its
+    -- own reference: it is what the formatter is supposed to settle on.
+    ReferenceMarked String
   deriving (Eq, Show)
 
 -- | Where the examples of a corpus come from.
@@ -114,7 +114,7 @@ vendoredExamples =
   Corpus
     { corpusName = "tilia",
       corpusSource = Vendored ("corpora" </> "vendored"),
-      corpusReference = ReferenceSuffix "-out.hs",
+      corpusReference = ReferenceMarked "-out",
       corpusExpectations =
         Listed
           Lists
@@ -142,7 +142,7 @@ ormoluExamples =
             mempty
           )
           ("data" </> "examples"),
-      corpusReference = ReferenceSuffix "-out.hs",
+      corpusReference = ReferenceMarked "-out",
       corpusExpectations =
         Listed Lists {expectSkip = ormoluSkip, expectDeclined = []},
       corpusInPackages = False
@@ -949,11 +949,11 @@ examplesIn corpus root = do
       example f reference = Example (nameOf f) f reference <$> reader f
   case corpusReference corpus of
     NoReference -> traverse (`example` Nothing) files
-    ReferenceSuffix suffix -> forM files $ \f ->
-      if suffix `isSuffixOf` f
+    ReferenceMarked mark -> forM files $ \f ->
+      if mark `isSuffixOf` stemOf f
         then example f (Just f)
         else do
-          let reference = stemOf f <> suffix
+          let reference = stemOf f <> mark <> extensionOf f
           there <- doesFileExist reference
           example f (if there then Just reference else Nothing)
   where
@@ -966,14 +966,17 @@ examplesIn corpus root = do
       Listed lists -> expectSkip lists
       Recorded _ -> []
     inputFor name = case corpusReference corpus of
-      ReferenceSuffix suffix
-        | Just stem <- withoutSuffix suffix name -> Just (stem <> ".hs")
+      ReferenceMarked mark
+        | Just stem <- withoutSuffix mark (stemOf name) ->
+            Just (stem <> extensionOf name)
       _ -> Nothing
     withoutSuffix suffix name
       | suffix `isSuffixOf` name = Just (take (length name - length suffix) name)
       | otherwise = Nothing
     stemOf f =
       fromMaybe f (listToMaybe (mapMaybe (`withoutSuffix` f) haskellExtensions))
+    extensionOf f =
+      fromMaybe "" (listToMaybe (filter (`isSuffixOf` f) haskellExtensions))
 
 -- | What each of a corpus's examples has in force before its own pragmas.
 packageReaderFor :: Corpus -> IO (FilePath -> IO [Extension])
