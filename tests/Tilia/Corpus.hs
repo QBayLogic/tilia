@@ -888,11 +888,15 @@ download :: (Url 'Https, Option 'Https) -> FilePath -> IO (Either Text ())
 download (url, query) dest =
   try get >>= \case
     Left (e :: HttpException) -> pure (Left (explain e))
-    Right bytes -> do
-      BL.writeFile partial bytes
-      Right <$> renameFile partial dest
+    Right bytes
+      | not (gzipped bytes) -> pure (Left "the answer was not an archive")
+      | otherwise -> do
+          BL.writeFile partial bytes
+          Right <$> renameFile partial dest
   where
     partial = dest <> ".part"
+    -- The two bytes every gzip stream opens with.
+    gzipped = (== [0x1f, 0x8b]) . BL.unpack . BL.take 2
     get =
       runReq defaultHttpConfig $
         responseBody <$> req GET url NoReqBody lbsResponse query
