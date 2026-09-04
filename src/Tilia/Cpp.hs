@@ -15,6 +15,7 @@ module Tilia.Cpp
     Configurations (..),
     configurations,
     leaves,
+    branchLeaves,
     linearLeaves,
     countLeaves,
     answeredLeaves,
@@ -29,7 +30,7 @@ import Data.Char (isAsciiLower)
 import Data.List (isPrefixOf, sortOn, transpose, unsnoc)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (isJust, listToMaybe)
+import Data.Maybe (isJust, listToMaybe, maybeToList)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.LanguageExtensions.Type (Extension (..))
@@ -288,7 +289,7 @@ configurationsWorthTrying = 4096
 replacing :: [([Guard], Int)] -> [Opaque] -> Doc -> Either CppError Doc
 replacing answers opaque doc = foldl step (Right doc) opaque
   where
-    step acc (Opaque n t gap)
+    step acc (Opaque n _ t gap)
       | reproducedAt n doc = Left (DirectiveInQuotedText answers (keyword t))
       | otherwise =
           acc >>= maybe (Left (DirectiveUnplaceable answers (keyword t))) Right
@@ -369,7 +370,7 @@ replacing answers opaque doc = foldl step (Right doc) opaque
 -- lining documents up by where they came from.
 withoutOpaque :: Text -> Text
 withoutOpaque source =
-  blanking [(opLine d, opLine d) | d <- opaqueDirectives source] source
+  blanking [(opLine d, opLastLine d) | d <- opaqueDirectives source] source
 
 -- | Merge the documents one conditional's branches printed to.
 --
@@ -1138,21 +1139,37 @@ isDirective l = case T.stripPrefix "#" (T.stripStart l) of
 -- | Directives that do not introduce configurations.
 opaqueDirectives :: Text -> [Opaque]
 opaqueDirectives source =
-  [ Opaque {opLine = n, opText = T.stripEnd body, opGapBelow = blankAfter n}
+  [ Opaque
+      { opLine = n,
+        opLastLine = end n,
+        opText = T.stripEnd (T.intercalate "\n" (body : map lineOf below)),
+        opGapBelow = blankAfter (end n) || blank (lineOf (end n))
+      }
     | (n, l) <- numbered,
       isDirective l,
       let body = T.stripStart (T.drop 1 (T.stripStart l)),
-      T.takeWhile isAsciiLower body `elem` opaqueKeywords
+      T.takeWhile isAsciiLower body `elem` opaqueKeywords,
+      let below = continuing n
   ]
   where
     numbered = zip [1 ..] (T.lines source)
     lineAt = Map.fromList numbered
-    blankAfter n = maybe False (T.null . T.strip) (Map.lookup (n + 1) lineAt)
+    lineOf n = Map.findWithDefault "" n lineAt
+    blank = T.null . T.strip
+    blankAfter n = maybe False blank (Map.lookup (n + 1) lineAt)
+    end n = last (n : continuing n)
+    continuing n
+      | maybe False runsOn (Map.lookup n lineAt) = n + 1 : continuing (n + 1)
+      | otherwise = []
+    runsOn = T.isSuffixOf "\\" . T.stripEnd
 
 -- | One directive that asks nothing, and what is known about it.
 data Opaque = Opaque
   { -- | The line it was written on.
     opLine :: Int,
+    -- | The last line it takes up, which is 'opLine' unless it was written
+    -- across several with backslashes.
+    opLastLine :: Int,
     -- | What follows its hash, kept whole and never read.
     opText :: Text,
     -- | Whether a blank line was written under it.
@@ -1170,6 +1187,57 @@ blanking ranges source =
     ]
   where
     holds n (from, to) = from <= n && n <= to
+
+-- | One configuration for every branch of every conditional, and no more.
+--
+-- 'leaves' takes every combination of answers, of which there are as many as
+-- the branches multiplied together: a module of moderate size can have tens
+-- of thousands, and a reader that has to look at all of them cannot look at
+-- it at all. These are the sum instead of the product—one configuration per
+-- branch, with every other conditional taking its first—which is few enough
+-- to read even for the worst of them.
+--
+-- What that buys is coverage rather than completeness: every line of the
+-- module appears in at least one of these, so nothing written under a
+-- directive goes unseen. What it does not buy is every /combination/ of
+-- lines, so this answers questions asked of the parts and not of the whole.
+-- Conditionals asking the same question are answered the same way
+-- throughout, as they are everywhere else here, so no configuration
+-- contradicts itself.
+branchLeaves :: Text -> Either CppError [Text]
+branchLeaves source = case scanDirectives source of
+  Nothing -> Left (UnhandledDirective (unhandledIn source))
+  Just ds -> case nesting 0 ds of
+    Nothing -> Left UnsplittableConditional
+    Just forest -> traverse resolved (distinct (map configuration (assignments forest)))
+  where
+    reachable = go Map.empty
+      where
+        go asked ns =
+          concat
+            [ (asked, gs)
+                : concat
+                  [ go (Map.insert (gsGuards gs) i asked) nested
+                  | (i, nested) <- zip [0 ..] branches
+                  ]
+            | Nest gs branches <- ns
+            ]
+
+    assignments forest =
+      [ Map.insert (gsGuards gs) i asked
+      | (asked, gs) <- reachable forest,
+        i <- [0 .. gsCount gs - 1]
+      ]
+    configuration answers =
+      blanking
+        [ r
+        | grp <- allGroups (concat (maybeToList (scanDirectives source))),
+          Just gs <- [groupSpec grp],
+          r <- blankingFor gs (Map.findWithDefault 0 (gsGuards gs) answers)
+        ]
+        source
+
+    distinct = Map.elems . Map.fromList . map (\t -> (t, t))
 
 -- | Every configuration of a module, with every conditional resolved.
 --

@@ -1617,10 +1617,10 @@ formatted       ce8d353ea567  criterion-1.6.5.0/tests/Cleanup.hs
 formatted       78253dc00e1a  criterion-1.6.5.0/tests/Properties.hs
 formatted       a99e4edb542c  criterion-1.6.5.0/tests/Sanity.hs
 formatted       f8a8d8f2c4ae  criterion-1.6.5.0/tests/Tests.hs
-declined        -             cryptonite-0.30/Crypto/Cipher/AES.hs
+formatted       44af498375d5  cryptonite-0.30/Crypto/Cipher/AES.hs
 formatted       2240267dad51  cryptonite-0.30/Crypto/Cipher/AES/Primitive.hs
 formatted       5694da9617bf  cryptonite-0.30/Crypto/Cipher/AESGCMSIV.hs
-declined        -             cryptonite-0.30/Crypto/Cipher/Blowfish.hs
+formatted       ab05e6ed96e9  cryptonite-0.30/Crypto/Cipher/Blowfish.hs
 formatted       98e1845904ad  cryptonite-0.30/Crypto/Cipher/Blowfish/Box.hs
 formatted       9868441db65f  cryptonite-0.30/Crypto/Cipher/Blowfish/Primitive.hs
 formatted       7ece5bd42232  cryptonite-0.30/Crypto/Cipher/CAST5.hs
@@ -4396,7 +4396,7 @@ formatted       9159857aaf7c  stm-2.5.3.1/testsuite/src/Main.hs
 formatted       5a7bdca5eb2f  stm-2.5.3.1/testsuite/src/Stm052.hs
 formatted       9b30ce222d29  stm-2.5.3.1/testsuite/src/Stm064.hs
 formatted       0f86f9b94d82  stm-2.5.3.1/testsuite/src/Stm065.hs
-declined        -             swagger2-2.9.1/Setup.hs
+formatted       0872066614e0  swagger2-2.9.1/Setup.hs
 formatted       e53974342c33  swagger2-2.9.1/examples/hackage.hs
 formatted       bbac1d7e9767  swagger2-2.9.1/src/Data/HashMap/Strict/InsOrd/Compat.hs
 formatted       d71d272f220f  swagger2-2.9.1/src/Data/Swagger.hs
@@ -4932,7 +4932,7 @@ formatted       a312fe3ca55a  vector-0.13.2.0/src/Data/Vector/Storable/Mutable.h
 formatted       ca6c3919dbe4  vector-0.13.2.0/src/Data/Vector/Strict.hs
 formatted       3bc69095cb4d  vector-0.13.2.0/src/Data/Vector/Strict/Mutable.hs
 formatted       5a349caedbaf  vector-0.13.2.0/src/Data/Vector/Unboxed.hs
-declined        -             vector-0.13.2.0/src/Data/Vector/Unboxed/Base.hs
+formatted       caa42ebeb851  vector-0.13.2.0/src/Data/Vector/Unboxed/Base.hs
 formatted       58ff39d532e3  vector-0.13.2.0/src/Data/Vector/Unboxed/Mutable.hs
 formatted       f4e17f002657  vector-0.13.2.0/tests-inspect/Inspect.hs
 formatted       ce6c77adb117  vector-0.13.2.0/tests-inspect/Inspect/DerivingVia.hs
@@ -4949,7 +4949,7 @@ formatted       89d6f5f286c7  vector-0.13.2.0/tests/Tests/Vector/Storable.hs
 formatted       cc9e0bc6f8e0  vector-0.13.2.0/tests/Tests/Vector/Strict.hs
 formatted       891ffe33c45c  vector-0.13.2.0/tests/Tests/Vector/Unboxed.hs
 formatted       9d70a141ca8e  vector-0.13.2.0/tests/Tests/Vector/UnitTests.hs
-declined        -             vector-0.13.2.0/tests/Utilities.hs
+formatted       915b72919a48  vector-0.13.2.0/tests/Utilities.hs
 formatted       88ed51490944  vector-0.13.2.0/tests/doctests.hs
 formatted       5561dc5bc4a0  vector-algorithms-0.9.1.0/bench/simple/Blocks.hs
 formatted       501fcfb24218  vector-algorithms-0.9.1.0/bench/simple/Main.hs

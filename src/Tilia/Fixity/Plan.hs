@@ -58,7 +58,7 @@ where
 
 import Codec.Archive.Tar qualified as Tar
 import Codec.Compression.GZip qualified as GZip
-import Control.Monad (filterM, join)
+import Control.Monad (filterM, foldM, join)
 import Crypto.Hash.SHA256 qualified as SHA256
 import Data.Aeson (FromJSON (..), eitherDecodeFileStrict, withObject, (.:), (.:?))
 import Data.ByteString.Base16 qualified as B16
@@ -86,7 +86,7 @@ import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
 import System.Process (readCreateProcessWithExitCode, proc, cwd)
-import Tilia.Cpp (blankCpp)
+import Tilia.Cpp (branchLeaves)
 import Tilia.Fixity
 import Tilia.Fixity.Builtin (builtinFixities)
 import Tilia.Fixity.Cabal (containedModules, findCabalFile, packageModules, sourceDirs)
@@ -426,9 +426,28 @@ fromText ::
   Text ->
   IO (Maybe (Map OpName Fixity))
 fromText reach visiting source modName =
-  case parseModule defaultParserConfig (T.unpack modName) (blankCpp source) of
+  case branchLeaves source of
     Left _ -> pure Nothing
-    Right pm -> withReexports reach visiting modName (pmModule pm)
+    Right texts -> agreeing <$> traverse fromConfiguration texts
+  where
+    fromConfiguration text =
+      case parseModule defaultParserConfig (T.unpack modName) text of
+        Left _ -> pure Nothing
+        Right pm -> withReexports reach visiting modName (pmModule pm)
+
+-- | One answer from every configuration, if they agree on it.
+--
+-- A module may declare a fixity in one configuration and a different one in
+-- another. Which of them holds depends on how the module is compiled, which
+-- is not ours to decide, so disagreement is not an answer. Agreement across
+-- all of them is one, and a stronger one than the blanked text could give:
+-- it is a fact about the module rather than about a reading of it.
+agreeing :: [Maybe (Map OpName Fixity)] -> Maybe (Map OpName Fixity)
+agreeing = (foldM together Map.empty =<<) . sequence
+  where
+    together settled found
+      | and (Map.intersectionWith (==) settled found) = Just (Map.union settled found)
+      | otherwise = Nothing
 
 -- | Where each module of the project's own packages lives.
 --
@@ -579,7 +598,7 @@ checkReadiness projectDir =
       if not (null newer)
         then pure (PlanStale newer)
         else do
-          tarballs <- plannedTarballs plan
+          tarballs <- filter (isFetchable . fst) <$> plannedTarballs plan
           missing <-
             traverse
               (\(p, t) -> (\there -> if there then Nothing else Just (ppName p)) <$> doesFileExist t)

@@ -3,7 +3,7 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5202 examples, 5116 formatted.
+5202 examples, 5121 formatted.
 
 ==========================================================================
 broken (9)
@@ -509,7 +509,7 @@ unliftio-0.2.25.1/src/UnliftIO/Directory.hs
     1024 configurations is more than the 64 this checks, so only the ones varying a single conditional were compared
 
 ==========================================================================
-declined (51)
+declined (46)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/Main.hs
@@ -529,12 +529,6 @@ QuickCheck-2.18.0.0/src/Test/QuickCheck/Monadic.hs
 
 QuickCheck-2.18.0.0/src/Test/QuickCheck/Property.hs
     QuickCheck-2.18.0.0/src/Test/QuickCheck/Property.hs:315:13-14: parse error on input `::', in the configuration taking #ifndef NO_TYPEABLE, then #ifndef NO_SAFE_HASKELL, then #ifndef NO_TIMEOUT, then #if defined(MIN_VERSION_base), then #ifndef NO_DEEPSEQ, then #ifdef NO_TIMEOUT
-
-cryptonite-0.30/Crypto/Cipher/AES.hs
-    cryptonite-0.30/Crypto/Cipher/AES.hs:52:5: parse error (possibly incorrect indentation or mismatched brackets)
-
-cryptonite-0.30/Crypto/Cipher/Blowfish.hs
-    cryptonite-0.30/Crypto/Cipher/Blowfish.hs:54:5: parse error (possibly incorrect indentation or mismatched brackets)
 
 cryptonite-0.30/Crypto/Random/Entropy/Windows.hs
     cryptonite-0.30/Crypto/Random/Entropy/Windows.hs:64:16-28: parse error on input `WINDOWS_CCONV', in the configuration taking #if defined(ARCH_X86)
@@ -599,9 +593,6 @@ shake-0.19.9/src/General/EscCodes.hs
 shake-0.19.9/src/General/FileLock.hs
     shake-0.19.9/src/General/FileLock.hs:28:16-23: parse error on input `CALLCONV', in the configuration taking #ifdef mingw32_HOST_OS, then #ifdef x86_64_HOST_ARCH
 
-swagger2-2.9.1/Setup.hs
-    swagger2-2.9.1/Setup.hs:25:10: parse error (possibly incorrect indentation or mismatched brackets), in the configuration taking #ifndef MIN_VERSION_cabal_doctest, then no branch of #if MIN_VERSION_cabal_doctest(1,0,0), then #ifdef MIN_VERSION_Cabal
-
 text-2.1.4/src/Data/Text.hs
     a #if directive, which we do not handle
 
@@ -657,11 +648,6 @@ transformers-0.6.3.0/legacy/pre709/Data/Functor/Identity.hs
     too many configurations to format
 
 unordered-containers-0.2.21/Data/HashMap/Internal/Array.hs
-    unordered-containers-0.2.21/Data/HashMap/Internal/Array.hs:116:1: parse error (possibly incorrect indentation or mismatched brackets), in the configuration taking #if defined(ASSERTS), then #if defined(__GLASGOW_HASKELL__)
-
-vector-0.13.2.0/src/Data/Vector/Unboxed/Base.hs
-    vector-0.13.2.0/src/Data/Vector/Unboxed/Base.hs:406:3-12: parse error on input `{-# INLINE', in the configuration taking #if MIN_VERSION_deepseq(1,4,3)
-
-vector-0.13.2.0/tests/Utilities.hs
-    vector-0.13.2.0/tests/Utilities.hs:119:3-6: parse error on input `type'
+    unordered-containers-0.2.21/Data/HashMap/Internal/Array.hs:(266,9)-(267,31): Unexpected case expression in function application:
+        case writeSmallArray# (unMArray ary) i# b s of s' -> (# s', () #), in the configuration taking #if defined(ASSERTS), then #if defined(__GLASGOW_HASKELL__)
 
