@@ -4,15 +4,19 @@
 module Tilia.Fixity.CacheSpec (spec) where
 
 import Data.Map.Strict qualified as Map
+import System.Directory (getModificationTime, setModificationTime)
 import System.Environment (setEnv, unsetEnv)
+import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
 import Tilia.Fixity
 import Tilia.Fixity.Cache
+import Tilia.Fixity.PackageDb (Installed (..), InstalledPackage (..))
 
 spec :: Spec
 spec = do
   tokens
+  database
   around withIsolatedCache $ do
     describe "modules" $ do
       it "remembers a package's module list" $ \cache -> do
@@ -99,6 +103,57 @@ spec = do
         storeFixities cache "thing-1.0" "A.B.C.D" (Declares (Map.fromList [(OpName "%", Fixity NoAssoc 5)]))
         cachedFixities cache "thing-1.0" "A.B.C.D"
           `shouldReturn` Just (Declares (Map.fromList [(OpName "%", Fixity NoAssoc 5)]))
+
+-- | What the compiler can see, and what it takes to stop believing it.
+--
+-- The database stands in for @ghc-pkg@ here: what is under test is that a
+-- change to it is noticed, not what @ghc-pkg@ would have said about it.
+database :: Spec
+database = around withIsolatedCache $ do
+  it "gives back what it was told, while the database sits still" $ \cache ->
+    withDatabase $ \db -> do
+      storeInstalled cache (Installed [containers] [db])
+      cachedInstalled cache `shouldReturn` Just [containers]
+
+  it "gives back nothing once a package has been registered" $ \cache ->
+    withDatabase $ \db -> do
+      storeInstalled cache (Installed [containers] [db])
+      writeFile (db </> "new-1.0.conf") ""
+      cachedInstalled cache `shouldReturn` Nothing
+
+  it "gives back nothing once the database is gone" $ \cache -> do
+    db <- withDatabase pure
+    storeInstalled cache (Installed [containers] [db])
+    cachedInstalled cache `shouldReturn` Nothing
+
+  it "remembers nothing it has no way to stop believing" $ \cache -> do
+    -- No database to stamp means no way to notice a change, and an answer
+    -- nothing can invalidate is worse than none: it never stops being given.
+    storeInstalled cache (Installed [containers] [])
+    cachedInstalled cache `shouldReturn` Nothing
+
+  it "carries a package that exposes nothing" $ \cache ->
+    withDatabase $ \db -> do
+      let quiet = InstalledPackage {ipName = "rts", ipVersion = "1.0", ipModules = []}
+      storeInstalled cache (Installed [containers, quiet] [db])
+      cachedInstalled cache `shouldReturn` Just [containers, quiet]
+  where
+    containers =
+      InstalledPackage
+        { ipName = "containers",
+          ipVersion = "0.7",
+          ipModules = ["Data.Map", "Data.Map.Strict", "Data.Set"]
+        }
+
+-- | A directory standing in for a package database, with a timestamp that
+-- can be set rather than waited for.
+withDatabase :: (FilePath -> IO a) -> IO a
+withDatabase action =
+  withSystemTempDirectory "tilia-db" $ \db -> do
+    -- Something long ago, so that anything happening to the directory
+    -- afterwards is a change whatever the clock's resolution.
+    setModificationTime db =<< getModificationTime "/"
+    action db
 
 -- | What an answer of \"could not be read\" is tied to, and what it is not.
 tokens :: Spec

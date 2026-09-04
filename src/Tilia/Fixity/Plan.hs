@@ -37,6 +37,7 @@ import Data.ByteString.Lazy qualified as BL
 import Data.IORef
 import Data.List (isSuffixOf)
 import Data.List qualified
+import Data.Foldable (traverse_)
 import Data.Maybe (catMaybes, listToMaybe)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -113,6 +114,18 @@ isFetchable p = case ppSource p of
   HackagePackage _ -> True
   _ -> False
 
+-- | Every package the compiler can see.
+whatTheCompilerSees :: Maybe Cache -> IO [InstalledPackage]
+whatTheCompilerSees cache =
+  remembered >>= \case
+    Just packages -> pure packages
+    Nothing -> do
+      found <- readInstalledPackages
+      traverse_ (`storeInstalled` found) cache
+      pure (installedPackages found)
+  where
+    remembered = maybe (pure Nothing) cachedInstalled cache
+
 -- | Summarize a 'BuildPlan' by hashing over it.
 planToken :: BuildPlan -> PlanToken
 planToken plan =
@@ -188,7 +201,7 @@ newResolver :: BuildPlan -> IO (Text -> IO (Maybe (Map OpName Fixity)))
 newResolver plan = do
   tarballs <- plannedTarballs plan
   cache <- openCache (planToken plan)
-  installed <- readInstalledPackages
+  installed <- whatTheCompilerSees cache
   index <- buildModuleIndex cache installed tarballs
   local <- localModules plan
   memo <- newIORef Map.empty

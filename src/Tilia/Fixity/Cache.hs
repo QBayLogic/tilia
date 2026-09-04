@@ -16,6 +16,8 @@ module Tilia.Fixity.Cache
     storeModules,
     cachedFixities,
     storeFixities,
+    cachedInstalled,
+    storeInstalled,
   )
 where
 
@@ -30,11 +32,13 @@ import System.Directory
   ( XdgDirectory (XdgCache),
     createDirectoryIfMissing,
     doesFileExist,
+    getModificationTime,
     getXdgDirectory,
     renameFile,
   )
 import System.FilePath ((</>))
 import Tilia.Fixity
+import Tilia.Fixity.PackageDb (Installed (..), InstalledPackage (..))
 import Tilia.Utils (quietly)
 
 -- | Where cached answers are kept together with a token unique to this
@@ -134,6 +138,53 @@ storeFixities cache package modName answer = do
     Cache _ (PlanToken token) = cache
 
 ----------------------------------------------------------------------------
+-- The package database
+
+-- | What the compiler could see when last asked, if it can still see it.
+cachedInstalled :: Cache -> IO (Maybe [InstalledPackage])
+cachedInstalled cache = quietly Nothing $ do
+  readIfPresent (installedPath cache) T.lines >>= \case
+    Nothing -> pure Nothing
+    Just ls -> do
+      let written =
+            [(T.unpack path, stamp) | ["db", path, stamp] <- map fields ls]
+      still <- traverse unchanged written
+      pure $
+        if not (null written) && and still
+          then Just (mapMaybe installedFrom ls)
+          else Nothing
+  where
+    unchanged (path, stamp) =
+      quietly False ((== stamp) . T.pack . show <$> getModificationTime path)
+    installedFrom l = case fields l of
+      ["pkg", name, version, modules] ->
+        Just InstalledPackage
+               {ipName = name, ipVersion = version, ipModules = T.words modules}
+      _ -> Nothing
+    fields = T.splitOn "\t"
+
+-- | Remember what the compiler can see, stamped so that a later run can
+-- tell whether it still does.
+--
+-- Nothing is written when there is no database to stamp: an answer nothing
+-- can invalidate is worse than no answer, because it never stops being
+-- given.
+storeInstalled :: Cache -> Installed -> IO ()
+storeInstalled cache found
+  | null (installedDatabases found) = pure ()
+  | otherwise = quietly () $ do
+      stamps <- traverse stamped (installedDatabases found)
+      writeAtomically (installedPath cache) . T.unlines $
+        [T.intercalate "\t" ["db", T.pack path, stamp] | (path, stamp) <- stamps]
+          <> [ T.intercalate "\t" ["pkg", ipName p, ipVersion p, T.unwords (ipModules p)]
+             | p <- installedPackages found
+             ]
+  where
+    stamped path = do
+      stamp <- T.pack . show <$> getModificationTime path
+      pure (path, stamp)
+
+----------------------------------------------------------------------------
 -- Entries
 
 renderEntry :: (OpName, Fixity) -> Text
@@ -176,6 +227,9 @@ decimal' t
 
 packageDir :: Cache -> Text -> FilePath
 packageDir (Cache root _) package = root </> "fixities" </> T.unpack package
+
+installedPath :: Cache -> FilePath
+installedPath (Cache root _) = root </> "installed"
 
 modulesPath :: Cache -> Text -> FilePath
 modulesPath (Cache root _) package = root </> "modules" </> T.unpack package

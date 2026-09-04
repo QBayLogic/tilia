@@ -17,16 +17,21 @@
 -- tarball; this only decides which tarball to look for.
 module Tilia.Fixity.PackageDb
   ( InstalledPackage (..),
+    Installed (..),
     readInstalledPackages,
   )
 where
 
+import Control.Monad (filterM)
 import Data.Char (isSpace)
+import Data.List (nub)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
+import System.Directory (doesDirectoryExist)
 import System.Exit (ExitCode (..))
+import System.FilePath ((</>))
 import System.Process (readProcessWithExitCode)
 import Tilia.Utils (quietly)
 
@@ -43,19 +48,47 @@ data InstalledPackage = InstalledPackage
   }
   deriving (Eq, Show)
 
--- | Every package the compiler can see.
+-- | What the compiler can see, and where it is.
+data Installed = Installed
+  { -- | Every package it can see.
+    installedPackages :: [InstalledPackage],
+    installedDatabases :: [FilePath]
+  }
+  deriving (Eq, Show)
+
+-- | Everything the compiler can see, and where it read it from.
 --
 -- Empty if @ghc-pkg@ cannot be run, which is not fatal.
 --
 -- @ghc-pkg@ is invoked rather than a database read off disk because where
 -- the databases are is not knowable from outside: under Nix the wrapper
--- carries the paths, and @GHC_PACKAGE_PATH@ is not set.
-readInstalledPackages :: IO [InstalledPackage]
-readInstalledPackages = quietly [] $ do
+-- carries the paths, and @GHC_PACKAGE_PATH@ is not set. The records name
+-- them, though, so having asked once we need not ask again to find out
+-- whether the answer still holds.
+readInstalledPackages :: IO Installed
+readInstalledPackages = quietly (Installed [] []) $ do
   (code, out, _) <- readProcessWithExitCode "ghc-pkg" ["dump", "--global", "--user"] ""
-  pure $ case code of
-    ExitSuccess -> mapMaybe fromRecord (records (T.pack out))
-    _ -> []
+  case code of
+    ExitSuccess -> do
+      let fields = map parseFields (records (T.pack out))
+      databases <- filterM doesDirectoryExist (databasesIn fields)
+      pure
+        Installed
+          { installedPackages = mapMaybe fromFields fields,
+            installedDatabases = databases
+          }
+    _ -> pure (Installed [] [])
+
+-- | The databases a set of records came out of.
+databasesIn :: [Map.Map Text Text] -> [FilePath]
+databasesIn fields =
+  nub
+    [ T.unpack (unquote root) </> "package.conf.d"
+    | f <- fields,
+      Just root <- [Map.lookup "pkgroot" f]
+    ]
+  where
+    unquote = T.dropAround (== '"') . T.strip
 
 -- | Split @ghc-pkg dump@ output into its records.
 records :: Text -> [Text]
@@ -65,10 +98,9 @@ records = map T.unlines . go . T.lines
       (record, []) -> [record | not (null record)]
       (record, _ : rest) -> record : go rest
 
--- | Read one record, if it names a package.
-fromRecord :: Text -> Maybe InstalledPackage
-fromRecord record = do
-  let fields = parseFields record
+-- | Read one record's fields, if they name a package.
+fromFields :: Map.Map Text Text -> Maybe InstalledPackage
+fromFields fields = do
   name <- Map.lookup "name" fields
   version <- Map.lookup "version" fields
   pure
@@ -118,4 +150,3 @@ parseFields = Map.fromList . mapMaybe field . groups . T.lines
         | not (T.null value) ->
             Just (T.strip key, T.unwords (T.drop 1 value : map T.strip rest))
       _ -> Nothing
-
