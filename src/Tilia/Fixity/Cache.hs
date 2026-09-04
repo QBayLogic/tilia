@@ -9,6 +9,8 @@
 -- of the work when a formatter is driven from an editor.
 module Tilia.Fixity.Cache
   ( Cache,
+    PlanToken (..),
+    Established (..),
     openCache,
     cachedModules,
     storeModules,
@@ -17,6 +19,7 @@ module Tilia.Fixity.Cache
   )
 where
 
+import Control.Monad (join)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
@@ -34,8 +37,28 @@ import System.FilePath ((</>))
 import Tilia.Fixity
 import Tilia.Utils (quietly)
 
--- | Where cached answers are kept.
-newtype Cache = Cache FilePath
+-- | Where cached answers are kept together with a token unique to this
+-- build plan.
+data Cache = Cache FilePath PlanToken
+
+-- | A token that is unique to this plan. It is needed in order to be able
+-- to cache the expensive class of lookup failures that are related to
+-- chasing module re-export chains. Rather than track which packages each
+-- failure leaned on, all of them are tied to the plan as a whole: anything
+-- that could turn a failure into an answer changes the plan, and failures
+-- are few enough that re-deriving them when it does costs little.
+newtype PlanToken = PlanToken Text
+  deriving (Eq, Show)
+
+-- | What reading a module established about its operators.
+data Established
+  = -- | It was read, and declares these.
+    Declares (Map OpName Fixity)
+  | -- | It could not be read. The expensive answer of the two, because
+    -- reaching it means exhausting every way of reading the module, which
+    -- is why it is kept rather than worked out again on every run.
+    Unreadable
+  deriving (Eq, Show)
 
 -- | Bumped whenever what is written changes shape, so that entries from an
 -- older Tilia are ignored rather than misread.
@@ -46,12 +69,15 @@ formatVersion = "v1"
 --
 -- 'Nothing' if there is nowhere to write, in which case everything still
 -- works and is merely slower.
-openCache :: IO (Maybe Cache)
-openCache = quietly Nothing $ do
+--
+-- The token is what a failure written through this cache is tied to, and
+-- what one read back out of it has to match. See 'PlanToken'.
+openCache :: PlanToken -> IO (Maybe Cache)
+openCache token = quietly Nothing $ do
   root <- (</> formatVersion) <$> getXdgDirectory XdgCache "tilia"
   createDirectoryIfMissing True (root </> "modules")
   createDirectoryIfMissing True (root </> "fixities")
-  pure (Just (Cache root))
+  pure (Just (Cache root token))
 
 -- | The modules a package exposes, if that was worked out before.
 cachedModules :: Cache -> Text -> IO (Maybe [Text])
@@ -64,21 +90,48 @@ storeModules :: Cache -> Text -> [Text] -> IO ()
 storeModules cache package =
   writeAtomically (modulesPath cache package) . T.unlines
 
--- | The fixities a module declares, if that was worked out before.
-cachedFixities :: Cache -> Text -> Text -> IO (Maybe (Map OpName Fixity))
-cachedFixities cache package modName =
-  readIfPresent (fixitiesPath cache package modName) $
-    Map.fromList . mapMaybe parseEntry . T.lines
-
--- | Remember what a module declares.
+-- | What was established about a module before, if anything was.
 --
--- An empty map is worth storing: "this module declares no operators" is an
--- answer, and re-deriving it costs exactly as much as any other.
-storeFixities :: Cache -> Text -> Text -> Map OpName Fixity -> IO ()
-storeFixities cache package modName fixities = do
+-- An 'Unreadable' answer is offered back only under the 'PlanToken' it was
+-- written under.
+cachedFixities ::
+  -- | Where to look
+  Cache ->
+  -- | The package the module belongs to. Opaque here: whatever the caller
+  -- uses to tell one package from another is what an answer is filed under,
+  -- and answers filed under different keys never meet.
+  Text ->
+  -- | The module, by its full dotted name
+  Text ->
+  -- | What was established, or 'Nothing' if nothing was
+  IO (Maybe Established)
+cachedFixities cache@(Cache _ (PlanToken token)) package modName =
+  fmap join . readIfPresent (fixitiesPath cache package modName) $ \contents ->
+    case T.lines contents of
+      ("read" : entries) -> Just (Declares (Map.fromList (mapMaybe parseEntry entries)))
+      [unread] | unread == "unread\t" <> token -> Just Unreadable
+      _ -> Nothing
+
+-- | Remember what reading a module established.
+storeFixities ::
+  -- | Where to write
+  Cache ->
+  -- | The package the module belongs to, as 'cachedFixities' takes it
+  Text ->
+  -- | The module, by its full dotted name
+  Text ->
+  -- | What was established about it
+  Established ->
+  IO ()
+storeFixities cache package modName answer = do
   quietly () (createDirectoryIfMissing True (packageDir cache package))
   writeAtomically (fixitiesPath cache package modName) $
-    T.unlines (map renderEntry (Map.toList fixities))
+    case answer of
+      Unreadable -> T.unlines ["unread\t" <> token]
+      Declares fixities ->
+        T.unlines ("read" : map renderEntry (Map.toList fixities))
+  where
+    Cache _ (PlanToken token) = cache
 
 ----------------------------------------------------------------------------
 -- Entries
@@ -122,10 +175,10 @@ decimal' t
 -- Paths and files
 
 packageDir :: Cache -> Text -> FilePath
-packageDir (Cache root) package = root </> "fixities" </> T.unpack package
+packageDir (Cache root _) package = root </> "fixities" </> T.unpack package
 
 modulesPath :: Cache -> Text -> FilePath
-modulesPath (Cache root) package = root </> "modules" </> T.unpack package
+modulesPath (Cache root _) package = root </> "modules" </> T.unpack package
 
 fixitiesPath :: Cache -> Text -> Text -> FilePath
 fixitiesPath cache package modName =
@@ -150,4 +203,3 @@ writeAtomically path contents = quietly () $ do
   let temporary = path <> ".tmp"
   T.writeFile temporary contents
   renameFile temporary path
-

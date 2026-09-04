@@ -1,39 +1,9 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Layer 3: finding out what the modules a project imports actually
--- declare.
---
--- "Tilia.Fixity" resolves a module's operators exactly, given a function
+-- | "Tilia.Fixity" resolves a module's operators exactly, given a function
 -- that says what each imported module exports. This is that function, built
 -- from what the project itself is compiled against.
---
--- == How
---
--- @cabal@ writes the resolved build plan to @dist-newstyle\/cache\/plan.json@:
--- every package, at the exact version the project builds with. Each entry is
--- one of two kinds, and the distinction turns out to be exactly the one that
--- matters here.
---
---   * @configured@ packages come from Hackage, and @cabal@ keeps their source
---     tarballs in its package cache. Their fixity declarations can be read
---     out of the source.
---
---   * @pre-existing@ packages ship with the compiler—@base@, @ghc-prim@,
---     @containers@ and the rest. Their sources are not in the cache, so
---     their fixities come from 'builtinFixities'.
---
--- That split is not an approximation creeping back in. The boot packages are
--- a fixed, small set whose operators are stable across releases, which is
--- what makes a table of them reasonable where a table of Hackage would not
--- be.
---
--- == Finding the module
---
--- Which package exposes a module is answered by "Tilia.Fixity.Cabal",
--- reading @exposed-modules@ out of each planned package's own @.cabal@
--- file. Nothing has to be installed for that, only downloaded, which is
--- what 'checkReadiness' and 'prepare' are for.
 module Tilia.Fixity.Plan
   ( -- * Build plans
     PlanPackage (..),
@@ -66,6 +36,7 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as BL
 import Data.IORef
 import Data.List (isSuffixOf)
+import Data.List qualified
 import Data.Maybe (catMaybes, listToMaybe)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -142,6 +113,19 @@ isFetchable p = case ppSource p of
   HackagePackage _ -> True
   _ -> False
 
+-- | Summarize a 'BuildPlan' by hashing over it.
+planToken :: BuildPlan -> PlanToken
+planToken plan =
+  PlanToken
+    . T.take 16
+    . T.decodeUtf8Lenient
+    . B16.encode
+    . SHA256.hash
+    . T.encodeUtf8
+    $ T.intercalate
+      "\n"
+      (bpCompiler plan : Data.List.sort (map cacheKey (bpPackages plan)))
+
 -- | The SHA-256 the plan expects this package's tarball to have.
 sourceHashOf :: PlanPackage -> Maybe Text
 sourceHashOf p = case ppSource p of
@@ -203,7 +187,7 @@ readBuildPlan path =
 newResolver :: BuildPlan -> IO (Text -> IO (Maybe (Map OpName Fixity)))
 newResolver plan = do
   tarballs <- plannedTarballs plan
-  cache <- openCache
+  cache <- openCache (planToken plan)
   installed <- readInstalledPackages
   index <- buildModuleIndex cache installed tarballs
   local <- localModules plan
@@ -279,15 +263,19 @@ resolveModule cache local index reach visiting modName
       Nothing -> pure Nothing
       Just (package, tarball) ->
         cachedFor package >>= \case
-          Just remembered -> pure (Just remembered)
+          Just remembered -> pure (answered remembered)
           Nothing ->
             fromSource (reach visiting') visiting' tarball modName >>= \case
-              Nothing -> pure (Map.lookup modName byHandFixities)
-              Just fixities -> do
-                storeFor package fixities
-                pure (Just fixities)
+              NoArchive -> pure (byHand modName)
+              FromArchive established -> do
+                storeFor package established
+                pure (answered established)
   where
     visiting' = Set.insert modName visiting
+    answered = \case
+      Declares fixities -> Just fixities
+      Unreadable -> byHand modName
+    byHand = (`Map.lookup` byHandFixities)
     cachedFor package = case cache of
       Nothing -> pure Nothing
       Just c -> cachedFixities c package modName
@@ -404,13 +392,27 @@ fromSource ::
   FilePath ->
   -- | The module to read.
   Text ->
-  -- | Its fixities, including those it only passes on, or 'Nothing' if the
-  -- source could not be found or would not parse.
-  IO (Maybe (Map OpName Fixity))
+  -- | What it declares, including what it only passes on, and whether that
+  -- is worth remembering.
+  IO Reading
 fromSource reach visiting tarball modName =
-  readModule tarball modName >>= \case
-    Nothing -> pure Nothing
-    Just source -> fromText reach visiting source modName
+  doesFileExist tarball >>= \case
+    False -> pure NoArchive
+    True ->
+      readModule tarball modName >>= \case
+        Nothing -> pure (FromArchive Unreadable)
+        Just source ->
+          FromArchive . maybe Unreadable Declares
+            <$> fromText reach visiting source modName
+
+-- | What came of looking for a module in an archive.
+data Reading
+  = -- | The archive was there, and this is what reading it established.
+    FromArchive Established
+  | -- | There was no archive to open. That is a fact about this machine and
+    -- not about the module—the plan can stay exactly as it is while
+    -- somebody downloads the sources—so it is never remembered.
+    NoArchive
 
 -- | The fixities a module's text declares and passes on.
 fromText ::
@@ -427,14 +429,13 @@ fromText ::
   Text ->
   IO (Maybe (Map OpName Fixity))
 fromText reach visiting source modName =
-  case branchLeaves source of
-    Left _ -> pure Nothing
-    Right texts -> agreeing <$> traverse fromConfiguration texts
+  case traverse parsed =<< configurations of
+    Nothing -> pure Nothing
+    Just modules ->
+      agreeing <$> traverse (withReexports reach visiting modName) modules
   where
-    fromConfiguration text =
-      case parseModule defaultParserConfig (T.unpack modName) text of
-        Left _ -> pure Nothing
-        Right pm -> withReexports reach visiting modName (pmModule pm)
+    configurations = either (const Nothing) Just (branchLeaves source)
+    parsed = fmap pmModule . either (const Nothing) Just . parseModule defaultParserConfig (T.unpack modName)
 
 -- | One answer from every configuration, if they agree on it.
 --

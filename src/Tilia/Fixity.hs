@@ -10,7 +10,7 @@ module Tilia.Fixity
     Fixity (..),
     defaultFixity,
 
-    -- * Layer 1: what a module declares
+    -- * What a module declares
     declaredFixities,
     declaredNames,
     moduleName,
@@ -19,7 +19,7 @@ module Tilia.Fixity
     ExportItem (..),
     moduleExports,
 
-    -- * Layer 2: what a module can see
+    -- * What a module can see
     Import (..),
     moduleImports,
     Scope (..),
@@ -78,7 +78,7 @@ defaultFixity :: Fixity
 defaultFixity = Fixity LeftAssoc 9
 
 ----------------------------------------------------------------------------
--- Layer 1: what a module declares
+-- What a module declares
 
 -- | The fixities a module declares for its own operators.
 declaredFixities :: HsModule GhcPs -> Map OpName Fixity
@@ -211,7 +211,7 @@ moduleExports =
     named = ExportName . opName . ieWrappedName . unLoc
 
 ----------------------------------------------------------------------------
--- Layer 2: what a module can see
+-- What a module can see
 
 -- | One import declaration, reduced to what bears on fixity.
 data Import = Import
