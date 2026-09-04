@@ -138,6 +138,17 @@ withPlan plan = do
       quiet <- resolve "Data.Char"
       quiet `shouldBe` Just Map.empty
 
+  describe "modules whose source defeats us" $ do
+    it "answers for Test.QuickCheck.Property, which cannot be parsed" $
+      needs resolve "Test.QuickCheck.Property" $ \fixities -> do
+        Map.lookup (OpName "===") fixities `shouldBe` Just (Fixity NoAssoc 4)
+        Map.lookup (OpName ".&&.") fixities `shouldBe` Just (Fixity RightAssoc 1)
+        Map.lookup (OpName "==>") fixities `shouldBe` Just (Fixity RightAssoc 0)
+
+    it "carries that through the re-export chain to Test.QuickCheck" $
+      needs resolve "Test.QuickCheck" $ \fixities ->
+        Map.lookup (OpName "===") fixities `shouldBe` Just (Fixity NoAssoc 4)
+
   describe "the whole pipeline, from source text to a fixity" $ do
     it "resolves an operator through a real import" $
       endToEnd resolve "module M where\nimport Prettyprinter\n" $ \scope ->

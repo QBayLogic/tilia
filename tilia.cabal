@@ -44,6 +44,7 @@ library
     Tilia.Doc.Internal
     Tilia.Fixity
     Tilia.Fixity.Builtin
+    Tilia.Fixity.ByHand
     Tilia.Fixity.Cabal
     Tilia.Fixity.Cache
     Tilia.Fixity.PackageDb

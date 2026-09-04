@@ -89,6 +89,7 @@ import System.Process (readCreateProcessWithExitCode, proc, cwd)
 import Tilia.Cpp (branchLeaves)
 import Tilia.Fixity
 import Tilia.Fixity.Builtin (builtinFixities)
+import Tilia.Fixity.ByHand (byHandFixities)
 import Tilia.Fixity.Cabal (containedModules, findCabalFile, packageModules, sourceDirs)
 import Tilia.Fixity.Cache
 import Tilia.Fixity.PackageDb
@@ -281,7 +282,7 @@ resolveModule cache local index reach visiting modName
           Just remembered -> pure (Just remembered)
           Nothing ->
             fromSource (reach visiting') visiting' tarball modName >>= \case
-              Nothing -> pure Nothing
+              Nothing -> pure (Map.lookup modName byHandFixities)
               Just fixities -> do
                 storeFor package fixities
                 pure (Just fixities)
