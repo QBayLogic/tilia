@@ -207,14 +207,27 @@ newResolver plan = do
   let interfaces = interfaceIndex installed
   local <- localModules plan
   memo <- newIORef Map.empty
-  let reach visiting modName = do
-        known <- readIORef memo
-        case Map.lookup modName known of
-          Just answer -> pure answer
+  interfacesRead <- newIORef Map.empty
+  let interfaceOf modName = do
+        seen <- readIORef interfacesRead
+        case Map.lookup modName seen of
+          Just interface -> pure interface
           Nothing -> do
-            answer <- resolveModule cache local index interfaces reach visiting modName
-            modifyIORef' memo (Map.insert modName answer)
-            pure answer
+            interface <- case Map.lookup modName interfaces of
+              Nothing -> pure Nothing
+              Just (_, path) -> readInterface modName path
+            modifyIORef' interfacesRead (Map.insert modName interface)
+            pure interface
+  let reach visiting modName
+        | modName `Set.member` visiting = pure Nothing
+        | otherwise = do
+            known <- readIORef memo
+            case Map.lookup modName known of
+              Just answer -> pure answer
+              Nothing -> do
+                answer <- resolveModule cache local index interfaces interfaceOf reach visiting modName
+                modifyIORef' memo (Map.insert modName answer)
+                pure answer
   pure (reach Set.empty)
 
 -- | Work out what a module can see, using a resolver to reach its imports.
@@ -249,27 +262,26 @@ resolveModule ::
   -- package is the cache key, which carries the hash the tarball was
   -- verified against.
   Map Text (Text, FilePath) ->
-  -- | Which compiled interface holds each module, and what to file an
-  -- answer read out of it under. Consulted only where there is no archive.
+  -- | What to file an answer read out of each module's interface under.
   Map Text (Text, FilePath) ->
+  -- | A module's interface, read at most once a run.
+  (Text -> IO (Maybe Interface)) ->
   -- | How to reach another module. Tied back on itself by 'newResolver', so
   -- that the memo it keeps covers the recursive calls too.
   (Set Text -> Text -> IO (Maybe (Map OpName Fixity))) ->
   -- | Modules currently being resolved further up the call chain.
   --
-  -- A module reached while it is in here is part of a cycle, and yields
-  -- nothing rather than recurring forever. Because that answer depends on
-  -- how the module was reached, it is never remembered.
+  -- Only passed through, so that a chase started here carries where it came
+  -- from. What is done about a module already in it belongs to 'newResolver',
+  -- which decides it before anything is remembered.
   Set Text ->
   -- | The module to resolve.
   Text ->
   -- | Its operator fixities, or 'Nothing' if they could not be
   -- established.
   IO (Maybe (Map OpName Fixity))
-resolveModule cache local index interfaces reach visiting modName
+resolveModule cache local index interfaces interfaceOf reach visiting modName
   | Just builtin <- Map.lookup modName builtinFixities = pure (Just builtin)
-  | modName `Set.member` visiting = pure (Just Map.empty)
-  | Set.size visiting > reexportDepth = pure (Just Map.empty)
   | Just path <- Map.lookup modName local =
       readFileText path >>= \case
         Nothing -> pure Nothing
@@ -286,11 +298,11 @@ resolveModule cache local index interfaces reach visiting modName
 
     viaInterface = case Map.lookup modName interfaces of
       Nothing -> pure Nothing
-      Just (key, interface) ->
+      Just (key, _) ->
         cachedFor key >>= \case
           Just remembered -> pure (Just remembered)
           Nothing -> do
-            established <- fromInterface (reach visiting') modName interface
+            established <- fromInterface interfaceOf modName
             storeFor key established
             pure (Just established)
 
@@ -371,37 +383,31 @@ interfaceIndex installed =
       "interface-"
         <> T.take 24 (T.decodeUtf8Lenient (B16.encode (SHA256.hash (T.encodeUtf8 (T.pack dir)))))
 
--- | The fixities a compiled interface reports, following what it passes on.
---
--- Shallower than the same question asked of source. An interface names, for
--- every name it passes on, the module that declared it, so there is one step
--- to take rather than a chain of imports to work out and follow.
+-- | The fixities a compiled interface reports, and those it passes on.
 fromInterface ::
-  -- | How to reach another module
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
-  -- | The module the interface is supposed to hold
+  -- | A module's interface, if it has one
+  (Text -> IO (Maybe Interface)) ->
+  -- | The module to read
   Text ->
-  -- | The interface file to read
-  FilePath ->
   IO Established
-fromInterface reach modName interface =
-  readInterface modName interface >>= \case
+fromInterface interfaceOf modName =
+  interfaceOf modName >>= \case
     Nothing -> pure Unreadable
     Just iface -> do
-      answers <- traverse asked (distinct (map fst (interfacePassedOn iface)))
-      pure $ case traverse snd answers of
+      declarers <- traverse asked (distinct (map fst (interfacePassedOn iface)))
+      pure $ case traverse snd declarers of
         Nothing -> Unreadable
         Just _ ->
           Declares . Map.union (interfaceDeclares iface) . Map.fromList $
             [ (op, fixity)
             | (m, op) <- interfacePassedOn iface,
-              Just (Just declared) <- [lookup m answers],
-              Just fixity <- [Map.lookup op declared]
+              Just (Just declarer) <- [lookup m declarers],
+              Just fixity <- [Map.lookup op (interfaceDeclares declarer)]
             ]
   where
     asked m = do
-      answer <- reach m
-      pure (m, answer)
+      interface <- interfaceOf m
+      pure (m, interface)
     distinct = Map.keys . Map.fromList . map (,())
 
 -- | A package's module list from the @.cabal@ file in its tarball.
@@ -649,10 +655,6 @@ readModule tarball modName = quietly Nothing $ do
       | d == "." = takeWhile (/= '/') path <> suffix == path
       | otherwise = ("/" <> T.unpack d <> suffix) `isSuffixOf` path
     decode = T.decodeUtf8Lenient . BL.toStrict
-
--- | How far a chain of re-exports is followed.
-reexportDepth :: Int
-reexportDepth = 6
 
 ----------------------------------------------------------------------------
 -- Readiness

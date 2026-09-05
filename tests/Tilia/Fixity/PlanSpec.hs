@@ -143,6 +143,11 @@ withPlan plan = do
       needs resolve "Test.QuickCheck" $ \fixities ->
         Map.lookup (OpName "===") fixities `shouldBe` Just (Fixity NoAssoc 4)
 
+  describe "modules that re-export one another" $
+    it "answers for one whose re-exports are mutually entangled" $ do
+      answer <- resolve "GHC.Hs"
+      answer `shouldSatisfy` (/= Nothing)
+
   describe "the two ways of finding a fixity" $
     it "agree wherever both can answer" $ do
       installed <- readInstalledPackages
