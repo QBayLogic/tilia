@@ -3206,7 +3206,7 @@ formatted       74bebaa57c03  pandoc-3.10.2/src/Text/Pandoc/Writers/BibTeX.hs
 formatted       c3a3e99a6a7b  pandoc-3.10.2/src/Text/Pandoc/Writers/Blaze.hs
 formatted       2afa2a035da6  pandoc-3.10.2/src/Text/Pandoc/Writers/ChunkedHTML.hs
 formatted       936b3d7e333a  pandoc-3.10.2/src/Text/Pandoc/Writers/CommonMark.hs
-formatted       c8bbff8887d3  pandoc-3.10.2/src/Text/Pandoc/Writers/ConTeXt.hs
+formatted       5380c20c8b47  pandoc-3.10.2/src/Text/Pandoc/Writers/ConTeXt.hs
 formatted       d9b0707d098c  pandoc-3.10.2/src/Text/Pandoc/Writers/CslJson.hs
 formatted       22ad2f699b3c  pandoc-3.10.2/src/Text/Pandoc/Writers/Djot.hs
 formatted       45e80a32da2f  pandoc-3.10.2/src/Text/Pandoc/Writers/DocBook.hs
