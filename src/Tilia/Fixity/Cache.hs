@@ -27,6 +27,7 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Read qualified as T
 import Data.Text.IO qualified as T
 import System.Directory
   ( XdgDirectory (XdgCache),
@@ -157,9 +158,14 @@ cachedInstalled cache = quietly Nothing $ do
     unchanged (path, stamp) =
       quietly False ((== stamp) . T.pack . show <$> getModificationTime path)
     installedFrom l = case fields l of
-      ["pkg", name, version, modules] ->
-        Just InstalledPackage
-               {ipName = name, ipVersion = version, ipModules = T.words modules}
+      ("pkg" : name : version : modules : dirs) ->
+        Just
+          InstalledPackage
+            { ipName = name,
+              ipVersion = version,
+              ipModules = T.words modules,
+              ipImportDirs = map T.unpack dirs
+            }
       _ -> Nothing
     fields = T.splitOn "\t"
 
@@ -176,7 +182,9 @@ storeInstalled cache found
       stamps <- traverse stamped (installedDatabases found)
       writeAtomically (installedPath cache) . T.unlines $
         [T.intercalate "\t" ["db", T.pack path, stamp] | (path, stamp) <- stamps]
-          <> [ T.intercalate "\t" ["pkg", ipName p, ipVersion p, T.unwords (ipModules p)]
+          <> [ T.intercalate "\t" $
+                 ["pkg", ipName p, ipVersion p, T.unwords (ipModules p)]
+                   <> map T.pack (ipImportDirs p)
              | p <- installedPackages found
              ]
   where
@@ -209,18 +217,9 @@ parseEntry line = case T.splitOn "\t" line of
       "r" -> Just RightAssoc
       "n" -> Just NoAssoc
       _ -> Nothing
-    readPrecedence t = case decimal' t of
-      Just n | n >= 0, n <= 9 -> Just n
+    readPrecedence t = case T.signed T.decimal t of
+      Right (p, rest) | T.null rest -> Just p
       _ -> Nothing
-
--- | A non-negative integer, or nothing.
-decimal' :: Text -> Maybe Int
-decimal' t
-  | T.null t = Nothing
-  | T.all (`elem` ['0' .. '9']) t = Just (T.foldl' step 0 t)
-  | otherwise = Nothing
-  where
-    step acc c = acc * 10 + (fromEnum c - fromEnum '0')
 
 ----------------------------------------------------------------------------
 -- Paths and files

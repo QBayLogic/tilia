@@ -45,7 +45,8 @@ spec = do
         let fixities =
               Map.fromList
                 [ (OpName "!", Fixity LeftAssoc 0),
-                  (OpName "?", Fixity LeftAssoc 9)
+                  (OpName "?", Fixity LeftAssoc 9),
+                  (OpName "->", Fixity RightAssoc (-1))
                 ]
         storeFixities cache "thing-1.0" "Edges" (Declares fixities)
         cachedFixities cache "thing-1.0" "Edges" `shouldReturn` Just (Declares fixities)
@@ -134,7 +135,7 @@ database = around withIsolatedCache $ do
 
   it "carries a package that exposes nothing" $ \cache ->
     withDatabase $ \db -> do
-      let quiet = InstalledPackage {ipName = "rts", ipVersion = "1.0", ipModules = []}
+      let quiet = InstalledPackage {ipName = "rts", ipVersion = "1.0", ipModules = [], ipImportDirs = []}
       storeInstalled cache (Installed [containers, quiet] [db])
       cachedInstalled cache `shouldReturn` Just [containers, quiet]
   where
@@ -142,7 +143,8 @@ database = around withIsolatedCache $ do
       InstalledPackage
         { ipName = "containers",
           ipVersion = "0.7",
-          ipModules = ["Data.Map", "Data.Map.Strict", "Data.Set"]
+          ipModules = ["Data.Map", "Data.Map.Strict", "Data.Set"],
+          ipImportDirs = ["/nowhere/containers-0.7"]
         }
 
 -- | A directory standing in for a package database, with a timestamp that

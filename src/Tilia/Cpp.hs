@@ -1222,12 +1222,12 @@ branchLeaves source = case scanDirectives source of
                   ]
             | Nest gs branches <- ns
             ]
-
     assignments forest =
-      [ Map.insert (gsGuards gs) i asked
-      | (asked, gs) <- reachable forest,
-        i <- [0 .. gsCount gs - 1]
-      ]
+      Map.empty
+        : [ Map.insert (gsGuards gs) i asked
+          | (asked, gs) <- reachable forest,
+            i <- [0 .. gsCount gs - 1]
+          ]
     configuration answers =
       blanking
         [ r

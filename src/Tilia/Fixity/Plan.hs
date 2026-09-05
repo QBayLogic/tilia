@@ -64,6 +64,7 @@ import Tilia.Fixity.Builtin (builtinFixities)
 import Tilia.Fixity.ByHand (byHandFixities)
 import Tilia.Fixity.Cabal (containedModules, findCabalFile, packageModules, sourceDirs)
 import Tilia.Fixity.Cache
+import Tilia.Fixity.Interface
 import Tilia.Fixity.PackageDb
 import Tilia.Parser
 import Tilia.Utils (quietly)
@@ -203,6 +204,7 @@ newResolver plan = do
   cache <- openCache (planToken plan)
   installed <- whatTheCompilerSees cache
   index <- buildModuleIndex cache installed tarballs
+  let interfaces = interfaceIndex installed
   local <- localModules plan
   memo <- newIORef Map.empty
   let reach visiting modName = do
@@ -210,7 +212,7 @@ newResolver plan = do
         case Map.lookup modName known of
           Just answer -> pure answer
           Nothing -> do
-            answer <- resolveModule cache local index reach visiting modName
+            answer <- resolveModule cache local index interfaces reach visiting modName
             modifyIORef' memo (Map.insert modName answer)
             pure answer
   pure (reach Set.empty)
@@ -247,6 +249,9 @@ resolveModule ::
   -- package is the cache key, which carries the hash the tarball was
   -- verified against.
   Map Text (Text, FilePath) ->
+  -- | Which compiled interface holds each module, and what to file an
+  -- answer read out of it under. Consulted only where there is no archive.
+  Map Text (Text, FilePath) ->
   -- | How to reach another module. Tied back on itself by 'newResolver', so
   -- that the memo it keeps covers the recursive calls too.
   (Set Text -> Text -> IO (Maybe (Map OpName Fixity))) ->
@@ -261,30 +266,46 @@ resolveModule ::
   -- | Its operator fixities, or 'Nothing' if they could not be
   -- established.
   IO (Maybe (Map OpName Fixity))
-resolveModule cache local index reach visiting modName
+resolveModule cache local index interfaces reach visiting modName
   | Just builtin <- Map.lookup modName builtinFixities = pure (Just builtin)
   | modName `Set.member` visiting = pure (Just Map.empty)
   | Set.size visiting > reexportDepth = pure (Just Map.empty)
-  -- The project's own modules come first and are never remembered on disk:
-  -- they are the ones being edited, so an answer kept from a previous run is
-  -- the one thing here that can be out of date.
   | Just path <- Map.lookup modName local =
       readFileText path >>= \case
         Nothing -> pure Nothing
         Just source -> fromText (reach visiting') visiting' source modName
-  | otherwise = case Map.lookup modName index of
+  | otherwise = answered <$> firstAnswer [viaInterface, viaArchive]
+  where
+    visiting' = Set.insert modName visiting
+
+    firstAnswer [] = pure Unreadable
+    firstAnswer (route : rest) =
+      route >>= \case
+        Just (Declares fixities) -> pure (Declares fixities)
+        _ -> firstAnswer rest
+
+    viaInterface = case Map.lookup modName interfaces of
+      Nothing -> pure Nothing
+      Just (key, interface) ->
+        cachedFor key >>= \case
+          Just remembered -> pure (Just remembered)
+          Nothing -> do
+            established <- fromInterface (reach visiting') modName interface
+            storeFor key established
+            pure (Just established)
+
+    viaArchive = case Map.lookup modName index of
       Nothing -> pure Nothing
       Just (package, tarball) ->
         cachedFor package >>= \case
-          Just remembered -> pure (answered remembered)
+          Just remembered -> pure (Just remembered)
           Nothing ->
             fromSource (reach visiting') visiting' tarball modName >>= \case
-              NoArchive -> pure (byHand modName)
+              NoArchive -> pure Nothing
               FromArchive established -> do
                 storeFor package established
-                pure (answered established)
-  where
-    visiting' = Set.insert modName visiting
+                pure (Just established)
+
     answered = \case
       Declares fixities -> Just fixities
       Unreadable -> byHand modName
@@ -329,6 +350,59 @@ buildModuleIndex cache installed tarballs =
             (Nothing, Nothing) -> []
             (a, b) -> concat (catMaybes [a, b])
       pure [(m, (key, tarball)) | m <- modules]
+
+-- | Where each installed module's compiled interface is.
+--
+-- Filed under the directory it was found in rather than under the package's
+-- name and version, because those do not say which build: the same version
+-- compiled with different flags can declare different fixities, and under
+-- Nix a different build is a different directory.
+interfaceIndex :: [InstalledPackage] -> Map Text (Text, FilePath)
+interfaceIndex installed =
+  Map.fromListWith
+    (\_ first' -> first')
+    [ (m, (keyFor dir, dir </> T.unpack (T.replace "." "/" m) <> ".hi"))
+    | i <- installed,
+      dir <- ipImportDirs i,
+      m <- ipModules i
+    ]
+  where
+    keyFor dir =
+      "interface-"
+        <> T.take 24 (T.decodeUtf8Lenient (B16.encode (SHA256.hash (T.encodeUtf8 (T.pack dir)))))
+
+-- | The fixities a compiled interface reports, following what it passes on.
+--
+-- Shallower than the same question asked of source. An interface names, for
+-- every name it passes on, the module that declared it, so there is one step
+-- to take rather than a chain of imports to work out and follow.
+fromInterface ::
+  -- | How to reach another module
+  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  -- | The module the interface is supposed to hold
+  Text ->
+  -- | The interface file to read
+  FilePath ->
+  IO Established
+fromInterface reach modName interface =
+  readInterface modName interface >>= \case
+    Nothing -> pure Unreadable
+    Just iface -> do
+      answers <- traverse asked (distinct (map fst (interfacePassedOn iface)))
+      pure $ case traverse snd answers of
+        Nothing -> Unreadable
+        Just _ ->
+          Declares . Map.union (interfaceDeclares iface) . Map.fromList $
+            [ (op, fixity)
+            | (m, op) <- interfacePassedOn iface,
+              Just (Just declared) <- [lookup m answers],
+              Just fixity <- [Map.lookup op declared]
+            ]
+  where
+    asked m = do
+      answer <- reach m
+      pure (m, answer)
+    distinct = Map.keys . Map.fromList . map (,())
 
 -- | A package's module list from the @.cabal@ file in its tarball.
 fromCabalFile ::
@@ -591,8 +665,13 @@ data Readiness
     PlanMissing
   | -- | The plan is older than the files that determine it.
     PlanStale [FilePath]
-  | -- | The plan is there but some packages have not been downloaded. The
-    -- names are listed so that a caller can say what it is waiting for.
+  | -- | The plan is there, and some packages have neither been downloaded
+    -- nor built. The names are listed so that a caller can say what it is
+    -- waiting for.
+    --
+    -- Built counts as having them: their interfaces answer everything the
+    -- source would have been read for, so a package the compiler already
+    -- holds is not missing however absent its tarball is.
     SourcesMissing [Text]
   deriving (Eq, Show)
 
@@ -614,13 +693,20 @@ checkReadiness projectDir =
         then pure (PlanStale newer)
         else do
           tarballs <- filter (isFetchable . fst) <$> plannedTarballs plan
-          missing <-
-            traverse
-              (\(p, t) -> (\there -> if there then Nothing else Just (ppName p)) <$> doesFileExist t)
-              tarballs
-          pure $ case [n | Just n <- missing] of
+          absent <- filterM (fmap not . doesFileExist . snd) tarballs
+          wanted <- filterM (fmap not . builtAlready plan) (map fst absent)
+          pure $ case map ppName wanted of
             [] -> Ready
             ns -> SourcesMissing ns
+
+-- | Has the compiler got this package already?
+builtAlready :: BuildPlan -> PlanPackage -> IO Bool
+builtAlready plan p = do
+  cache <- openCache (planToken plan)
+  installed <- whatTheCompilerSees cache
+  pure (any matches installed)
+  where
+    matches i = ipName i == ppName p && ipVersion i == ppVersion p
 
 -- | The project files that have changed since the plan was written.
 --

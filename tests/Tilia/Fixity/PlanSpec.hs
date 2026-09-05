@@ -14,14 +14,18 @@
 module Tilia.Fixity.PlanSpec (spec) where
 
 import Data.List (isInfixOf)
+import Data.Maybe (listToMaybe)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
 import Test.Hspec
 import Tilia.Fixity
+import Tilia.Fixity.Interface
+import Tilia.Fixity.PackageDb
 import Tilia.Fixity.Plan
 import Tilia.Parser
+import System.FilePath ((</>))
 
 spec :: Spec
 spec = do
@@ -70,8 +74,6 @@ withPlan plan = do
 
   describe "re-exports" $
     it "finds an operator a module exports but does not declare" $
-      -- Prettyprinter re-exports <+> from Prettyprinter.Internal, where the
-      -- infixr 6 actually lives.
       needs resolve "Prettyprinter" $ \fixities ->
         Map.lookup (OpName "<+>") fixities `shouldBe` Just (Fixity RightAssoc 6)
 
@@ -104,9 +106,6 @@ withPlan plan = do
       concat wrong `shouldBe` []
 
     it "carries re-exports already resolved" $ do
-      -- ($) is declared in an internal module and only reaches Prelude by
-      -- re-export; (!) likewise reaches Data.Map from Data.Map.Internal.
-      -- Both are in the table, so no chasing happens at run time.
       p <- resolve "Prelude"
       m <- resolve "Data.Map"
       ( Map.lookup (OpName "$") =<< p,
@@ -115,8 +114,6 @@ withPlan plan = do
         `shouldBe` (Just (Fixity RightAssoc 0), Just (Fixity LeftAssoc 9))
 
     it "gives the same operator different fixities in different modules" $ do
-      -- (\\\\) is infix 5 in Data.List and infixl 9 in Data.Map. A table keyed
-      -- by operator rather than by module could not say this.
       inList <- resolve "Data.List"
       inMap <- resolve "Data.Map"
       ( Map.lookup (OpName "\\\\") =<< inList,
@@ -132,9 +129,6 @@ withPlan plan = do
       resolve "Some.Package.That.Does.Not.Exist" `shouldReturn` Nothing
 
     it "distinguishes a boot module with no operators from an unknown one" $ do
-      -- Data.Char exports none, and saying so is an answer. Were it merely
-      -- absent from the table, importing it would leave every operator in
-      -- scope unresolved.
       quiet <- resolve "Data.Char"
       quiet `shouldBe` Just Map.empty
 
@@ -148,6 +142,19 @@ withPlan plan = do
     it "carries that through the re-export chain to Test.QuickCheck" $
       needs resolve "Test.QuickCheck" $ \fixities ->
         Map.lookup (OpName "===") fixities `shouldBe` Just (Fixity NoAssoc 4)
+
+  describe "the two ways of finding a fixity" $
+    it "agree wherever both can answer" $ do
+      installed <- readInstalledPackages
+      let interfaceFor m =
+            listToMaybe
+              [ dir </> T.unpack (T.replace "." "/" m) <> ".hi"
+              | p <- installedPackages installed,
+                m `elem` ipModules p,
+                dir <- ipImportDirs p
+              ]
+      disagreements <- traverse (compare' resolve interfaceFor) declaringModules
+      concat disagreements `shouldBe` []
 
   describe "the whole pipeline, from source text to a fixity" $ do
     it "resolves an operator through a real import" $
@@ -194,8 +201,6 @@ withPlan plan = do
           `shouldBe` Resolved (Fixity RightAssoc 6) (DeclaredIn "Prettyprinter")
 
     it "concludes the default through a boot import that exports no operators" $
-      -- The table knowing Data.Char is what makes this a conclusion rather
-      -- than an admission.
       endToEnd resolve "module M where\nimport Data.Char\n" $ \scope ->
         lookupFixity scope Nothing (OpName "<!@#>")
           `shouldBe` Resolved defaultFixity ReportDefault
@@ -219,6 +224,49 @@ withPlan plan = do
 
 ----------------------------------------------------------------------------
 -- Helpers
+
+-- | Modules known to declare a fixity of their own, across a few packages
+-- and a few shapes: at the margin, inside a class, and behind a
+-- conditional.
+declaringModules :: [Text]
+declaringModules =
+  [ "Data.Map.Internal",
+    "Data.Bits",
+    "Prettyprinter.Internal",
+    "Data.Aeson.Types.ToJSON",
+    "Text.Megaparsec"
+  ]
+
+-- | Everything an interface says a module declares, as the resolver has it.
+--
+-- The resolver reports what a module passes on as well as what it declares,
+-- so the interface's declarations are a subset of its answer rather than
+-- equal to it.
+compare' ::
+  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  (Text -> Maybe FilePath) ->
+  Text ->
+  IO [String]
+compare' resolve interfaceFor modName = case interfaceFor modName of
+  Nothing -> pure []
+  Just path ->
+    readInterface modName path >>= \case
+      Nothing -> pure []
+      Just interface ->
+        resolve modName >>= \case
+          Nothing -> pure []
+          Just resolved ->
+            pure
+              [ T.unpack modName
+                <> ": " <> show op
+                <> " is "
+                <> show declared
+                <> " by the compiler, "
+                <> show (Map.lookup op resolved)
+                <> " from source"
+              | (op, declared) <- Map.toList (interfaceDeclares interface),
+                Map.lookup op resolved /= Just declared
+              ]
 
 -- | Run an assertion on a module's fixities, or mark the test pending if
 -- the module could not be resolved at all.

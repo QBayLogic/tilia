@@ -83,10 +83,14 @@ defaultFixity = Fixity LeftAssoc 9
 -- | The fixities a module declares for its own operators.
 declaredFixities :: HsModule GhcPs -> Map OpName Fixity
 declaredFixities =
-  Map.fromList . concatMap fixitySig . hsmodDecls
+  Map.fromList . concatMap (fromDecl . unLoc) . hsmodDecls
   where
-    fixitySig = \case
-      L _ (SigD _ (FixSig _ (FixitySig _ names fixity))) ->
+    fromDecl = \case
+      SigD _ sig -> fromSig sig
+      TyClD _ ClassDecl {tcdSigs} -> concatMap (fromSig . unLoc) tcdSigs
+      _ -> []
+    fromSig = \case
+      FixSig _ (FixitySig _ names fixity) ->
         [(opName (unLoc n), fromGhcFixity fixity) | n <- names]
       _ -> []
 

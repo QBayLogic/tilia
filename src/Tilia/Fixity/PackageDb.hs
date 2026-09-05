@@ -41,10 +41,12 @@ data InstalledPackage = InstalledPackage
     ipName :: Text,
     -- | Package version
     ipVersion :: Text,
-    -- | The modules it exposes, with re-export clauses dropped: those name
-    -- modules belonging to another package, and looking there is that
-    -- package's business.
-    ipModules :: [Text]
+    -- | Every module it holds, hidden ones included, with re-export clauses
+    -- dropped: those name modules belonging to another package, and looking
+    -- there is that package's business.
+    ipModules :: [Text],
+    -- | Where its compiled interfaces are.
+    ipImportDirs :: [FilePath]
   }
   deriving (Eq, Show)
 
@@ -87,8 +89,10 @@ databasesIn fields =
     | f <- fields,
       Just root <- [Map.lookup "pkgroot" f]
     ]
-  where
-    unquote = T.dropAround (== '"') . T.strip
+
+-- | Strip the quotes a path is written in when it has none needing them.
+unquote :: Text -> Text
+unquote = T.dropAround (== '"') . T.strip
 
 -- | Split @ghc-pkg dump@ output into its records.
 records :: Text -> [Text]
@@ -108,16 +112,16 @@ fromFields fields = do
       { ipName = T.strip name,
         ipVersion = T.strip version,
         ipModules =
-          maybe [] moduleNames (Map.lookup "exposed-modules" fields)
+          concatMap
+            (maybe [] moduleNames . (`Map.lookup` fields))
+            ["exposed-modules", "hidden-modules"],
+        ipImportDirs =
+          maybe [] (map (T.unpack . unquote) . T.words) (Map.lookup "import-dirs" fields)
       }
 
 -- | The module names in an @exposed-modules@ field.
---
--- A re-export is written @Here from other-pkg:There@; both the name and
--- what it points at are dropped, since the fixities it carries belong to
--- the package it came from.
 moduleNames :: Text -> [Text]
-moduleNames = go . T.words
+moduleNames = go . filter (not . T.null) . concatMap (T.split (== ',')) . T.words
   where
     go = \case
       (_ : "from" : _ : rest) -> go rest

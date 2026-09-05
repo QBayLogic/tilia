@@ -210,6 +210,19 @@ spec = do
           (const False)
           (all (\l -> not ("inner" `T.isInfixOf` l) || "outer" `T.isInfixOf` l))
 
+  describe "covering every branch" $ do
+    it "gives a module with no conditionals one configuration, its own" $
+      said (length <$> branchLeaves "module M where\nx = 1\n") `shouldBe` Right 1
+
+    it "gives one per branch of a conditional" $ do
+      said (length <$> branchLeaves "module M where\n#if A\nx = 1\n#endif\n") `shouldBe` Right 2
+      said (length <$> branchLeaves "module M where\n#if A\nx = 1\n#else\nx = 2\n#endif\n")
+        `shouldBe` Right 2
+
+    it "is their sum where enumerating them would be their product" $
+      (said (length <$> branchLeaves (sideBySide 20)), said (countLeaves (sideBySide 20)))
+        `shouldBe` (Right 21, Right (2 ^ (20 :: Int)))
+
   describe "varying one conditional at a time" $ do
     it "is the baseline and one configuration per further branch" $
       said (length <$> linearLeaves (sideBySide 63)) `shouldBe` Right 64

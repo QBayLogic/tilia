@@ -40,10 +40,20 @@ spec = do
       declaredIn "module M where\ny = a <+> b\ninfixl 6 <+>\n"
         `shouldBe` [(OpName "<+>", Fixity LeftAssoc 6)]
 
+    it "reads one a class makes about its own method" $
+      declaredIn "module M where\nclass C a where\n  infixr 8 .=\n  (.=) :: a -> a -> Int\n"
+        `shouldBe` [(OpName ".=", Fixity RightAssoc 8)]
+
+    it "reads those at the margin and in a class together" $
+      declaredIn "module M where\ninfixl 1 <+>\nclass C a where\n  infixr 8 .=\n  (.=) :: a -> a -> Int\n"
+        `shouldBe` [(OpName ".=", Fixity RightAssoc 8), (OpName "<+>", Fixity LeftAssoc 1)]
+
+    it "leaves a declaration local to a binding where it is" $
+      declaredIn "module M where\nf = g\n  where\n    infixr 3 ###\n    g = 1\n"
+        `shouldBe` []
+
   describe "layer 2: imports" $ do
     it "sees an unqualified import in both scopes" $
-      -- A plain import brings names in qualified as well: @Data.Map.!@ is
-      -- valid after @import Data.Map@.
       scopeOf "module M where\nimport Data.Map\n"
         `shouldBe`
           ( [(OpName "!", Fixity LeftAssoc 9)],
