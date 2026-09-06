@@ -131,6 +131,18 @@ executable tilia
     text >=2.1 && <3,
     tilia,
 
+  -- Twelve capabilities rather than -N, because formatting a project stops
+  -- getting faster well before a machine runs out of cores and every
+  -- capability past that point costs about 40 MiB and 0.15s of CPU while
+  -- formatting nothing. Over this project's 43 files: 1.88s at -N1, 575ms
+  -- at -N8, 518ms at -N12, 499ms at -N16, and back to 509ms at -N24. Asking
+  -- for -N here instead is the same wall time as -N12 give or take noise,
+  -- for 50% more CPU and 940 MiB against 520 MiB. Twelve is no worse on a
+  -- smaller machine either: pinned to four cores it lands within 3% of -N4.
+  --
+  -- The nursery is the flag that pays for itself. At the default size the
+  -- same run takes 828ms rather than 522ms, which is what the extra 320 MiB
+  -- buys.
   ghc-options:
     -threaded
     -rtsopts
