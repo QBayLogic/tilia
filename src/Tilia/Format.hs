@@ -13,6 +13,7 @@ where
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import Data.List.NonEmpty qualified as NE
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -80,9 +81,10 @@ describeFormatError = \case
     where
       saying (OpName op, why) = op <> " " <> because why
       because = \case
-        NotRead [] -> "is not declared anywhere in scope"
         NotRead missing ->
-          "may be declared in " <> T.intercalate " or " missing <> ", which could not be read"
+          "may be declared in "
+            <> T.intercalate " or " (NE.toList missing)
+            <> ", which could not be read"
         Ambiguous -> "is declared differently by two modules in scope"
 
 -- | The exit status a failure should leave behind.

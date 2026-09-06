@@ -8,7 +8,6 @@ module Tilia.Fixity.Plan
   ( -- * Build plans
     PlanPackage (..),
     PackageSource (..),
-    isPreExisting,
     isFetchable,
     sourceHashOf,
     BuildPlan (..),
@@ -106,10 +105,6 @@ data PackageSource
     -- does.
     HackagePackage (Maybe Text)
   deriving (Eq, Show)
-
--- | Will @cabal@ decline to build this package because it is there already?
-isPreExisting :: PlanPackage -> Bool
-isPreExisting p = ppSource p == PreExisting
 
 -- | Is there a tarball to go and read?
 isFetchable :: PlanPackage -> Bool
@@ -227,18 +222,21 @@ checkReadiness projectDir =
         then pure (PlanStale newer)
         else do
           tarballs <- filter (isFetchable . fst) <$> plannedTarballs plan
-          absent <- filterM (fmap not . doesFileExist . snd) tarballs
-          wanted <- filterM (fmap not . builtAlready plan) (map fst absent)
+          absent <- map fst <$> filterM (fmap not . doesFileExist . snd) tarballs
+          wanted <-
+            if null absent
+              then pure []
+              else do
+                cache <- openCache (planToken plan)
+                installed <- whatTheCompilerSees cache
+                pure (filter (not . builtAlready installed) absent)
           pure $ case map ppName wanted of
             [] -> Ready
             ns -> SourcesMissing ns
 
 -- | Has the compiler got this package already?
-builtAlready :: BuildPlan -> PlanPackage -> IO Bool
-builtAlready plan p = do
-  cache <- openCache (planToken plan)
-  installed <- whatTheCompilerSees cache
-  pure (any matches installed)
+builtAlready :: [InstalledPackage] -> PlanPackage -> Bool
+builtAlready installed p = any matches installed
   where
     matches i = ipName i == ppName p && ipVersion i == ppVersion p
 
@@ -584,9 +582,12 @@ interfaceIndex :: [InstalledPackage] -> Map Text (Text, FilePath)
 interfaceIndex installed =
   Map.fromListWith
     (\_ first' -> first')
-    [ (m, (keyFor dir, dir </> T.unpack (T.replace "." "/" m) <> ".hi"))
+    [ (m, (key, dir </> T.unpack (T.replace "." "/" m) <> ".hi"))
     | i <- installed,
       dir <- ipImportDirs i,
+      -- Bound out here so that the directory is hashed once rather than
+      -- once for each of the modules found in it.
+      let key = keyFor dir,
       m <- ipModules i
     ]
   where

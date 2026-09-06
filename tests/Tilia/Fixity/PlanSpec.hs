@@ -14,6 +14,7 @@
 module Tilia.Fixity.PlanSpec (spec) where
 
 import Data.List (isInfixOf)
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
@@ -55,6 +56,7 @@ withPlan plan = do
 
     it "puts every package in exactly one of the three kinds" $ do
       let kinds p = length (filter id [isPreExisting p, isFetchable p, isLocal p])
+          isPreExisting p = ppSource p == PreExisting
           isLocal p = case ppSource p of LocalPackage _ -> True; _ -> False
       filter ((/= 1) . kinds) (bpPackages plan) `shouldBe` []
 
@@ -181,7 +183,7 @@ withPlan plan = do
     it "refuses to conclude anything when an import could not be read" $
       endToEnd resolve "module M where\nimport No.Such.Module\n" $ \scope ->
         lookupFixity scope Nothing (OpName "<!@#>")
-          `shouldBe` Unresolved ["No.Such.Module"]
+          `shouldBe` Unresolved ("No.Such.Module" :| [])
 
     it "still answers for what it did find, despite an unreadable import" $
       endToEnd resolve "module M where\nimport Prettyprinter\nimport No.Such.Module\n" $ \scope ->

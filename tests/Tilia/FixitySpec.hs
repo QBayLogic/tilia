@@ -4,6 +4,7 @@
 -- | Whether fixities can be resolved exactly from source alone.
 module Tilia.FixitySpec (spec) where
 
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Test.Hspec
@@ -130,7 +131,7 @@ spec = do
     it "refuses to conclude anything when a module could not be read" $
       let s = fullScope "module M where\nimport Data.Map\nimport Opaque\n"
        in lookupFixity s Nothing (OpName "<??>")
-            `shouldBe` Unresolved ["Opaque"]
+            `shouldBe` Unresolved ("Opaque" :| [])
 
     it "still answers for an operator it did find, despite an unread module" $
       let s = fullScope "module M where\nimport Data.Map\nimport Opaque\n"

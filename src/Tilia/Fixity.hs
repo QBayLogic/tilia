@@ -41,6 +41,7 @@ where
 import Control.Applicative ((<|>))
 import Data.Foldable (toList)
 import Data.Generics.Schemes (listify)
+import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
@@ -310,8 +311,10 @@ data Scope = Scope
 -- an admission about us, and conflating them is how a formatter ends up
 -- asserting a fixity it never established.
 --
--- Not yet handled: re-export chains, and operators arriving through
--- @T(..)@. Both are syntactic and belong in the lookup function.
+-- Not handled here: operators arriving through @T(..)@. That is syntactic
+-- and so belongs to the lookup function, as re-export chains do—and those
+-- "Tilia.Fixity.Plan" already follows, through export lists in source and
+-- through the export section of an interface.
 resolveScope ::
   -- | What a module exports, or 'Nothing' if that could not be determined
   (Text -> Maybe (Map OpName Fixity)) ->
@@ -387,7 +390,7 @@ data Resolution
     -- A printer that receives this must not restructure the operator chain:
     -- it has to lay it out as the input had it. Rearranging on a guess is
     -- exactly what this type exists to prevent.
-    Unresolved [Text]
+    Unresolved (NonEmpty Text)
   deriving (Eq, Show)
 
 -- | The fixity of an operator as this module sees it.
@@ -403,11 +406,11 @@ lookupFixity ::
 lookupFixity scope qualifier op =
   case found of
     Just (fixity, provenance) -> Resolved fixity provenance
-    Nothing -> case unreadFor scope qualifier op of
+    Nothing -> case nonEmpty (unreadFor scope qualifier op) of
       -- Nothing that could have declared it went unread, so the Report's
       -- default is not a guess but a conclusion.
-      [] -> Resolved defaultFixity ReportDefault
-      missing -> Unresolved missing
+      Nothing -> Resolved defaultFixity ReportDefault
+      Just missing -> Unresolved missing
   where
     found = case qualifier of
       Nothing -> Map.lookup op (scopeUnqualified scope)
@@ -451,7 +454,7 @@ unreadFor scope qualifier op =
 data Unknown
   = -- | These modules in scope could not be read, and the declaration the
     -- answer depends on may be in any of them.
-    NotRead [Text]
+    NotRead (NonEmpty Text)
   | -- | Two modules in scope bring it in with different fixities, so which
     -- one applies cannot be read off the imports alone.
     Ambiguous
