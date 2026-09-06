@@ -166,6 +166,7 @@ test-suite tests
     Tilia.Equivalence
     Tilia.Fixity.CabalSpec
     Tilia.Fixity.CacheSpec
+    Tilia.Fixity.DependenciesSpec
     Tilia.Fixity.InterfaceSpec
     Tilia.Fixity.PlanSpec
     Tilia.FixitySpec

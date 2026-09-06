@@ -14,18 +14,14 @@
 module Tilia.Fixity.PlanSpec (spec) where
 
 import Data.List (isInfixOf)
-import Data.Maybe (listToMaybe)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
 import Test.Hspec
 import Tilia.Fixity
-import Tilia.Fixity.Interface
-import Tilia.Fixity.PackageDb
 import Tilia.Fixity.Plan
 import Tilia.Parser
-import System.FilePath ((</>))
 
 spec :: Spec
 spec = do
@@ -148,19 +144,6 @@ withPlan plan = do
       answer <- resolve "GHC.Hs"
       answer `shouldSatisfy` (/= Nothing)
 
-  describe "the two ways of finding a fixity" $
-    it "agree wherever both can answer" $ do
-      installed <- readInstalledPackages
-      let interfaceFor m =
-            listToMaybe
-              [ dir </> T.unpack (T.replace "." "/" m) <> ".hi"
-              | p <- installedPackages installed,
-                m `elem` ipModules p,
-                dir <- ipImportDirs p
-              ]
-      disagreements <- traverse (compare' resolve interfaceFor) declaringModules
-      concat disagreements `shouldBe` []
-
   describe "the whole pipeline, from source text to a fixity" $ do
     it "resolves an operator through a real import" $
       endToEnd resolve "module M where\nimport Prettyprinter\n" $ \scope ->
@@ -229,49 +212,6 @@ withPlan plan = do
 
 ----------------------------------------------------------------------------
 -- Helpers
-
--- | Modules known to declare a fixity of their own, across a few packages
--- and a few shapes: at the margin, inside a class, and behind a
--- conditional.
-declaringModules :: [Text]
-declaringModules =
-  [ "Data.Map.Internal",
-    "Data.Bits",
-    "Prettyprinter.Internal",
-    "Data.Aeson.Types.ToJSON",
-    "Text.Megaparsec"
-  ]
-
--- | Everything an interface says a module declares, as the resolver has it.
---
--- The resolver reports what a module passes on as well as what it declares,
--- so the interface's declarations are a subset of its answer rather than
--- equal to it.
-compare' ::
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
-  (Text -> Maybe FilePath) ->
-  Text ->
-  IO [String]
-compare' resolve interfaceFor modName = case interfaceFor modName of
-  Nothing -> pure []
-  Just path ->
-    readInterface modName path >>= \case
-      Nothing -> pure []
-      Just interface ->
-        resolve modName >>= \case
-          Nothing -> pure []
-          Just resolved ->
-            pure
-              [ T.unpack modName
-                <> ": " <> show op
-                <> " is "
-                <> show declared
-                <> " by the compiler, "
-                <> show (Map.lookup op resolved)
-                <> " from source"
-              | (op, declared) <- Map.toList (interfaceDeclares interface),
-                Map.lookup op resolved /= Just declared
-              ]
 
 -- | Run an assertion on a module's fixities, or mark the test pending if
 -- the module could not be resolved at all.

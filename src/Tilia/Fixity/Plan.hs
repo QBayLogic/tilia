@@ -21,7 +21,9 @@ module Tilia.Fixity.Plan
     loadPlan,
 
     -- * Resolving
+    Route (..),
     newResolver,
+    newResolverVia,
     scopeFor,
   )
 where
@@ -72,6 +74,14 @@ import Tilia.Utils (quietly)
 ----------------------------------------------------------------------------
 -- The plan
 
+-- | One package of a build plan.
+data PlanPackage = PlanPackage
+  { ppName :: Text,
+    ppVersion :: Text,
+    ppSource :: PackageSource
+  }
+  deriving (Eq, Show)
+
 -- | Where a package's source is, if anywhere.
 --
 -- A plan contains exactly three kinds of entry and they are mutually
@@ -95,14 +105,6 @@ data PackageSource
     -- one; every entry in a plan @cabal@ writes for a secure repository
     -- does.
     HackagePackage (Maybe Text)
-  deriving (Eq, Show)
-
--- | One package of a build plan.
-data PlanPackage = PlanPackage
-  { ppName :: Text,
-    ppVersion :: Text,
-    ppSource :: PackageSource
-  }
   deriving (Eq, Show)
 
 -- | Will @cabal@ decline to build this package because it is there already?
@@ -187,7 +189,180 @@ readBuildPlan path =
     True -> either (Left . T.pack) Right <$> eitherDecodeFileStrict path
 
 ----------------------------------------------------------------------------
+-- Readiness
+
+-- | Whether everything the resolver needs is on disk.
+data Readiness
+  = -- | Nothing to do.
+    Ready
+  | -- | No build plan; @cabal@ has not solved this project yet.
+    PlanMissing
+  | -- | The plan is older than the files that determine it.
+    PlanStale [FilePath]
+  | -- | The plan is there, and some packages have neither been downloaded
+    -- nor built. The names are listed so that a caller can say what it is
+    -- waiting for.
+    --
+    -- Built counts as having them: their interfaces answer everything the
+    -- source would have been read for, so a package the compiler already
+    -- holds is not missing however absent its tarball is.
+    SourcesMissing [Text]
+  deriving (Eq, Show)
+
+-- | Where @cabal@ writes the plan for a project.
+planPathFor :: FilePath -> FilePath
+planPathFor projectDir = projectDir </> "dist-newstyle" </> "cache" </> "plan.json"
+
+-- | Check what is missing, cheaply.
+--
+-- One read of the plan and one @stat@ per package, so this is fast enough
+-- to run before every format without anyone noticing.
+checkReadiness :: FilePath -> IO Readiness
+checkReadiness projectDir =
+  readBuildPlan (planPathFor projectDir) >>= \case
+    Left _ -> pure PlanMissing
+    Right plan -> do
+      newer <- filesNewerThanPlan projectDir
+      if not (null newer)
+        then pure (PlanStale newer)
+        else do
+          tarballs <- filter (isFetchable . fst) <$> plannedTarballs plan
+          absent <- filterM (fmap not . doesFileExist . snd) tarballs
+          wanted <- filterM (fmap not . builtAlready plan) (map fst absent)
+          pure $ case map ppName wanted of
+            [] -> Ready
+            ns -> SourcesMissing ns
+
+-- | Has the compiler got this package already?
+builtAlready :: BuildPlan -> PlanPackage -> IO Bool
+builtAlready plan p = do
+  cache <- openCache (planToken plan)
+  installed <- whatTheCompilerSees cache
+  pure (any matches installed)
+  where
+    matches i = ipName i == ppName p && ipVersion i == ppVersion p
+
+-- | The project files that have changed since the plan was written.
+--
+-- A plan describes the dependencies as they were when @cabal@ last solved.
+-- Edit a @build-depends@ and the plan on disk is about a different project,
+-- and resolving fixities against it would answer for packages that are no
+-- longer in play. Comparing modification times is one @stat@ each, so this
+-- costs nothing to check every time.
+filesNewerThanPlan :: FilePath -> IO [FilePath]
+filesNewerThanPlan projectDir = quietly [] $ do
+  planTime <- getModificationTime (planPathFor projectDir)
+  entries <- quietly [] (listDirectory projectDir)
+  let candidates =
+        filter
+          (\f -> f `elem` projectFiles || ".cabal" `isSuffixOf` f)
+          entries
+  newer <- traverse (isNewerThan planTime) candidates
+  pure [f | Just f <- newer]
+  where
+    projectFiles =
+      ["cabal.project", "cabal.project.local", "cabal.project.freeze"]
+    isNewerThan planTime f = quietly Nothing $ do
+      t <- getModificationTime (projectDir </> f)
+      pure (if t > planTime then Just f else Nothing)
+
+-- | Do whatever is missing, by asking @cabal@.
+--
+-- Neither of these builds anything: a dry run only solves, and
+-- @--only-download@ only fetches. Both are one-time costs, and @cabal@'s
+-- package cache is shared between projects, so a machine that has seen a
+-- dependency once never fetches it again.
+--
+-- This runs a subprocess and may reach the network, so it is a separate
+-- call rather than something 'newResolver' does behind the caller's back.
+-- An editor formatting on save must not block on it.
+prepare :: FilePath -> Readiness -> IO (Either Text ())
+prepare projectDir = \case
+  Ready -> pure (Right ())
+  PlanMissing -> cabal ["build", "--dry-run"]
+  PlanStale _ -> cabal ["build", "--dry-run"]
+  SourcesMissing _ -> cabal ["build", "--only-download"]
+  where
+    cabal args = quietly (Left "could not run cabal") $ do
+      (code, _, err) <-
+        readCreateProcessWithExitCode (proc "cabal" args) {cwd = Just projectDir} ""
+      pure $ case code of
+        ExitSuccess -> Right ()
+        _ -> Left (T.strip (T.pack err))
+
+-- | Get a plan that is safe to use, doing whatever @cabal@ work is needed.
+--
+-- This is the call most users want. It checks, asks @cabal@ if anything is
+-- missing or possibly out of date, and then reads the plan. Once a dry run
+-- has succeeded the plan on disk is correct by construction: @cabal@ would
+-- have rewritten it otherwise. So the readiness is not consulted a second
+-- time, and a project whose files are merely newer than its plan does not
+-- send this into a loop.
+loadPlan :: FilePath -> IO (Either Text BuildPlan)
+loadPlan projectDir = do
+  readiness <- checkReadiness projectDir
+  prepare projectDir readiness >>= \case
+    Left err | readiness /= Ready -> pure (Left err)
+    _ -> readBuildPlan (planPathFor projectDir)
+
+-- | Every planned package whose source could be in the package cache, with
+-- where that would be.
+--
+-- Not only the ones the plan will fetch. A package already installed still
+-- has a tarball in the cache if anything ever downloaded it, and under Nix
+-- that is the normal case for every dependency. A package with no tarball
+-- costs one @stat@ and falls through.
+--
+-- Local packages are excluded: they are directories, not archives.
+plannedTarballs :: BuildPlan -> IO [(PlanPackage, FilePath)]
+plannedTarballs plan = do
+  cacheDir <- packageCacheDir
+  pure
+    [ (p, tarballFor cacheDir p)
+    | p <- bpPackages plan,
+      not (isLocal p)
+    ]
+  where
+    isLocal p = case ppSource p of
+      LocalPackage _ -> True
+      _ -> False
+
+-- | Where @cabal@ keeps downloaded package sources.
+packageCacheDir :: IO FilePath
+packageCacheDir =
+  lookupEnv "CABAL_DIR" >>= \case
+    Just dir -> pure (dir </> "packages" </> hackage)
+    Nothing -> do
+      home <- getHomeDirectory
+      let xdg = home </> ".cache" </> "cabal" </> "packages" </> hackage
+          legacy = home </> ".cabal" </> "packages" </> hackage
+      exists <- doesFileExist (xdg </> "01-index.tar")
+      pure (if exists then xdg else legacy)
+  where
+    hackage = "hackage.haskell.org"
+
+-- | Where a package's source tarball should be.
+tarballFor :: FilePath -> PlanPackage -> FilePath
+tarballFor cacheDir p =
+  cacheDir
+    </> T.unpack (ppName p)
+    </> T.unpack (ppVersion p)
+    </> T.unpack (ppName p <> "-" <> ppVersion p <> ".tar.gz")
+
+----------------------------------------------------------------------------
 -- Resolving
+
+-- | Where a module's fixities can be read from.
+data Route
+  = -- | The compiled interface the package database points at. Cheap, and
+    -- authoritative where it exists, since it is the compiler's own account
+    -- of what it settled on.
+    FromInterface
+  | -- | The module's source, out of the package's tarball in Cabal's
+    -- package cache. Slower, and the only route for a package that is
+    -- planned but not built.
+    FromSource
+  deriving (Eq, Show)
 
 -- | Build a lookup function for "Tilia.Fixity".
 --
@@ -195,11 +370,25 @@ readBuildPlan path =
 -- its having no operators; see 'Tilia.Fixity.resolveScope' for why the
 -- difference has to survive.
 --
--- Answers are remembered on disk between runs by "Tilia.Fixity.Cache", so
--- a package is decompressed and parsed once per machine rather than once
--- per file.
-newResolver :: BuildPlan -> IO (Text -> IO (Maybe (Map OpName Fixity)))
-newResolver plan = do
+-- Answers are remembered on disk between runs by "Tilia.Fixity.Cache", so a
+-- package is decompressed and parsed once per machine rather than once per
+-- file.
+newResolver ::
+  -- | The build plan to use
+  BuildPlan ->
+  -- | The resolver
+  IO (Text -> IO (Maybe (Map OpName Fixity)))
+newResolver = newResolverVia [FromInterface, FromSource]
+
+-- | 'newResolver', restricted to the routes given.
+newResolverVia ::
+  -- | Which readings to try, in order
+  [Route] ->
+  -- | The build plan to use
+  BuildPlan ->
+  -- | The resolver
+  IO (Text -> IO (Maybe (Map OpName Fixity)))
+newResolverVia routes plan = do
   tarballs <- plannedTarballs plan
   cache <- openCache (planToken plan)
   installed <- whatTheCompilerSees cache
@@ -213,9 +402,16 @@ newResolver plan = do
         case Map.lookup modName seen of
           Just interface -> pure interface
           Nothing -> do
-            interface <- case Map.lookup modName interfaces of
+            found <- case Map.lookup modName interfaces of
               Nothing -> pure Nothing
               Just (_, path) -> readInterface modName path
+            -- Being listed is not the same as being readable: @ghc-pkg@
+            -- names @GHC.Prim@ among @ghc-prim@'s modules and there is no
+            -- file at the path that implies. So the table answers for a
+            -- module with nothing to read, however it came to have nothing.
+            let interface = case found of
+                  Just _ -> found
+                  Nothing -> asInterface <$> Map.lookup modName builtinFixities
             modifyIORef' interfacesRead (Map.insert modName interface)
             pure interface
   let reach visiting modName
@@ -225,7 +421,16 @@ newResolver plan = do
             case Map.lookup modName known of
               Just answer -> pure answer
               Nothing -> do
-                answer <- resolveModule cache local index interfaces interfaceOf reach visiting modName
+                answer <- resolveModule
+                  routes
+                  cache
+                  local
+                  index
+                  interfaces
+                  interfaceOf
+                  reach
+                  visiting
+                  modName
                 modifyIORef' memo (Map.insert modName answer)
                 pure answer
   pure (reach Set.empty)
@@ -253,6 +458,8 @@ scopeFor resolve hsModule = do
 
 -- | Where a module's fixities come from, in order of cost.
 resolveModule ::
+  -- | Which readings to try, in the order given.
+  [Route] ->
   -- | Where to remember answers between runs.
   Maybe Cache ->
   -- | The modules of the project's own packages, which are read straight
@@ -280,15 +487,19 @@ resolveModule ::
   -- | Its operator fixities, or 'Nothing' if they could not be
   -- established.
   IO (Maybe (Map OpName Fixity))
-resolveModule cache local index interfaces interfaceOf reach visiting modName
+resolveModule routes cache local index interfaces interfaceOf reach visiting modName
   | Just builtin <- Map.lookup modName builtinFixities = pure (Just builtin)
   | Just path <- Map.lookup modName local =
       readFileText path >>= \case
         Nothing -> pure Nothing
         Just source -> fromText (reach visiting') visiting' source modName
-  | otherwise = answered <$> firstAnswer [viaInterface, viaArchive]
+  | otherwise = answered <$> firstAnswer (map taking routes)
   where
     visiting' = Set.insert modName visiting
+
+    taking = \case
+      FromInterface -> viaInterface
+      FromSource -> viaArchive
 
     firstAnswer [] = pure Unreadable
     firstAnswer (route : rest) =
@@ -382,6 +593,11 @@ interfaceIndex installed =
     keyFor dir =
       "interface-"
         <> T.take 24 (T.decodeUtf8Lenient (B16.encode (SHA256.hash (T.encodeUtf8 (T.pack dir)))))
+
+-- | Present a fixity map as an 'Interface'.
+asInterface :: Map OpName Fixity -> Interface
+asInterface fixities =
+  Interface {interfaceDeclares = fixities, interfacePassedOn = []}
 
 -- | The fixities a compiled interface reports, and those it passes on.
 fromInterface ::
@@ -655,164 +871,3 @@ readModule tarball modName = quietly Nothing $ do
       | d == "." = takeWhile (/= '/') path <> suffix == path
       | otherwise = ("/" <> T.unpack d <> suffix) `isSuffixOf` path
     decode = T.decodeUtf8Lenient . BL.toStrict
-
-----------------------------------------------------------------------------
--- Readiness
-
--- | Whether everything the resolver needs is on disk.
-data Readiness
-  = -- | Nothing to do.
-    Ready
-  | -- | No build plan; @cabal@ has not solved this project yet.
-    PlanMissing
-  | -- | The plan is older than the files that determine it.
-    PlanStale [FilePath]
-  | -- | The plan is there, and some packages have neither been downloaded
-    -- nor built. The names are listed so that a caller can say what it is
-    -- waiting for.
-    --
-    -- Built counts as having them: their interfaces answer everything the
-    -- source would have been read for, so a package the compiler already
-    -- holds is not missing however absent its tarball is.
-    SourcesMissing [Text]
-  deriving (Eq, Show)
-
--- | Where @cabal@ writes the plan for a project.
-planPathFor :: FilePath -> FilePath
-planPathFor projectDir = projectDir </> "dist-newstyle" </> "cache" </> "plan.json"
-
--- | Check what is missing, cheaply.
---
--- One read of the plan and one @stat@ per package, so this is fast enough
--- to run before every format without anyone noticing.
-checkReadiness :: FilePath -> IO Readiness
-checkReadiness projectDir =
-  readBuildPlan (planPathFor projectDir) >>= \case
-    Left _ -> pure PlanMissing
-    Right plan -> do
-      newer <- filesNewerThanPlan projectDir
-      if not (null newer)
-        then pure (PlanStale newer)
-        else do
-          tarballs <- filter (isFetchable . fst) <$> plannedTarballs plan
-          absent <- filterM (fmap not . doesFileExist . snd) tarballs
-          wanted <- filterM (fmap not . builtAlready plan) (map fst absent)
-          pure $ case map ppName wanted of
-            [] -> Ready
-            ns -> SourcesMissing ns
-
--- | Has the compiler got this package already?
-builtAlready :: BuildPlan -> PlanPackage -> IO Bool
-builtAlready plan p = do
-  cache <- openCache (planToken plan)
-  installed <- whatTheCompilerSees cache
-  pure (any matches installed)
-  where
-    matches i = ipName i == ppName p && ipVersion i == ppVersion p
-
--- | The project files that have changed since the plan was written.
---
--- A plan describes the dependencies as they were when @cabal@ last solved.
--- Edit a @build-depends@ and the plan on disk is about a different project,
--- and resolving fixities against it would answer for packages that are no
--- longer in play. Comparing modification times is one @stat@ each, so this
--- costs nothing to check every time.
-filesNewerThanPlan :: FilePath -> IO [FilePath]
-filesNewerThanPlan projectDir = quietly [] $ do
-  planTime <- getModificationTime (planPathFor projectDir)
-  entries <- quietly [] (listDirectory projectDir)
-  let candidates =
-        filter
-          (\f -> f `elem` projectFiles || ".cabal" `isSuffixOf` f)
-          entries
-  newer <- traverse (isNewerThan planTime) candidates
-  pure [f | Just f <- newer]
-  where
-    projectFiles =
-      ["cabal.project", "cabal.project.local", "cabal.project.freeze"]
-    isNewerThan planTime f = quietly Nothing $ do
-      t <- getModificationTime (projectDir </> f)
-      pure (if t > planTime then Just f else Nothing)
-
--- | Do whatever is missing, by asking @cabal@.
---
--- Neither of these builds anything: a dry run only solves, and
--- @--only-download@ only fetches. Both are one-time costs, and @cabal@'s
--- package cache is shared between projects, so a machine that has seen a
--- dependency once never fetches it again.
---
--- This runs a subprocess and may reach the network, so it is a separate
--- call rather than something 'newResolver' does behind the caller's back.
--- An editor formatting on save must not block on it.
-prepare :: FilePath -> Readiness -> IO (Either Text ())
-prepare projectDir = \case
-  Ready -> pure (Right ())
-  PlanMissing -> cabal ["build", "--dry-run"]
-  PlanStale _ -> cabal ["build", "--dry-run"]
-  SourcesMissing _ -> cabal ["build", "--only-download"]
-  where
-    cabal args = quietly (Left "could not run cabal") $ do
-      (code, _, err) <-
-        readCreateProcessWithExitCode (proc "cabal" args) {cwd = Just projectDir} ""
-      pure $ case code of
-        ExitSuccess -> Right ()
-        _ -> Left (T.strip (T.pack err))
-
--- | Get a plan that is safe to use, doing whatever @cabal@ work is needed.
---
--- This is the call most users want. It checks, asks @cabal@ if anything is
--- missing or possibly out of date, and then reads the plan. Once a dry run
--- has succeeded the plan on disk is correct by construction: @cabal@ would
--- have rewritten it otherwise. So the readiness is not consulted a second
--- time, and a project whose files are merely newer than its plan does not
--- send this into a loop.
-loadPlan :: FilePath -> IO (Either Text BuildPlan)
-loadPlan projectDir = do
-  readiness <- checkReadiness projectDir
-  prepare projectDir readiness >>= \case
-    Left err | readiness /= Ready -> pure (Left err)
-    _ -> readBuildPlan (planPathFor projectDir)
-
--- | Every planned package whose source could be in the package cache, with
--- where that would be.
---
--- Not only the ones the plan will fetch. A package already installed still
--- has a tarball in the cache if anything ever downloaded it, and under Nix
--- that is the normal case for every dependency. A package with no tarball
--- costs one @stat@ and falls through.
---
--- Local packages are excluded: they are directories, not archives.
-plannedTarballs :: BuildPlan -> IO [(PlanPackage, FilePath)]
-plannedTarballs plan = do
-  cacheDir <- packageCacheDir
-  pure
-    [ (p, tarballFor cacheDir p)
-    | p <- bpPackages plan,
-      not (isLocal p)
-    ]
-  where
-    isLocal p = case ppSource p of
-      LocalPackage _ -> True
-      _ -> False
-
--- | Where @cabal@ keeps downloaded package sources.
-packageCacheDir :: IO FilePath
-packageCacheDir =
-  lookupEnv "CABAL_DIR" >>= \case
-    Just dir -> pure (dir </> "packages" </> hackage)
-    Nothing -> do
-      home <- getHomeDirectory
-      let xdg = home </> ".cache" </> "cabal" </> "packages" </> hackage
-          legacy = home </> ".cabal" </> "packages" </> hackage
-      exists <- doesFileExist (xdg </> "01-index.tar")
-      pure (if exists then xdg else legacy)
-  where
-    hackage = "hackage.haskell.org"
-
--- | Where a package's source tarball should be.
-tarballFor :: FilePath -> PlanPackage -> FilePath
-tarballFor cacheDir p =
-  cacheDir
-    </> T.unpack (ppName p)
-    </> T.unpack (ppVersion p)
-    </> T.unpack (ppName p <> "-" <> ppVersion p <> ".tar.gz")
