@@ -412,23 +412,24 @@ newResolverVia routes plan = do
                   Nothing -> asInterface <$> Map.lookup modName builtinFixities
             modifyIORef' interfacesRead (Map.insert modName interface)
             pure interface
-  let reach visiting modName
+  let resolver =
+        Resolver
+          { rsRoutes = routes,
+            rsCache = cache,
+            rsLocal = local,
+            rsIndex = index,
+            rsInterfaces = interfaces,
+            rsInterfaceOf = interfaceOf,
+            rsReach = reach
+          }
+      reach visiting modName
         | modName `Set.member` visiting = pure Nothing
         | otherwise = do
             known <- readIORef memo
             case Map.lookup modName known of
               Just answer -> pure answer
               Nothing -> do
-                answer <- resolveModule
-                  routes
-                  cache
-                  local
-                  index
-                  interfaces
-                  interfaceOf
-                  reach
-                  visiting
-                  modName
+                answer <- resolveModule resolver visiting modName
                 modifyIORef' memo (Map.insert modName answer)
                 pure answer
   pure (reach Set.empty)
@@ -454,89 +455,102 @@ scopeFor resolve hsModule = do
   let table = Map.fromList answers
   pure (resolveScope (\m -> Map.findWithDefault Nothing m table) hsModule)
 
+-- | Everything a resolver consults, and the way back into it.
+--
+-- None of it changes from one module to the next, which is why
+-- 'newResolverVia' builds it once and hands it over whole.
+data Resolver = Resolver
+  { -- | Which readings to try, in the order given.
+    rsRoutes :: [Route],
+    -- | Where to remember answers between runs.
+    rsCache :: Maybe Cache,
+    -- | The modules of the project's own packages, which are read straight
+    -- from disk rather than out of an archive.
+    rsLocal :: Map Text FilePath,
+    -- | Which package holds each module, and the tarball to find it in; the
+    -- package is the cache key, which carries the hash the tarball was
+    -- verified against.
+    rsIndex :: Map Text (Text, FilePath),
+    -- | What to file an answer read out of each module's interface under.
+    rsInterfaces :: Map Text (Text, FilePath),
+    -- | A module's interface, read at most once a run.
+    rsInterfaceOf :: Text -> IO (Maybe Interface),
+    -- | How to reach another module. Tied back on itself by
+    -- 'newResolverVia', so that the memo it keeps covers the recursive
+    -- calls too.
+    rsReach :: Set Text -> Text -> IO (Maybe (Map OpName Fixity))
+  }
+
 -- | Where a module's fixities come from, in order of cost.
 resolveModule ::
-  -- | Which readings to try, in the order given.
-  [Route] ->
-  -- | Where to remember answers between runs.
-  Maybe Cache ->
-  -- | The modules of the project's own packages, which are read straight
-  -- from disk rather than out of an archive.
-  Map Text FilePath ->
-  -- | Which package holds each module, and the tarball to find it in; the
-  -- package is the cache key, which carries the hash the tarball was
-  -- verified against.
-  Map Text (Text, FilePath) ->
-  -- | What to file an answer read out of each module's interface under.
-  Map Text (Text, FilePath) ->
-  -- | A module's interface, read at most once a run.
-  (Text -> IO (Maybe Interface)) ->
-  -- | How to reach another module. Tied back on itself by 'newResolver', so
-  -- that the memo it keeps covers the recursive calls too.
-  (Set Text -> Text -> IO (Maybe (Map OpName Fixity))) ->
+  -- | Where to look, and how to get back to the resolver.
+  Resolver ->
   -- | Modules currently being resolved further up the call chain.
   --
   -- Only passed through, so that a chase started here carries where it came
-  -- from. What is done about a module already in it belongs to 'newResolver',
-  -- which decides it before anything is remembered.
+  -- from. What is done about a module already in it belongs to
+  -- 'newResolverVia', which decides it before anything is remembered.
   Set Text ->
   -- | The module to resolve.
   Text ->
   -- | Its operator fixities, or 'Nothing' if they could not be
   -- established.
   IO (Maybe (Map OpName Fixity))
-resolveModule routes cache local index interfaces interfaceOf reach visiting modName
-  | Just builtin <- Map.lookup modName builtinFixities = pure (Just builtin)
-  | Just path <- Map.lookup modName local =
-      readFileText path >>= \case
+resolveModule
+  Resolver {rsRoutes, rsCache, rsLocal, rsIndex, rsInterfaces, rsInterfaceOf, rsReach}
+  visiting
+  modName
+    | Just builtin <- Map.lookup modName builtinFixities = pure (Just builtin)
+    | Just path <- Map.lookup modName rsLocal =
+        readFileText path >>= \case
+          Nothing -> pure Nothing
+          Just source -> fromText (rsReach visiting') visiting' source modName
+    | otherwise = answered <$> firstAnswer (map taking rsRoutes)
+    where
+      visiting' = Set.insert modName visiting
+
+      taking = \case
+        FromInterface -> viaInterface
+        FromSource -> viaArchive
+
+      firstAnswer [] = pure Unreadable
+      firstAnswer (route : rest) =
+        route >>= \case
+          Just (Declares fixities) -> pure (Declares fixities)
+          _ -> firstAnswer rest
+
+      viaInterface = case Map.lookup modName rsInterfaces of
         Nothing -> pure Nothing
-        Just source -> fromText (reach visiting') visiting' source modName
-  | otherwise = answered <$> firstAnswer (map taking routes)
-  where
-    visiting' = Set.insert modName visiting
+        Just (key, _) ->
+          cachedFor key >>= \case
+            Just remembered -> pure (Just remembered)
+            Nothing -> do
+              established <- fromInterface rsInterfaceOf modName
+              storeFor key established
+              pure (Just established)
 
-    taking = \case
-      FromInterface -> viaInterface
-      FromSource -> viaArchive
+      viaArchive = case Map.lookup modName rsIndex of
+        Nothing -> pure Nothing
+        Just (package, tarball) ->
+          cachedFor package >>= \case
+            Just remembered -> pure (Just remembered)
+            Nothing ->
+              fromSource (rsReach visiting') visiting' tarball modName >>= \case
+                NoArchive -> pure Nothing
+                FromArchive established -> do
+                  storeFor package established
+                  pure (Just established)
 
-    firstAnswer [] = pure Unreadable
-    firstAnswer (route : rest) =
-      route >>= \case
-        Just (Declares fixities) -> pure (Declares fixities)
-        _ -> firstAnswer rest
-
-    viaInterface = case Map.lookup modName interfaces of
-      Nothing -> pure Nothing
-      Just (key, _) ->
-        cachedFor key >>= \case
-          Just remembered -> pure (Just remembered)
-          Nothing -> do
-            established <- fromInterface interfaceOf modName
-            storeFor key established
-            pure (Just established)
-
-    viaArchive = case Map.lookup modName index of
-      Nothing -> pure Nothing
-      Just (package, tarball) ->
-        cachedFor package >>= \case
-          Just remembered -> pure (Just remembered)
-          Nothing ->
-            fromSource (reach visiting') visiting' tarball modName >>= \case
-              NoArchive -> pure Nothing
-              FromArchive established -> do
-                storeFor package established
-                pure (Just established)
-
-    answered = \case
-      Declares fixities -> Just fixities
-      Unreadable -> byHand modName
-    byHand = (`Map.lookup` byHandFixities)
-    cachedFor package = case cache of
-      Nothing -> pure Nothing
-      Just c -> cachedFixities c package modName
-    storeFor package fixities = case cache of
-      Nothing -> pure ()
-      Just c -> storeFixities c package modName fixities
+      answered = \case
+        Declares fixities -> Just fixities
+        Unreadable -> byHand modName
+      byHand = (`Map.lookup` byHandFixities)
+      cachedFor package = case rsCache of
+        Nothing -> pure Nothing
+        Just c -> cachedFixities c package modName
+      storeFor package fixities = case rsCache of
+        Nothing -> pure ()
+        Just c -> storeFixities c package modName fixities
 
 -- | Which package and tarball holds each module.
 --

@@ -35,6 +35,9 @@ module Tilia.Fixity
     Unknown (..),
     operatorsUsed,
     unknownOperators,
+
+    -- * What reading a module established
+    Established (..),
   )
 where
 
@@ -500,3 +503,20 @@ unknownOperators scope hsModule =
       Resolved _ _
         | Nothing <- qualifier, Set.member op ambiguous -> Just (op, Ambiguous)
         | otherwise -> Nothing
+
+----------------------------------------------------------------------------
+-- What reading a module established
+
+-- | What reading a module established about its operators.
+--
+-- Declaring nothing is something a module did; being unreadable is
+-- something that happened to us. Everything here turns on keeping those
+-- apart, which is why this is two constructors rather than a map that
+-- might be empty.
+data Established
+  = -- | It was read, and declares these.
+    Declares (Map OpName Fixity)
+  | -- | It could not be read. The expensive answer of the two, because
+    -- reaching it means exhausting every way of reading the module.
+    Unreadable
+  deriving (Eq, Show)

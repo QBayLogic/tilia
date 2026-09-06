@@ -10,7 +10,6 @@
 module Tilia.Fixity.Cache
   ( Cache,
     PlanToken (..),
-    Established (..),
     openCache,
     cachedModules,
     storeModules,
@@ -22,7 +21,6 @@ module Tilia.Fixity.Cache
 where
 
 import Control.Monad (join)
-import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
@@ -53,16 +51,6 @@ data Cache = Cache FilePath PlanToken
 -- that could turn a failure into an answer changes the plan, and failures
 -- are few enough that re-deriving them when it does costs little.
 newtype PlanToken = PlanToken Text
-  deriving (Eq, Show)
-
--- | What reading a module established about its operators.
-data Established
-  = -- | It was read, and declares these.
-    Declares (Map OpName Fixity)
-  | -- | It could not be read. The expensive answer of the two, because
-    -- reaching it means exhausting every way of reading the module, which
-    -- is why it is kept rather than worked out again on every run.
-    Unreadable
   deriving (Eq, Show)
 
 -- | Bumped whenever what is written changes shape, so that entries from an
