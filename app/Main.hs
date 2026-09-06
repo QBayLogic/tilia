@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -5,6 +6,7 @@
 module Main (main) where
 
 import Control.Monad (when)
+import Data.Choice (Choice, fromBool)
 import Data.Foldable (traverse_)
 import Data.Text (Text)
 import Data.Text.IO qualified as T
@@ -54,8 +56,9 @@ main = do
     pure
     (maybe (parseTarget "all") parseTarget optTarget)
   files <- filesFor palette target
-  session <- newSession "." optCheckAst
-    >>= either (dieFormatting palette) pure
+  session <-
+    newSession "." optCheckAst optCheckIdempotence
+      >>= either (dieFormatting palette) pure
   outcomes <- runOver session files
   case optMode of
     Inplace -> do
@@ -122,7 +125,9 @@ data Opts = Opts
     -- | Which component to work on, if not all of them.
     optTarget :: Maybe String,
     -- | Whether to check AST equivalence.
-    optCheckAst :: Bool
+    optCheckAst :: Choice "checkAst",
+    -- | Whether to check idempotence.
+    optCheckIdempotence :: Choice "checkIdempotence"
   }
 
 optsParserInfo :: ParserInfo Opts
@@ -145,11 +150,20 @@ optsParser =
       command "check" (info (parser Check) (progDesc "Report what formatting would change, and fail if anything would"))
     ]
   where
-    parser mode = Opts mode <$> optional targetArgument <*> checkAstSwitch
+    parser mode =
+      Opts mode
+        <$> optional targetArgument
+        <*> checkAstSwitch
+        <*> checkIdempotenceSwitch
     checkAstSwitch =
-      (switch . mconcat)
+      fromBool <$> (switch . mconcat)
         [ long "check-ast",
           help "Check AST equivalence."
+        ]
+    checkIdempotenceSwitch =
+      fromBool <$> (switch . mconcat)
+        [ long "check-idempotence",
+          help "Check that formatting twice changes nothing."
         ]
     targetArgument =
       (strArgument . mconcat)

@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -17,6 +18,7 @@ import Control.Applicative ((<|>))
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import Data.Choice (Choice, isTrue)
 import Data.Foldable (traverse_)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
@@ -77,6 +79,8 @@ data FormatError
     Unreadable FilePath Text
   | -- | Formatting the file changed its AST.
     NotEquivalent FilePath Text
+  | -- | Formatting is not idempotent.
+    NotIdempotent FilePath Text
 
 -- | Say what went wrong, in one line.
 describeFormatError :: Palette -> FormatError -> Text
@@ -98,6 +102,8 @@ describeFormatError palette = \case
   Unreadable path why -> "cannot read " <> file path <> ": " <> why
   NotEquivalent path why ->
     "formatting " <> file path <> " changed the program: " <> why
+  NotIdempotent path why ->
+    "formatting " <> file path <> " is not idempotent: " <> why
   UnknownFixity path unknown ->
     "will not format "
       <> file path
@@ -133,6 +139,7 @@ formatErrorExitCode = \case
   UnknownFixity {} -> 15
   Unreadable {} -> 16
   NotEquivalent {} -> 17
+  NotIdempotent {} -> 18
   CppUnsupported _ why -> case why of
     UnhandledDirective {} -> 9
     UnsplittableConditional -> 10
@@ -151,6 +158,7 @@ refused = \case
   NoPackage {} -> False
   Unreadable {} -> False
   NotEquivalent {} -> False
+  NotIdempotent {} -> False
   NoProject {} -> False
   NoBuildPlan {} -> False
 
@@ -164,18 +172,22 @@ data Session = Session
     sessionResolve :: Text -> IO (Maybe (Map OpName Fixity)),
     -- | What each file's package puts in force.
     sessionPackage :: PackageReader,
-    -- | Whether to check AST preservation.
-    sessionChecksAst :: Bool
+    -- | Whether to check AST equivalence.
+    sessionChecksAst :: Choice "checkAst",
+    -- | Whether to check idempotence.
+    sessionChecksIdempotence :: Choice "checkIdempotence"
   }
 
 -- | Settle everything that does not depend on the file being formatted.
 newSession ::
   -- | Where to start looking for the project
   FilePath ->
-  -- | For every file, check that formatting preserves the AST.
-  Bool ->
+  -- | Check AST equivalence.
+  Choice "checkAst" ->
+  -- | Check idempotence.
+  Choice "checkIdempotence" ->
   IO (Either FormatError Session)
-newSession start checksAst = runExceptT $ do
+newSession start checksAst checksIdempotence = runExceptT $ do
   root <- prPath <$> (need (NoProject start) =<< liftIO (findProjectRoot start))
   plan <- orElse (NoBuildPlan root) =<< liftIO (loadPlan root)
   resolve <- liftIO (newResolver plan)
@@ -184,7 +196,8 @@ newSession start checksAst = runExceptT $ do
     Session
       { sessionResolve = resolve,
         sessionPackage = askPackage,
-        sessionChecksAst = checksAst
+        sessionChecksAst = checksAst,
+        sessionChecksIdempotence = checksIdempotence
       }
   where
     need :: FormatError -> Maybe a -> ExceptT FormatError IO a
@@ -209,10 +222,9 @@ formatSource session path source = runExceptT $ do
     throwE (PositionPragmas path)
   package <- orElse (NoPackage path) =<< liftIO (sessionPackage session path)
   let resolve = sessionResolve session
-      extensionsInForce = effectiveExtensions package source
       config = parserConfigFor package
-      extensions = Set.fromList extensionsInForce
-      renderConfigFor hsModule = do
+      cpp = usesCpp (effectiveExtensions package source) source
+      renderConfigFor extensions hsModule = do
         scope <- liftIO (scopeFor resolve hsModule)
         case unknownOperators scope hsModule of
           [] ->
@@ -222,25 +234,47 @@ formatSource session path source = runExceptT $ do
                   rcScope = Just scope
                 }
           unknown -> throwE (UnknownFixity path unknown)
-      cpp = usesCpp extensionsInForce source
-  formatted <-
-    if cpp
-      then do
-        render <- case parseModule config path (blankCpp source) of
-          Left _ -> pure defaultRenderConfig {rcExtensions = extensions}
-          Right whole -> renderConfigFor (pmModule whole)
-        orElse
-          (CppUnsupported path)
-          (formatWithCpp config render path source)
-      else do
-        parsed <- orElse NotParsed (parseModule config path source)
-        render <- renderConfigFor (pmModule parsed)
-        pure (printDoc defaultRenderOptions (renderModule render parsed))
-  when (sessionChecksAst session) $
+      formatting text = do
+        let inForce = effectiveExtensions package text
+            extensions = Set.fromList inForce
+        if usesCpp inForce text
+          then do
+            render <- case parseModule config path (blankCpp text) of
+              Left _ -> pure defaultRenderConfig {rcExtensions = extensions}
+              Right whole -> renderConfigFor extensions (pmModule whole)
+            orElse
+              (CppUnsupported path)
+              (formatWithCpp config render path text)
+          else do
+            parsed <- orElse NotParsed (parseModule config path text)
+            render <- renderConfigFor extensions (pmModule parsed)
+            pure (printDoc defaultRenderOptions (renderModule render parsed))
+  formatted <- formatting source
+  when (isTrue (sessionChecksAst session)) $
     traverse_
       (throwE . NotEquivalent path)
       (rewritten config cpp path source formatted)
+  when (isTrue (sessionChecksIdempotence session)) $ do
+    settled <- formatting formatted
+    when (settled /= formatted) $
+      throwE (NotIdempotent path (whereTheyDiffer formatted settled))
   pure formatted
+
+-- | Where two spellings of the same file first disagree.
+whereTheyDiffer :: Text -> Text -> Text
+whereTheyDiffer before after =
+  case [n | (n, one, two) <- zip3 [1 :: Int ..] first second, one /= two] of
+    (n : _) -> "line " <> tshow n <> " differs"
+    [] ->
+      "the second pass came out "
+        <> tshow (length second)
+        <> " lines long where the first came out "
+        <> tshow (length first)
+  where
+    first = T.lines before
+    second = T.lines after
+    tshow :: Int -> Text
+    tshow = T.pack . show
 
 -- | What formatting changed about the program.
 --
