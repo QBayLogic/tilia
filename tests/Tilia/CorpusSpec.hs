@@ -30,7 +30,8 @@ import Tilia.Cpp
     formatWithCpp,
     usesCpp,
   )
-import Tilia.Diff (Colours, coloursFor, diff)
+import Tilia.Diff (diff)
+import Tilia.Palette (Palette, paletteFor)
 import Tilia.Pragma (effectiveExtensions, movesPositions)
 import Tilia.Equivalence (commentDifference, syntaxDifference)
 import Tilia.Source (comments)
@@ -63,8 +64,8 @@ corpusSpec corpus =
         it "is available" . pendingWith $
           "corpus not on this machine and could not be fetched: " <> T.unpack problem
       Right examples -> do
-        colours <- runIO coloursFor
-        let run = check colours
+        palette <- runIO paletteFor
+        let run = check palette
         case corpusExpectations corpus of
           Listed lists -> againstLists lists run examples
           Recorded path -> againstRecord path run examples
@@ -229,14 +230,14 @@ verdict declines (Result outcome why _) = case outcome of
     unlisted what =
       "this " <> what <> ", and the corpus does not list it under expectSkip"
 
-check :: Colours -> Example -> IO Result
-check colours example = do
+check :: Palette -> Example -> IO Result
+check palette example = do
   source <- readUtf8 (exampleInput example)
   expected <- traverse readUtf8 (exampleReference example)
   case source of
     Nothing -> pure (Result NotUtf8 "" noDigest)
     Just text ->
-      guarded (checkPure colours (exampleName example) (exampleExtensions example) text (join expected))
+      guarded (checkPure palette (exampleName example) (exampleExtensions example) text (join expected))
 
 -- | Read a file that is supposed to be a Haskell module.
 readUtf8 :: FilePath -> IO (Maybe Text)
@@ -260,16 +261,16 @@ guarded result =
 
 -- | Everything that can be established about one example without doing any
 -- more input or output.
-checkPure :: Colours -> FilePath -> [Extension] -> Text -> Maybe Text -> Result
-checkPure colours path package source expected
+checkPure :: Palette -> FilePath -> [Extension] -> Text -> Maybe Text -> Result
+checkPure palette path package source expected
   | movesPositions source =
       Result Declined "a pragma that moves positions, which we do not rewrite" noDigest
-  | usesCpp inForce source = checkCpp colours path package source expected
+  | usesCpp inForce source = checkCpp palette path package source expected
   | otherwise = case parseModule config path source of
       Left problem -> Result DoesNotParse (parseProblem problem) noDigest
       Right before ->
         let formatted = render before
-            against name = diff colours ("input", name) source formatted
+            against name = diff palette ("input", name) source formatted
          in case parse formatted of
               Nothing ->
                 told formatted
@@ -303,14 +304,14 @@ checkPure colours path package source expected
                     told formatted
                       Broken
                       ( "formatting is non-idempotent\n"
-                          <> diff colours ("first pass", "second pass") formatted settled
+                          <> diff palette ("first pass", "second pass") formatted settled
                       )
                 | Just reference <- expected,
                   reference /= formatted ->
                     told formatted
                       Broken
                       ( "does not match the corpus's expected output\n"
-                          <> diff colours ("expected", "ours") reference formatted
+                          <> diff palette ("expected", "ours") reference formatted
                       )
                 | otherwise -> told formatted Formatted ""
   where
@@ -328,8 +329,8 @@ checkPure colours path package source expected
 
 -- | Everything that can be established about an example with conditionals in
 -- it.
-checkCpp :: Colours -> FilePath -> [Extension] -> Text -> Maybe Text -> Result
-checkCpp colours path package source expected = case formatWithCpp parser render path source of
+checkCpp :: Palette -> FilePath -> [Extension] -> Text -> Maybe Text -> Result
+checkCpp palette path package source expected = case formatWithCpp parser render path source of
   Left why -> Result Declined (describeCppError why) noDigest
   Right formatted -> case (countLeaves source, countLeaves formatted) of
     (Left why, _) ->
@@ -364,7 +365,7 @@ checkCpp colours path package source expected = case formatWithCpp parser render
     told formatted outcome why = Result outcome why (digestOf formatted)
     count :: Integer -> Text
     count = T.pack . show
-    against formatted = diff colours ("input", "output") source formatted
+    against formatted = diff palette ("input", "output") source formatted
     quantified enumerate reservation formatted =
       case (enumerate source, enumerate formatted) of
         (Left why, _) ->
@@ -382,14 +383,14 @@ checkCpp colours path package source expected = case formatWithCpp parser render
                     told formatted
                       Broken
                       ( "formatting is non-idempotent\n"
-                          <> diff colours ("first pass", "second pass") formatted settled
+                          <> diff palette ("first pass", "second pass") formatted settled
                       )
                 | Just reference <- expected,
                   reference /= formatted ->
                     told formatted
                       Broken
                       ( "does not match the corpus's expected output\n"
-                          <> diff colours ("expected", "ours") reference formatted
+                          <> diff palette ("expected", "ours") reference formatted
                       )
                 | otherwise ->
                   maybe (told formatted Formatted "") (told formatted PartlyChecked) reservation

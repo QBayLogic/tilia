@@ -17,6 +17,7 @@ module Tilia.Fixity.Plan
     Readiness (..),
     planPathFor,
     checkReadiness,
+    prepareWith,
     loadPlan,
 
     -- * Resolving
@@ -32,16 +33,16 @@ import Codec.Compression.GZip qualified as GZip
 import Control.Monad (filterM, foldM, join)
 import Crypto.Hash.SHA256 qualified as SHA256
 import Data.Aeson (FromJSON (..), eitherDecodeFileStrict, withObject, (.:), (.:?))
-import Data.ByteString.Base16 qualified as B16
 import Data.ByteString qualified as BS
+import Data.ByteString.Base16 qualified as B16
 import Data.ByteString.Lazy qualified as BL
+import Data.Foldable (traverse_)
 import Data.IORef
 import Data.List (isSuffixOf)
 import Data.List qualified
-import Data.Foldable (traverse_)
-import Data.Maybe (catMaybes, listToMaybe)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (catMaybes, listToMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -49,6 +50,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import GHC.Hs (HsModule)
 import GHC.Hs.Extension (GhcPs)
+import GHC.IO.Handle (hDuplicate)
 import System.Directory
   ( doesFileExist,
     getHomeDirectory,
@@ -58,7 +60,16 @@ import System.Directory
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
-import System.Process (readCreateProcessWithExitCode, proc, cwd)
+import System.IO (hFlush, stderr)
+import System.Process
+  ( StdStream (Inherit, UseHandle),
+    createProcess,
+    cwd,
+    proc,
+    std_err,
+    std_out,
+    waitForProcess,
+  )
 import Tilia.Cpp (branchLeaves)
 import Tilia.Fixity
 import Tilia.Fixity.Builtin (builtinFixities)
@@ -275,32 +286,67 @@ filesNewerThanPlan projectDir = quietly [] $ do
 -- call rather than something 'newResolver' does behind the caller's back.
 -- An editor formatting on save must not block on it.
 prepare :: FilePath -> Readiness -> IO (Either Text ())
-prepare projectDir = \case
+prepare projectDir = prepareWith (runCabal projectDir) projectDir
+
+-- | 'prepare', given a way to run @cabal@.
+prepareWith ::
+  -- | Run @cabal@ with these arguments
+  ([String] -> IO (Either Text ())) ->
+  -- | The project being prepared
+  FilePath ->
+  -- | What it was found to be short of
+  Readiness ->
+  IO (Either Text ())
+prepareWith cabal projectDir = \case
   Ready -> pure (Right ())
-  PlanMissing -> cabal ["build", "--dry-run"]
-  PlanStale _ -> cabal ["build", "--dry-run"]
-  SourcesMissing _ -> cabal ["build", "--only-download"]
+  SourcesMissing _ -> fetch
+  PlanMissing -> solveThenFetch
+  PlanStale _ -> solveThenFetch
   where
-    cabal args = quietly (Left "could not run cabal") $ do
-      (code, _, err) <-
-        readCreateProcessWithExitCode (proc "cabal" args) {cwd = Just projectDir} ""
-      pure $ case code of
-        ExitSuccess -> Right ()
-        _ -> Left (T.strip (T.pack err))
+    fetch = cabal ["build", "--only-download"]
+    solveThenFetch =
+      cabal ["build", "--dry-run"] >>= \case
+        Left err -> pure (Left err)
+        Right () ->
+          checkReadiness projectDir >>= \case
+            SourcesMissing _ -> fetch
+            -- Either there is nothing left to do, or the plan @cabal@ has
+            -- just written is one we still cannot read. A second dry run
+            -- would not say anything the first did not.
+            _ -> pure (Right ())
+
+-- | Run @cabal@ in a project directory, letting it speak for itself.
+runCabal :: FilePath -> [String] -> IO (Either Text ())
+runCabal projectDir args = quietly (Left "could not run cabal") $ do
+  hFlush stderr
+  -- A duplicate because 'createProcess' closes the handle it is given once
+  -- the child has it, and closing the real standard error would leave
+  -- nothing to report the failure on.
+  passed <- hDuplicate stderr
+  (_, _, _, running) <-
+    createProcess
+      (proc "cabal" args)
+        { cwd = Just projectDir,
+          std_out = UseHandle passed,
+          std_err = Inherit
+        }
+  code <- waitForProcess running
+  pure $ case code of
+    ExitSuccess -> Right ()
+    _ -> Left ("cabal " <> T.unwords (map T.pack args) <> " failed; see above")
 
 -- | Get a plan that is safe to use, doing whatever @cabal@ work is needed.
 --
 -- This is the call most users want. It checks, asks @cabal@ if anything is
--- missing or possibly out of date, and then reads the plan. Once a dry run
--- has succeeded the plan on disk is correct by construction: @cabal@ would
--- have rewritten it otherwise. So the readiness is not consulted a second
--- time, and a project whose files are merely newer than its plan does not
--- send this into a loop.
+-- missing or possibly out of date, and then reads the plan. 'prepare' does
+-- at most one solve and one fetch however much is missing, so a project
+-- whose files are merely newer than its plan cannot send this into a loop,
+-- and the plan is read once at the end rather than judged again.
 loadPlan :: FilePath -> IO (Either Text BuildPlan)
 loadPlan projectDir = do
   readiness <- checkReadiness projectDir
   prepare projectDir readiness >>= \case
-    Left err | readiness /= Ready -> pure (Left err)
+    Left err -> pure (Left err)
     _ -> readBuildPlan (planPathFor projectDir)
 
 -- | Every planned package whose source could be in the package cache, with
@@ -410,7 +456,7 @@ newResolverVia routes plan = do
             let interface = case found of
                   Just _ -> found
                   Nothing -> asInterface <$> Map.lookup modName builtinFixities
-            modifyIORef' interfacesRead (Map.insert modName interface)
+            atomicModifyIORef' interfacesRead (\m -> (Map.insert modName interface m, ()))
             pure interface
   let resolver =
         Resolver
@@ -430,7 +476,7 @@ newResolverVia routes plan = do
               Just answer -> pure answer
               Nothing -> do
                 answer <- resolveModule resolver visiting modName
-                modifyIORef' memo (Map.insert modName answer)
+                atomicModifyIORef' memo (\m -> (Map.insert modName answer m, ()))
                 pure answer
   pure (reach Set.empty)
 
@@ -761,15 +807,29 @@ fromText reach visiting source modName =
     configurations = either (const Nothing) Just (branchLeaves source)
     parsed = fmap pmModule . either (const Nothing) Just . parseModule defaultParserConfig (T.unpack modName)
 
--- | One answer from every configuration, if they agree on it.
+-- | One answer from every configuration that could be read, if they agree.
 --
 -- A module may declare a fixity in one configuration and a different one in
 -- another. Which of them holds depends on how the module is compiled, which
 -- is not ours to decide, so disagreement is not an answer. Agreement across
--- all of them is one, and a stronger one than the blanked text could give:
--- it is a fact about the module rather than about a reading of it.
+-- the ones we could read is one, and a stronger one than the blanked text
+-- could give: it is a fact about the module rather than about a reading.
+--
+-- A configuration whose imports could not be resolved is passed over rather
+-- than counted against the rest, because almost every one of those is a
+-- branch meant for somewhere else. @System.IO.CodePage@ imports
+-- @System.Win32.CodePage@ under @#ifdef WINDOWS@, and no plan solved on
+-- Linux has Win32 anywhere in it. Refusing the whole module over a branch
+-- that will never be compiled here would be letting a fact about this
+-- machine stand as a fact about the module.
+--
+-- Every configuration unresolvable is still no answer. There is nothing
+-- left to agree, and saying the module declares nothing would be a guess
+-- rather than the silence it deserves.
 agreeing :: [Maybe (Map OpName Fixity)] -> Maybe (Map OpName Fixity)
-agreeing = (foldM together Map.empty =<<) . sequence
+agreeing answers = case catMaybes answers of
+  [] -> Nothing
+  readable -> foldM together Map.empty readable
   where
     together settled found
       | and (Map.intersectionWith (==) settled found) = Just (Map.union settled found)

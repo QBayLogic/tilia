@@ -16,6 +16,7 @@ import Codec.Compression.GZip qualified as GZip
 import Data.ByteString.Lazy qualified as BL
 import Data.Char (isSpace)
 import Data.List (isSuffixOf)
+import Data.List qualified
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
@@ -82,14 +83,15 @@ modulesUnder field =
       Just (c, _) -> c `elem` ['A' .. 'Z']
       Nothing -> False
 
--- | Every directory named by an @hs-source-dirs@ field.
+-- | Every directory a @.cabal@ file's modules could be under.
 --
--- A package that names none keeps its modules beside the @.cabal@ file, so
--- the current directory is the answer rather than nothing.
+-- The current directory is always among them, whatever @hs-source-dirs@
+-- says. This is deliberately more than cabal would look at: a package can
+-- keep modules beside its @.cabal@ file and name other directories as well,
+-- and a directory too many costs one @stat@ where a directory too few costs
+-- a module we cannot resolve.
 sourceDirs :: Text -> [Text]
-sourceDirs contents = case named of
-  [] -> ["."]
-  ds -> ds
+sourceDirs contents = Data.List.nub (named <> ["."])
   where
     named =
       filter (not . T.null)
@@ -102,8 +104,10 @@ sourceDirs contents = case named of
 -- | The values of every field with the given name, wherever it appears and
 -- however deeply it is nested.
 fieldsNamed :: Text -> [Text] -> [Text]
-fieldsNamed name = go
+fieldsNamed name = go . filter (not . commented)
   where
+    commented = T.isPrefixOf "--" . T.stripStart
+
     go = \case
       [] -> []
       (l : ls)

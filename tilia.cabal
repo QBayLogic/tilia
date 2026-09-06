@@ -38,6 +38,7 @@ library
     Tilia.Comments.Attach
     Tilia.Comments.Place
     Tilia.Cpp
+    Tilia.Diff
     Tilia.Doc
     Tilia.Doc.Body
     Tilia.Doc.Combinators
@@ -53,6 +54,7 @@ library
     Tilia.Format
     Tilia.Imports
     Tilia.Package
+    Tilia.Palette
     Tilia.Parser
     Tilia.Pragma
     Tilia.Project
@@ -73,9 +75,11 @@ library
     Tilia.Render.Pragma
     Tilia.Render.Signature
     Tilia.Render.Type
+    Tilia.Run
     Tilia.Source
     Tilia.Span
     Tilia.Span.Ghc
+    Tilia.Target
     Tilia.Utils
 
   hs-source-dirs: src
@@ -88,6 +92,7 @@ library
     Cabal-syntax >=3.12 && <3.16,
     containers >=0.5 && <0.9,
     cryptohash-sha256 >=0.11 && <0.12,
+    Diff >=0.4 && <2,
     directory ^>=1.3,
     filepath >=1.4 && <1.6,
     ghc-lib-parser >=9.14 && <9.15,
@@ -121,14 +126,15 @@ executable tilia
   default-language: GHC2021
   build-depends:
     base >=4.14 && <5,
-    tilia,
+    directory ^>=1.3,
     optparse-applicative >=0.14 && <0.20,
     text >=2.1 && <3,
+    tilia,
 
   ghc-options:
     -threaded
     -rtsopts
-    -with-rtsopts=-N
+    "-with-rtsopts=-N12 -A32m"
 
   if flag(dev)
     ghc-options:
@@ -158,7 +164,6 @@ test-suite tests
     Tilia.Corpus
     Tilia.Corpus.Manifest
     Tilia.CorpusSpec
-    Tilia.Diff
     Tilia.Doc.BodySpec
     Tilia.Doc.CombinatorsSpec
     Tilia.Doc.InternalSpec
@@ -176,11 +181,12 @@ test-suite tests
     Tilia.ProjectSpec
     Tilia.Render.OperatorSpec
     Tilia.RenderSpec
+    Tilia.RunSpec
+    Tilia.TargetSpec
     Tilia.TestConfig
 
   default-language: GHC2021
   build-depends:
-    Diff >=0.4 && <2,
     QuickCheck >=2.14 && <3,
     base >=4.14 && <5,
     base16-bytestring >=1 && <2,

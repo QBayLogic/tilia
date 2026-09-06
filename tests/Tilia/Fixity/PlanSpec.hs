@@ -13,12 +13,19 @@
 -- cache — each test says so and is marked pending rather than failing.
 module Tilia.Fixity.PlanSpec (spec) where
 
+import Control.Monad (when)
+import Data.Foldable (traverse_)
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.List (isInfixOf)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.IO qualified as T
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath (takeBaseName, takeDirectory, (</>))
+import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
 import Tilia.Fixity
 import Tilia.Fixity.Plan
@@ -26,10 +33,54 @@ import Tilia.Parser
 
 spec :: Spec
 spec = do
+  preparation
   plan <- runIO (readBuildPlan (planPathFor "."))
   case plan of
     Left _ -> unavailable "no build plan; run cabal build first"
     Right p -> withPlan p
+
+-- | What a run does before it trusts the plan.
+--
+-- These need no plan of their own and no @cabal@: the point is the order of
+-- the steps, so the steps are recorded rather than taken.
+preparation :: Spec
+preparation = describe "preparing a project" $ do
+  it "solves and then fetches, in the one run" $
+    -- The bug this is here for: a first run solved the project and stopped,
+    -- leaving the tarballs to be fetched by whoever ran the tool next, so
+    -- that cabal appeared twice for what is one project's setting up.
+    withTempProject Nothing $ \dir -> do
+      steps <- newIORef []
+      let cabal args = do
+            record steps args
+            -- What a real dry run leaves behind, in the one respect that
+            -- matters here: a plan naming a package nobody has fetched.
+            when (args == ["build", "--dry-run"]) (writePlan dir wantingATarball)
+            pure (Right ())
+      checkReadiness dir `shouldReturn` PlanMissing
+      prepareWith cabal dir PlanMissing `shouldReturn` Right ()
+      readIORef steps
+        `shouldReturn` [["build", "--dry-run"], ["build", "--only-download"]]
+
+  it "fetches without solving when the plan is already good" $
+    withTempProject (Just wantingATarball) $ \dir -> do
+      steps <- newIORef []
+      readiness <- checkReadiness dir
+      readiness `shouldBe` SourcesMissing ["tilia-phantom"]
+      prepareWith (obliging steps) dir readiness `shouldReturn` Right ()
+      readIORef steps `shouldReturn` [["build", "--only-download"]]
+
+  it "runs nothing at all when nothing is missing" $ do
+    steps <- newIORef []
+    prepareWith (obliging steps) "." Ready `shouldReturn` Right ()
+    readIORef steps `shouldReturn` []
+
+  it "does not go on to fetch when the solve fails" $
+    withTempProject Nothing $ \dir -> do
+      steps <- newIORef []
+      let cabal args = record steps args >> pure (Left "cabal said no")
+      prepareWith cabal dir PlanMissing `shouldReturn` Left "cabal said no"
+      readIORef steps `shouldReturn` [["build", "--dry-run"]]
 
 withPlan :: BuildPlan -> Spec
 withPlan plan = do
@@ -141,6 +192,72 @@ withPlan plan = do
       needs resolve "Test.QuickCheck" $ \fixities ->
         Map.lookup (OpName "===") fixities `shouldBe` Just (Fixity NoAssoc 4)
 
+  describe "a module with more than one configuration" $ do
+    -- Built in a temporary directory with a build plan written by hand, so
+    -- that the shapes below can be exactly the shapes worth testing. These
+    -- are the ones criterion's dependencies turned out to be written in.
+    it "answers from the configurations it can read" $
+      withFakeProject
+        [ ( "src/Platform.hs",
+            T.unlines
+              [ "{-# LANGUAGE CPP #-}",
+                "module Platform (sort, (<+>)) where",
+                "#ifdef WINDOWS",
+                "import No.Such.Module.At.All",
+                "#endif",
+                "import Data.List (sort)",
+                "infixl 6 <+>",
+                "(<+>) :: Int -> Int -> Int",
+                "a <+> b = a + b"
+              ]
+          )
+        ]
+        $ \ask ->
+          -- The WINDOWS branch imports a module nothing has, which is what
+          -- System.IO.CodePage does with System.Win32.CodePage. That branch
+          -- is passed over rather than taken as a reason to say nothing.
+          ask "Platform"
+            >>= (`shouldBe` Just (Map.singleton (OpName "<+>") (Fixity LeftAssoc 6)))
+
+    it "still refuses when the configurations it can read disagree" $
+      withFakeProject
+        [ ( "src/Disagree.hs",
+            T.unlines
+              [ "{-# LANGUAGE CPP #-}",
+                "module Disagree (sort, (<+>)) where",
+                "import Data.List (sort)",
+                "#ifdef FAST",
+                "infixl 6 <+>",
+                "#else",
+                "infixr 7 <+>",
+                "#endif",
+                "(<+>) :: Int -> Int -> Int",
+                "a <+> b = a + b"
+              ]
+          )
+        ]
+        $ \ask -> ask "Disagree" `shouldReturn` Nothing
+
+    it "says nothing when it can read no configuration at all" $
+      withFakeProject
+        [ ( "src/Bothbad.hs",
+            T.unlines
+              [ "{-# LANGUAGE CPP #-}",
+                "module Bothbad (sort) where",
+                "#ifdef WINDOWS",
+                "import No.Such.One",
+                "#else",
+                "import No.Such.Two",
+                "#endif",
+                "import Data.List (sort)"
+              ]
+          )
+        ]
+        $ \ask ->
+          -- Not @Just mempty@: that would be claiming the module declares
+          -- nothing, which is a guess rather than the silence it deserves.
+          ask "Bothbad" `shouldReturn` Nothing
+
   describe "modules that re-export one another" $
     it "answers for one whose re-exports are mutually entangled" $ do
       answer <- resolve "GHC.Hs"
@@ -215,6 +332,34 @@ withPlan plan = do
 ----------------------------------------------------------------------------
 -- Helpers
 
+-- | An empty project directory, holding a plan where @cabal@ writes one if
+-- it is to hold a plan at all.
+withTempProject :: Maybe Text -> (FilePath -> IO a) -> IO a
+withTempProject plan act =
+  withSystemTempDirectory "tilia-prepare" $ \dir -> do
+    createDirectoryIfMissing True (takeDirectory (planPathFor dir))
+    traverse_ (writePlan dir) plan
+    act dir
+
+writePlan :: FilePath -> Text -> IO ()
+writePlan dir = T.writeFile (planPathFor dir)
+
+-- | A plan naming one package that no package cache can have a tarball
+-- for, so that reading it leaves something to fetch.
+wantingATarball :: Text
+wantingATarball =
+  "{\"compiler-id\":\"ghc-0.0\",\"install-plan\":\
+  \[{\"pkg-name\":\"tilia-phantom\",\"pkg-version\":\"9.9.9\",\
+  \\"pkg-src\":{\"type\":\"repo-tar\"}}]}"
+
+-- | Note that @cabal@ was asked for something.
+record :: IORef [[String]] -> [String] -> IO ()
+record steps args = modifyIORef' steps (<> [args])
+
+-- | A @cabal@ that does nothing and says it went well.
+obliging :: IORef [[String]] -> [String] -> IO (Either Text ())
+obliging steps args = record steps args >> pure (Right ())
+
 -- | Run an assertion on a module's fixities, or mark the test pending if
 -- the module could not be resolved at all.
 --
@@ -259,6 +404,38 @@ check resolve (modName, op, expected) = do
         <> show actual
     | actual /= Just expected
     ]
+
+-- | A project of made-up modules, with a build plan written by hand.
+--
+-- The plan names one local package and nothing else, which is enough for a
+-- resolver: local modules are read straight off disk, and everything they
+-- import here is either a boot module or does not exist.
+withFakeProject :: [(FilePath, Text)] -> ((Text -> IO (Maybe (Map OpName Fixity))) -> IO a) -> IO a
+withFakeProject sources act =
+  withSystemTempDirectory "tilia-plan" $ \dir -> do
+    createDirectoryIfMissing True (dir </> "src")
+    T.writeFile (dir </> "fake.cabal") $
+      T.unlines
+        [ "cabal-version: 2.4",
+          "name: fake",
+          "version: 0.1.0.0",
+          "library",
+          "  exposed-modules: " <> T.intercalate ", " (map named sources),
+          "  hs-source-dirs: src",
+          "  default-language: Haskell2010"
+        ]
+    traverse_ (\(path, text) -> T.writeFile (dir </> path) text) sources
+    T.writeFile (dir </> "plan.json") $
+      "{\"compiler-id\":\"ghc-0.0\",\"install-plan\":\
+      \[{\"pkg-name\":\"fake\",\"pkg-version\":\"0.1.0.0\",\
+      \\"pkg-src\":{\"type\":\"local\",\"path\":\""
+        <> T.pack dir
+        <> "\"}}]}"
+    readBuildPlan (dir </> "plan.json") >>= \case
+      Left why -> error (T.unpack why)
+      Right plan -> newResolver plan >>= act
+  where
+    named (path, _) = T.pack (takeBaseName path)
 
 -- | Say why nothing could be tested, once, instead of failing repeatedly.
 unavailable :: String -> Spec

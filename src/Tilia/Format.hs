@@ -6,7 +6,10 @@ module Tilia.Format
   ( FormatError (..),
     describeFormatError,
     formatErrorExitCode,
-    formatFile,
+    refused,
+    Session,
+    newSession,
+    formatSource,
   )
 where
 
@@ -14,12 +17,12 @@ import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import Data.List.NonEmpty qualified as NE
+import Data.Map.Strict (Map)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.IO qualified as T
 import Tilia.Cpp (CppError (..), blankCpp, describeCppError, formatWithCpp, usesCpp)
-import Tilia.Fixity (OpName (..), Unknown (..), unknownOperators)
+import Tilia.Fixity (Fixity, OpName (..), Unknown (..), unknownOperators)
 import Tilia.Fixity.Plan (loadPlan, newResolver, scopeFor)
 import Tilia.Parser
   ( ParseError,
@@ -34,7 +37,9 @@ import Tilia.Package
   ( PackageProblem (..),
     PackageReader,
     describePackageProblem,
+    newPackageReader,
   )
+import Tilia.Palette (Color (Operator, Place), Palette, paint)
 import Tilia.Project (ProjectRoot (..), findProjectRoot)
 import Tilia.Render (RenderConfig (..), defaultRenderConfig, renderModule)
 
@@ -55,37 +60,46 @@ data FormatError
     CppUnsupported FilePath CppError
   | -- | An operator the file uses has a fixity we could not establish.
     UnknownFixity FilePath [(OpName, Unknown)]
+  | -- | The file could not be read at all.
+    Unreadable FilePath Text
 
 -- | Say what went wrong, in one line.
-describeFormatError :: FormatError -> Text
-describeFormatError = \case
+describeFormatError :: Palette -> FormatError -> Text
+describeFormatError palette = \case
   NoProject path ->
-    "no project above " <> T.pack path <> ": expected a cabal.project, a stack.yaml or a .cabal file"
+    "no project above " <> file path <> ": expected a cabal.project, a stack.yaml or a .cabal file"
   NoBuildPlan root reason ->
-    "no build plan for " <> T.pack root <> ": " <> reason
+    "no build plan for " <> file root <> ": " <> reason
   NoPackage path problem ->
     "cannot tell what "
-      <> T.pack path
+      <> file path
       <> " is written in: "
       <> describePackageProblem problem
-  NotParsed e -> "cannot parse " <> describeParseError e
+  NotParsed e -> "cannot parse " <> located (describeParseError e)
   PositionPragmas path ->
-    "will not format " <> T.pack path <> ": it uses {-# LINE #-} pragmas, and no reformatting can leave those true"
+    "will not format " <> file path <> ": it uses {-# LINE #-} pragmas, and no reformatting can leave those true"
   CppUnsupported path why ->
-    "will not format " <> T.pack path <> ": " <> describeCppError why
+    "will not format " <> file path <> ": " <> describeCppError why
+  Unreadable path why -> "cannot read " <> file path <> ": " <> why
   UnknownFixity path unknown ->
     "will not format "
-      <> T.pack path
+      <> file path
       <> ": the fixity of "
       <> T.intercalate ", " (map saying unknown)
     where
-      saying (OpName op, why) = op <> " " <> because why
+      saying (OpName op, why) = paint palette Operator op <> " " <> because why
       because = \case
         NotRead missing ->
           "may be declared in "
-            <> T.intercalate " or " (NE.toList missing)
+            <> T.intercalate " or " (map (paint palette Place) (NE.toList missing))
             <> ", which could not be read"
         Ambiguous -> "is declared differently by two modules in scope"
+  where
+    file = paint palette Place . T.pack
+    -- A parse error opens with the span the parser rendered, which opens
+    -- with the file. Set that much of it like every other file name here.
+    located t = case T.breakOn ":" t of
+      (where', rest) -> paint palette Place where' <> rest
 
 -- | The exit status a failure should leave behind.
 formatErrorExitCode :: FormatError -> Int
@@ -100,6 +114,7 @@ formatErrorExitCode = \case
     PackageMalformed {} -> 7
     FileUnclaimed {} -> 8
   UnknownFixity {} -> 15
+  Unreadable {} -> 16
   CppUnsupported _ why -> case why of
     UnhandledDirective {} -> 9
     UnsplittableConditional -> 10
@@ -108,23 +123,69 @@ formatErrorExitCode = \case
     DirectiveUnplaceable {} -> 13
     DirectiveInQuotedText {} -> 14
 
--- | Format a file, using the project it belongs to.
-formatFile ::
-  -- | Package reader
-  PackageReader ->
-  -- | File to format
+-- | Did we decline to format the file, rather than fail to?
+refused :: FormatError -> Bool
+refused = \case
+  PositionPragmas {} -> True
+  CppUnsupported {} -> True
+  UnknownFixity {} -> True
+  NotParsed {} -> False
+  NoPackage {} -> False
+  Unreadable {} -> False
+  NoProject {} -> False
+  NoBuildPlan {} -> False
+
+-- | What a run works out once and then uses for every file.
+--
+-- Finding the project, solving its build plan and building a resolver cost
+-- about as much as formatting a small file, and none of it depends on which
+-- file is being formatted.
+data Session = Session
+  { -- | What each module in scope exports.
+    sessionResolve :: Text -> IO (Maybe (Map OpName Fixity)),
+    -- | What each file's package puts in force.
+    sessionPackage :: PackageReader
+  }
+
+-- | Settle everything that does not depend on the file being formatted.
+newSession ::
+  -- | Where to start looking for the project
   FilePath ->
+  IO (Either FormatError Session)
+newSession start = runExceptT $ do
+  root <- prPath <$> (need (NoProject start) =<< liftIO (findProjectRoot start))
+  plan <- orElse (NoBuildPlan root) =<< liftIO (loadPlan root)
+  resolve <- liftIO (newResolver plan)
+  askPackage <- liftIO newPackageReader
+  pure
+    Session
+      { sessionResolve = resolve,
+        sessionPackage = askPackage
+      }
+  where
+    need :: FormatError -> Maybe a -> ExceptT FormatError IO a
+    need e = maybe (throwE e) pure
+
+-- | Format source that has already been read.
+--
+-- The text is passed in rather than read here because a caller that means
+-- to compare the two needs the original anyway, and reading a file twice to
+-- format it once is the sort of thing this is trying to stop doing.
+formatSource ::
+  -- | What the run has worked out already
+  Session ->
+  -- | The file the source came from, for reporting and for its package
+  FilePath ->
+  -- | The source
+  Text ->
   -- | Result
   IO (Either FormatError Text)
-formatFile askPackage path = runExceptT $ do
-  source <- liftIO (T.readFile path)
+formatSource session path source = runExceptT $ do
   when (movesPositions source) $
     throwE (PositionPragmas path)
-  root <- prPath <$> (need (NoProject path) =<< liftIO (findProjectRoot path))
-  plan <- orElse (NoBuildPlan root) =<< liftIO (loadPlan root)
-  package <- orElse (NoPackage path) =<< liftIO (askPackage path)
-  resolve <- liftIO (newResolver plan)
-  let extensionsInForce = effectiveExtensions package source
+  package <- orElse (NoPackage path) =<< liftIO (sessionPackage session path)
+  let resolve = sessionResolve session
+      extensionsInForce = effectiveExtensions package source
       config = parserConfigFor package
       extensions = Set.fromList extensionsInForce
       renderConfigFor hsModule = do
@@ -149,8 +210,7 @@ formatFile askPackage path = runExceptT $ do
       parsed <- orElse NotParsed (parseModule config path source)
       render <- renderConfigFor (pmModule parsed)
       pure (printDoc defaultRenderOptions (renderModule render parsed))
-  where
-    need :: FormatError -> Maybe a -> ExceptT FormatError IO a
-    need e = maybe (throwE e) pure
-    orElse :: (e -> FormatError) -> Either e a -> ExceptT FormatError IO a
-    orElse f = either (throwE . f) pure
+
+-- | Give up with the given error where there is one to give up over.
+orElse :: (e -> FormatError) -> Either e a -> ExceptT FormatError IO a
+orElse f = either (throwE . f) pure

@@ -3,63 +3,26 @@
 
 -- | Showing what changed.
 module Tilia.Diff
-  ( Colours (..),
-    coloursFor,
-    diff,
+  ( diff,
+    diffInFull,
   )
 where
 
 import Data.Algorithm.Diff qualified as D
-import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as T
-import System.Environment (lookupEnv)
-import System.IO (hIsTerminalDevice, stdout)
-
-----------------------------------------------------------------------------
--- Colour
-
--- | Whether to colour the output.
-data Colours = Colours | Plain
-
--- | Colour a diff when there is somebody there to see it.
---
--- Escape codes written to a file or a pipe are noise in a log, so they are
--- emitted only for a terminal, and not then if @NO_COLOR@ is set.
-coloursFor :: IO Colours
-coloursFor = do
-  refused <- lookupEnv "NO_COLOR"
-  terminal <- hIsTerminalDevice stdout
-  pure $
-    if terminal && not (isJust refused)
-      then Colours
-      else Plain
-
-data Ink = Meta | Gone | New | Unchanged
-
--- | Colour one line, and only that line.
-paint :: Colours -> Ink -> Text -> Text
-paint Plain _ t = t
-paint Colours ink t = code <> t <> "\ESC[0m"
-  where
-    code = case ink of
-      Meta -> "\ESC[36m"
-      Gone -> "\ESC[31m"
-      New -> "\ESC[32m"
-      Unchanged -> "\ESC[39m"
-
-----------------------------------------------------------------------------
--- Diffing
+import Tilia.Palette (Color (..), Palette, paint)
 
 -- | One line of the comparison, with the number it has on each side.
 data Line = Line !Mark !Int !Int !Text
 
+-- | The type of mark.
 data Mark = Context | Removed | Added
   deriving (Eq)
 
--- | A unified diff of two texts.
+-- | A unified diff of two texts, cut short once it has said enough.
 diff ::
-  Colours ->
+  Palette ->
   -- | What to call the two sides
   (Text, Text) ->
   -- | Before
@@ -67,34 +30,67 @@ diff ::
   -- | After
   Text ->
   Text
-diff colours (beforeName, afterName) before after
+diff palette = unified palette (Just roomFor) []
+
+-- | The whole of a unified diff of one file against its formatted self,
+-- headed the way @git diff@ heads one.
+diffInFull ::
+  Palette ->
+  -- | The file, named as it was given on the command line
+  FilePath ->
+  -- | What is in it
+  Text ->
+  -- | What would be
+  Text ->
+  Text
+diffInFull palette path =
+  unified
+    palette
+    Nothing
+    [paint palette Place ("diff --git " <> before <> " " <> after)]
+    (before, after)
+  where
+    before = "a/" <> T.pack path
+    after = "b/" <> T.pack path
+
+unified ::
+  Palette ->
+  -- | How many lines are worth printing, where there is a limit at all
+  Maybe Int ->
+  -- | Whatever goes above the two file names
+  [Text] ->
+  -- | What to call the two sides
+  (Text, Text) ->
+  -- | Before
+  Text ->
+  -- | After
+  Text ->
+  Text
+unified palette limit above (beforeName, afterName) before after
   | null hunks =
       "(the two are identical as text, so the difference is in something\
       \ the text does not show)"
-  | otherwise = T.intercalate "\n" (heading <> shown)
+  | otherwise = T.intercalate "\n" (above <> heading <> shown)
   where
     heading =
-      [ paint colours Gone ("--- " <> beforeName),
-        paint colours New ("+++ " <> afterName)
+      [ paint palette (Header Gone) ("--- " <> beforeName),
+        paint palette (Header New) ("+++ " <> afterName)
       ]
 
-    shown
-      | length body > roomFor = take roomFor body <> [omitted]
-      | otherwise = body
+    shown = case limit of
+      Just room | length body > room -> take room body <> [omitted room]
+      _ -> body
       where
-        omitted =
-          paint colours Meta $
-            "… and " <> T.pack (show (length body - roomFor)) <> " more lines"
+        omitted room =
+          paint palette Meta $
+            "… and " <> T.pack (show (length body - room)) <> " more lines"
 
     body = concatMap render hunks
 
-    render range@(from, _) =
-      hunkHeading range : map line (slice range)
-      where
-        _ = from
+    render range = hunkHeading range : map line (slice range)
 
     hunkHeading range =
-      paint colours Meta $
+      paint palette Meta $
         "@@ -"
           <> span' beforeOf (countingBefore (slice range))
           <> " +"
@@ -105,17 +101,10 @@ diff colours (beforeName, afterName) before after
           (l : _) -> T.pack (show (which l)) <> "," <> T.pack (show n)
           [] -> "0,0"
 
-    -- The marker is not padded away from an empty line, so that a diff does
-    -- not itself leave the trailing whitespace it is often being read to
-    -- find.
     line (Line mark _ _ text) = case mark of
-      Context -> paint colours Unchanged (marked "" "  ")
-      Removed -> paint colours Gone (marked "-" "- ")
-      Added -> paint colours New (marked "+" "+ ")
-      where
-        marked bare prefix
-          | T.null text = bare
-          | otherwise = prefix <> text
+      Context -> paint palette Unchanged (" " <> text)
+      Removed -> paint palette Gone ("-" <> text)
+      Added -> paint palette New ("+" <> text)
 
     slice (from, to) = take (to - from + 1) (drop from lines')
 
@@ -129,8 +118,6 @@ diff colours (beforeName, afterName) before after
     total = length lines'
     lines' = tag (D.getGroupedDiff (split before) (split after))
 
-    -- @T.lines@ drops a trailing empty line, and whether the output ends in
-    -- a newline is exactly the sort of thing worth seeing.
     split = T.splitOn "\n"
 
 -- | How many unchanged lines to show either side of a change.

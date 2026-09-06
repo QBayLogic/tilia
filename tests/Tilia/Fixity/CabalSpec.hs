@@ -81,6 +81,33 @@ spec = do
         \  exposed-modules: Internal.Lib\n"
         `shouldMatchList` ["Main.Lib", "Internal.Lib"]
 
+  describe "comments" $ do
+    it "does not let one at the margin cut a module list short" $
+      exposed "library\n  exposed-modules:\n    A\n--    B\n    C\n"
+        `shouldMatchList` ["A", "C"]
+
+    it "does not count a module somebody commented out" $
+      exposed "library\n  exposed-modules:\n    A\n    -- B\n    C\n"
+        `shouldMatchList` ["A", "C"]
+
+    it "keeps reading source directories past one" $
+      sourceDirs "library\n  hs-source-dirs: src\n-- a comment\ntest-suite t\n  hs-source-dirs: tests\n"
+        `shouldBe` ["src", "tests", "."]
+
+  describe "where a component with no hs-source-dirs lives" $ do
+    it "offers the package directory even when other components name one" $
+      sourceDirs "library\n  build-depends: base\ntest-suite t\n  hs-source-dirs: tests\n"
+        `shouldBe` ["tests", "."]
+
+    it "offers it last, so a named directory is tried first" $
+      last (sourceDirs "library\n  hs-source-dirs: src\n") `shouldBe` "."
+
+    it "offers it once when it is named as well" $
+      sourceDirs "library\n  hs-source-dirs: .\n" `shouldBe` ["."]
+
+    it "offers it when nothing names anything" $
+      sourceDirs "library\n  build-depends: base\n" `shouldBe` ["."]
+
   describe "the union is deliberate" $
     it "does not need to know which branch a build would take" $ do
       -- Both are reported. A module the real build does not expose cannot
