@@ -41,9 +41,10 @@ spec = do
         [ Unreadable "A.hs" "no such file",
           NoPackage "A.hs" NoPackageFile,
           NoProject "A.hs",
-          NoBuildPlan "." "cabal said no"
+          NoBuildPlan "." "cabal said no",
+          NotEquivalent "A.hs" "f = 1 became f = 2"
         ]
-        `shouldBe` [False, False, False, False]
+        `shouldBe` [False, False, False, False, False]
 
   describe "what became of a file" $ do
     it "counts a rewrite as a difference and nothing else" $

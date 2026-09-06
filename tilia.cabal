@@ -43,6 +43,7 @@ library
     Tilia.Doc.Body
     Tilia.Doc.Combinators
     Tilia.Doc.Internal
+    Tilia.Equivalence
     Tilia.Fixity
     Tilia.Fixity.Builtin
     Tilia.Fixity.ByHand
@@ -180,7 +181,7 @@ test-suite tests
     Tilia.Doc.CombinatorsSpec
     Tilia.Doc.InternalSpec
     Tilia.Doc.PropertiesSpec
-    Tilia.Equivalence
+    Tilia.EquivalenceSpec
     Tilia.Fixity.CabalSpec
     Tilia.Fixity.CacheSpec
     Tilia.Fixity.DependenciesSpec

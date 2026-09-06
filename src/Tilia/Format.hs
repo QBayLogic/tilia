@@ -13,23 +13,35 @@ module Tilia.Format
   )
 where
 
+import Control.Applicative ((<|>))
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import Data.Foldable (traverse_)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
-import Tilia.Cpp (CppError (..), blankCpp, describeCppError, formatWithCpp, usesCpp)
+import Tilia.Cpp
+  ( CppError (..),
+    blankCpp,
+    branchLeaves,
+    describeCppError,
+    formatWithCpp,
+    usesCpp,
+  )
+import Tilia.Equivalence (commentDifference, syntaxDifference)
 import Tilia.Fixity (Fixity, OpName (..), Unknown (..), unknownOperators)
 import Tilia.Fixity.Plan (loadPlan, newResolver, scopeFor)
 import Tilia.Parser
   ( ParseError,
+    ParserConfig,
     describeParseError,
     parseModule,
     parserConfigFor,
     pmModule,
+    pmSource,
   )
 import Tilia.Pragma (effectiveExtensions, movesPositions)
 import Tilia.Doc (defaultRenderOptions, printDoc)
@@ -42,6 +54,7 @@ import Tilia.Package
 import Tilia.Palette (Color (Operator, Place), Palette, paint)
 import Tilia.Project (ProjectRoot (..), findProjectRoot)
 import Tilia.Render (RenderConfig (..), defaultRenderConfig, renderModule)
+import Tilia.Source (comments)
 
 -- | Why a file could not be formatted.
 data FormatError
@@ -62,6 +75,8 @@ data FormatError
     UnknownFixity FilePath [(OpName, Unknown)]
   | -- | The file could not be read at all.
     Unreadable FilePath Text
+  | -- | Formatting the file changed its AST.
+    NotEquivalent FilePath Text
 
 -- | Say what went wrong, in one line.
 describeFormatError :: Palette -> FormatError -> Text
@@ -81,6 +96,8 @@ describeFormatError palette = \case
   CppUnsupported path why ->
     "will not format " <> file path <> ": " <> describeCppError why
   Unreadable path why -> "cannot read " <> file path <> ": " <> why
+  NotEquivalent path why ->
+    "formatting " <> file path <> " changed the program: " <> why
   UnknownFixity path unknown ->
     "will not format "
       <> file path
@@ -115,6 +132,7 @@ formatErrorExitCode = \case
     FileUnclaimed {} -> 8
   UnknownFixity {} -> 15
   Unreadable {} -> 16
+  NotEquivalent {} -> 17
   CppUnsupported _ why -> case why of
     UnhandledDirective {} -> 9
     UnsplittableConditional -> 10
@@ -132,6 +150,7 @@ refused = \case
   NotParsed {} -> False
   NoPackage {} -> False
   Unreadable {} -> False
+  NotEquivalent {} -> False
   NoProject {} -> False
   NoBuildPlan {} -> False
 
@@ -144,15 +163,19 @@ data Session = Session
   { -- | What each module in scope exports.
     sessionResolve :: Text -> IO (Maybe (Map OpName Fixity)),
     -- | What each file's package puts in force.
-    sessionPackage :: PackageReader
+    sessionPackage :: PackageReader,
+    -- | Whether to check AST preservation.
+    sessionChecksAst :: Bool
   }
 
 -- | Settle everything that does not depend on the file being formatted.
 newSession ::
   -- | Where to start looking for the project
   FilePath ->
+  -- | For every file, check that formatting preserves the AST.
+  Bool ->
   IO (Either FormatError Session)
-newSession start = runExceptT $ do
+newSession start checksAst = runExceptT $ do
   root <- prPath <$> (need (NoProject start) =<< liftIO (findProjectRoot start))
   plan <- orElse (NoBuildPlan root) =<< liftIO (loadPlan root)
   resolve <- liftIO (newResolver plan)
@@ -160,7 +183,8 @@ newSession start = runExceptT $ do
   pure
     Session
       { sessionResolve = resolve,
-        sessionPackage = askPackage
+        sessionPackage = askPackage,
+        sessionChecksAst = checksAst
       }
   where
     need :: FormatError -> Maybe a -> ExceptT FormatError IO a
@@ -198,18 +222,78 @@ formatSource session path source = runExceptT $ do
                   rcScope = Just scope
                 }
           unknown -> throwE (UnknownFixity path unknown)
-  if usesCpp extensionsInForce source
-    then do
-      render <- case parseModule config path (blankCpp source) of
-        Left _ -> pure defaultRenderConfig {rcExtensions = extensions}
-        Right whole -> renderConfigFor (pmModule whole)
-      orElse
-        (CppUnsupported path)
-        (formatWithCpp config render path source)
-    else do
-      parsed <- orElse NotParsed (parseModule config path source)
-      render <- renderConfigFor (pmModule parsed)
-      pure (printDoc defaultRenderOptions (renderModule render parsed))
+      cpp = usesCpp extensionsInForce source
+  formatted <-
+    if cpp
+      then do
+        render <- case parseModule config path (blankCpp source) of
+          Left _ -> pure defaultRenderConfig {rcExtensions = extensions}
+          Right whole -> renderConfigFor (pmModule whole)
+        orElse
+          (CppUnsupported path)
+          (formatWithCpp config render path source)
+      else do
+        parsed <- orElse NotParsed (parseModule config path source)
+        render <- renderConfigFor (pmModule parsed)
+        pure (printDoc defaultRenderOptions (renderModule render parsed))
+  when (sessionChecksAst session) $
+    traverse_
+      (throwE . NotEquivalent path)
+      (rewritten config cpp path source formatted)
+  pure formatted
+
+-- | What formatting changed about the program.
+--
+-- A file with conditionals is compared one configuration at a time, because
+-- the text as it stands is not a program: the branches only make one once
+-- the preprocessor has chosen between them.
+rewritten ::
+  -- | How to parse both sides
+  ParserConfig ->
+  -- | Whether the file uses the preprocessor
+  Bool ->
+  -- | The file, for the parser's messages
+  FilePath ->
+  -- | What was read
+  Text ->
+  -- | What was printed
+  Text ->
+  Maybe Text
+rewritten config cpp path before after
+  | not cpp = difference before after
+  | otherwise = case (branchLeaves before, branchLeaves after) of
+      -- Neither can really happen: a source that would not split never got
+      -- as far as being formatted. Saying so beats saying nothing.
+      (Left _, _) -> Just "the input could not be split into configurations"
+      (_, Left _) -> Just "the output could not be split into configurations"
+      (Right went, Right came)
+        | length went /= length came ->
+            Just
+              ( "the output has "
+                  <> tshow (length came)
+                  <> " configurations where the input had "
+                  <> tshow (length went)
+              )
+        | otherwise ->
+            firstJust
+              [ ("in one configuration, " <>) <$> difference b a
+              | (b, a) <- zip went came
+              ]
+  where
+    difference b a = case (parseModule config path b, parseModule config path a) of
+      -- The input parsed once already, or there would be nothing to compare.
+      (Left _, _) -> Nothing
+      (_, Left e) ->
+        Just ("the formatted output does not parse: " <> describeParseError e)
+      (Right b', Right a') ->
+        syntaxDifference (pmModule b') (pmModule a')
+          <|> commentDifference
+            (pmModule b', pmModule a')
+            (comments (pmSource b'))
+            (comments (pmSource a'))
+    firstJust = foldr (<|>) Nothing
+    tshow :: Int -> Text
+    tshow = T.pack . show
 
 -- | Give up with the given error where there is one to give up over.
 orElse :: (e -> FormatError) -> Either e a -> ExceptT FormatError IO a

@@ -54,7 +54,8 @@ main = do
     pure
     (maybe (parseTarget "all") parseTarget optTarget)
   files <- filesFor palette target
-  session <- newSession "." >>= either (dieFormatting palette) pure
+  session <- newSession "." optCheckAst
+    >>= either (dieFormatting palette) pure
   outcomes <- runOver session files
   case optMode of
     Inplace -> do
@@ -119,7 +120,9 @@ data Opts = Opts
   { -- | The mode of operation.
     optMode :: Mode,
     -- | Which component to work on, if not all of them.
-    optTarget :: Maybe String
+    optTarget :: Maybe String,
+    -- | Whether to check AST equivalence.
+    optCheckAst :: Bool
   }
 
 optsParserInfo :: ParserInfo Opts
@@ -142,7 +145,12 @@ optsParser =
       command "check" (info (parser Check) (progDesc "Report what formatting would change, and fail if anything would"))
     ]
   where
-    parser mode = Opts mode <$> optional targetArgument
+    parser mode = Opts mode <$> optional targetArgument <*> checkAstSwitch
+    checkAstSwitch =
+      (switch . mconcat)
+        [ long "check-ast",
+          help "Check AST equivalence."
+        ]
     targetArgument =
       (strArgument . mconcat)
         [ metavar "TARGET",
