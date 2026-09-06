@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -12,6 +13,7 @@ module Tilia.Parser
     defaultParserConfig,
     sourceTypeOf,
     parserConfigFor,
+    ghcLibParserVersion,
   )
 where
 
@@ -256,3 +258,7 @@ sourceTypeOf :: FilePath -> SourceType
 sourceTypeOf path
   | ".hsig" `isSuffixOf` path = SignatureSource
   | otherwise = ModuleSource
+
+-- | The version of @ghc-lib-parser@ this was built against.
+ghcLibParserVersion :: String
+ghcLibParserVersion = VERSION_ghc_lib_parser

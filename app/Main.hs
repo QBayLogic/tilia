@@ -23,6 +23,7 @@ import Tilia.Format
     newSession,
   )
 import Tilia.Project (findProjectRoot)
+import Tilia.Parser (ghcLibParserVersion)
 import Tilia.Utils (lineWidth)
 import Tilia.Run
   ( Outcome,
@@ -131,7 +132,7 @@ optsParserInfo =
   where
     versionOption =
       infoOption
-        ("tilia " ++ showVersion version)
+        ("tilia " ++ showVersion version ++ "\nusing ghc-lib-parser " ++ ghcLibParserVersion)
         (long "version" <> short 'v' <> help "Print version of the program")
 
 optsParser :: Parser Opts
