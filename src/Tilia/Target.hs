@@ -16,13 +16,17 @@ where
 
 import Control.Monad (filterM)
 import Data.ByteString qualified as BS
+import Data.ByteString.Char8 qualified as BS8
+import Data.Char (toLower)
 import Data.List (isPrefixOf, isSuffixOf, sort)
 import Data.List.NonEmpty qualified as NE
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
+import Distribution.Fields.Field (Field (..), FieldLine (..), Name (..))
 import Distribution.Fields.ParseResult (runParseResult)
+import Distribution.Fields.Parser (readFields)
 import Distribution.PackageDescription
   ( Benchmark (..),
     BuildInfo (..),
@@ -216,8 +220,7 @@ packageFilesOf root
   | ".cabal" `isSuffixOf` prMarker root = pure [prPath root </> prMarker root]
   | prMarker root == "cabal.project" = do
       contents <-
-        quietly "" $
-          T.decodeUtf8Lenient <$> BS.readFile (prPath root </> "cabal.project")
+        quietly BS.empty (BS.readFile (prPath root </> "cabal.project"))
       found <- traverse
         (packageToCabalFile (prPath root))
         (packagesInCabalProjectContents contents)
@@ -227,24 +230,18 @@ packageFilesOf root
   | otherwise = cabalFilesIn (prPath root)
 
 -- | The entries of a @cabal.project@'s @packages@ field.
-packagesInCabalProjectContents :: Text -> [Text]
-packagesInCabalProjectContents = go . filter (not . commented) . T.lines
+packagesInCabalProjectContents :: BS.ByteString -> [Text]
+packagesInCabalProjectContents contents = case readFields contents of
+  Left _ -> []
+  Right fields -> concatMap entries (packagesIn fields)
   where
-    commented = T.isPrefixOf "--" . T.stripStart
+    packagesIn = concatMap $ \case
+      Field (Name _ name) ls
+        | BS8.map toLower name == "packages" ->
+            [T.unwords [T.decodeUtf8Lenient value | FieldLine _ value <- ls]]
+        | otherwise -> []
+      Section _ _ inner -> packagesIn inner
 
-    go = \case
-      [] -> []
-      (l : ls)
-        | Just value <- fieldValue l ->
-            let (continued, rest) = span indented ls
-             in entries (T.unwords (value : map T.strip continued)) <> go rest
-        | otherwise -> go ls
-    fieldValue l =
-      let (key, rest) = T.break (== ':') l
-       in if T.toLower (T.strip key) == "packages" && not (T.null rest)
-            then Just (T.strip (T.drop 1 rest))
-            else Nothing
-    indented l = T.null (T.strip l) || maybe False (== ' ') (fst <$> T.uncons l)
     entries = filter (not . T.null) . map T.strip . concatMap (T.split (== ',')) . T.words
 
 -- | Turn one entry of a @packages@ field into the @.cabal@ files it names.

@@ -155,6 +155,27 @@ spec = do
             Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
             Right cs -> sort (map componentPackage cs) `shouldBe` ["one", "two"]
 
+    it "reads one continued with tabs, as cabal itself does" $
+      withProject
+        [ ("cabal.project", "packages:\n\tone\n\ttwo\n"),
+          ("one/one.cabal", package "one" "src"),
+          ("two/two.cabal", package "two" "src")
+        ]
+        $ \root ->
+          componentsOfTarget root Everything >>= \case
+            Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+            Right cs -> sort (map componentPackage cs) `shouldBe` ["one", "two"]
+
+    it "finds one a conditional has put inside a section" $
+      withProject
+        [ ("cabal.project", "if impl(ghc >= 9.4)\n  packages: one\n"),
+          ("one/one.cabal", package "one" "src")
+        ]
+        $ \root ->
+          componentsOfTarget root Everything >>= \case
+            Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+            Right cs -> map componentPackage cs `shouldBe` ["one"]
+
     it "walks every source directory a component names" $
       withProject
         [ ("only.cabal", packageWith "only" ["src", "gen"]),
