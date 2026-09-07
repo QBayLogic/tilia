@@ -20,16 +20,12 @@
 
       # Files that participate in the build. Anything outside this set can
       # change without forcing a rebuild.
-      sourceDirs = [ "src" "app" "tests" ];
+      sourceDirs = [ "src" "app" "tests" "corpora" ];
       sourceFiles = [ "cabal.project" "tilia.cabal" ];
 
       # Cabal insists these exist, but their contents never affect the
       # build, so they are staged as empty placeholders.
       placeholders = [ "LICENSE.md" "CHANGELOG.md" "README.md" ];
-
-      perCompiler = prefix: f:
-        lib.listToAttrs
-          (map (c: lib.nameValuePair "${prefix}${c}" (f c)) compilers);
     in
     flake-utils.lib.eachDefaultSystem (system:
       let
@@ -65,10 +61,6 @@
             modules = [{ packages.tilia.writeHieFiles = true; }];
           });
 
-        exeFor = compiler: projects.${compiler}.tilia.components.exes.tilia;
-        testsFor = compiler: projects.${compiler}.tilia.checks.tests;
-
-        # Weeder needs one --hie-directory per component it should see.
         weeder =
           let
             project = projects.${baseCompiler};
@@ -83,32 +75,107 @@
                     (c: "--hie-directory ${c.hie}") scanned}
               touch $out
             '';
-      in
-      {
-        packages =
-          { default = exeFor baseCompiler; }
-          // perCompiler "tilia-" exeFor;
 
-        checks =
-          { inherit weeder; }
-          // perCompiler "tests-" testsFor;
+        perGHC = lib.genAttrs compilers (compiler:
+          let
+            inherit (projects.${compiler}) tilia;
+            built = {
+              tilia = tilia.components.exes.tilia;
+              tests-exe = tilia.components.tests.tests;
+            }
+            // lib.optionalAttrs (compiler == baseCompiler) { inherit weeder; };
+          in
+          built // { ci = pkgs.linkFarm "tilia-ci-${compiler}" built; });
 
-        apps.default = {
-          type = "app";
-          program = "${exeFor baseCompiler}/bin/tilia";
+        base = perGHC.${baseCompiler};
+
+        checking = name: tools: run:
+          pkgs.runCommand "tilia-${name}" { nativeBuildInputs = tools; } ''
+            ${run}
+            touch $out
+          '';
+
+        nixSource = lib.cleanSourceWith {
+          name = "tilia-nix-source";
+          src = ./.;
+          filter = path: type: type == "directory" || lib.hasSuffix ".nix" path;
         };
 
-        devShells.default = projects.${baseCompiler}.shellFor {
+        tidy = {
+          cabal-gild = checking "cabal-gild" [ pkgs.haskellPackages.cabal-gild ] ''
+            cabal-gild --input=${./tilia.cabal} --mode=check
+          '';
+          nixpkgs-fmt = checking "nixpkgs-fmt" [ pkgs.nixpkgs-fmt ] ''
+            nixpkgs-fmt --check ${nixSource}
+          '';
+          deadnix = checking "deadnix" [ pkgs.deadnix ] ''
+            deadnix --fail ${nixSource}
+          '';
+        };
+
+        shellFor = compiler: projects.${compiler}.shellFor {
           tools.cabal = "latest";
+          nativeBuildInputs = [
+            pkgs.haskellPackages.cabal-gild
+            pkgs.nixpkgs-fmt
+            pkgs.deadnix
+          ];
           withHoogle = false;
           exactDeps = false;
         };
+
+        format = pkgs.writeShellApplication {
+          name = "tilia-format";
+          runtimeInputs = [
+            base.tilia
+            pkgs.cabal-install
+            pkgs.haskell-nix.compiler.${baseCompiler}
+            pkgs.haskellPackages.cabal-gild
+            pkgs.nixpkgs-fmt
+          ];
+          text = ''
+            export LANG=C.UTF-8
+            tilia inplace all --check-ast --check-idempotence
+            cabal-gild --io=tilia.cabal --mode=format
+            nixpkgs-fmt ./*.nix
+          '';
+        };
+      in
+      {
+        packages = {
+          default = base.tilia;
+          lint = pkgs.linkFarm "tilia-lint" tidy;
+        };
+
+        checks = { inherit weeder; } // tidy;
+
+        apps = {
+          default = {
+            type = "app";
+            program = "${base.tilia}/bin/tilia";
+          };
+          format = {
+            type = "app";
+            program = "${format}/bin/tilia-format";
+          };
+        };
+
+        devShells = { default = shellFor baseCompiler; }
+          // lib.genAttrs compilers shellFor;
+
+        legacyPackages = base // perGHC;
       });
 
   nixConfig = {
-    extra-substituters = [ "https://cache.iog.io" ];
+    extra-substituters = [
+      "https://cache.iog.io"
+      "https://cache.zw3rk.com"
+      "https://tilia.cachix.org"
+    ];
     extra-trusted-public-keys = [
       "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
+      "loony-tools:pr9m4BkM/5/eSTZlkQyRt57Jz7OMBxNSUiMC4FkcNfk="
+      "tilia.cachix.org-1:bxzzQCOu9D/Suuzll8oRj2RaOb37KVTsETMiTDMLiJ4="
     ];
   };
 }

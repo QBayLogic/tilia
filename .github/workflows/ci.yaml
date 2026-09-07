@@ -1,0 +1,86 @@
+name: CI
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - name: Checks
+        run: |
+          nix build -L --keep-going .#lint
+  build:
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc: [ghc9103, ghc9124, ghc9141]
+    name: Build and test on ${{ matrix.ghc }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - uses: cachix/cachix-action@v17
+        with:
+          name: tilia
+          authToken: '${{ secrets.CACHIX_TIILA_AUTH_TOKEN }}'
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/tilia
+            ~/.cache/cabal/packages
+          key: tilia-${{ hashFiles('corpora/hackage/hackage.manifest', 'cabal.project', 'tilia.cabal') }}
+          restore-keys: |
+            tilia-
+      - name: Build
+        run: |
+          nix build -L --keep-going .#${{ matrix.ghc }}.ci
+      - name: Test
+        run: |
+          tests="$(nix build --no-link --print-out-paths .#${{ matrix.ghc }}.tests-exe)"
+          nix develop -L .#${{ matrix.ghc }} -c bash -c "cabal update && cabal build --dry-run && $tests/bin/tests"
+  format:
+    needs: build
+    name: Self-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - uses: cachix/cachix-action@v17
+        with:
+          name: tilia
+          authToken: '${{ secrets.CACHIX_TIILA_AUTH_TOKEN }}'
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/tilia
+            ~/.cache/cabal/packages
+          key: tilia-${{ hashFiles('corpora/hackage/hackage.manifest', 'cabal.project', 'tilia.cabal') }}
+          restore-keys: |
+            tilia-
+      - name: Self-format
+        run: |
+          nix run .#format
+          git diff --exit-code --color=always
