@@ -28,6 +28,7 @@ import Tilia.Fixity
     Scope (..),
     lookupFixity,
     moduleImports,
+    operatorSpelling,
     operatorsUsed,
   )
 import Tilia.Palette (Color (Operator, Place), Palette, paint)
@@ -101,21 +102,20 @@ fixityNotes resolve scope hsModule = do
             noteBrought = Map.size <$> answer
           }
 
-    used = Map.elems (Map.fromList [(spelling u, u) | u <- operatorsUsed hsModule])
+    used =
+      Map.elems (Map.fromList [(uncurry operatorSpelling u, u) | u <- operatorsUsed hsModule])
 
     here =
       [ (op, fixity)
       | (OpName op, (fixity, DeclaredHere)) <- Map.toList (scopeUnqualified scope)
       ]
 
-    aboutOperator (qualifier, op@(OpName name)) =
+    aboutOperator (qualifier, op) =
       OperatorNote
-        { noteSpelling = spelling (qualifier, op),
+        { noteSpelling = operatorSpelling qualifier op,
           noteResolution = lookupFixity scope qualifier op,
-          noteAmbiguous = OpName name `elem` scopeAmbiguous scope
+          noteAmbiguous = (qualifier, op) `elem` scopeAmbiguous scope
         }
-
-    spelling (qualifier, OpName op) = maybe "" (<> ".") qualifier <> op
 
 -- | Set out all the 'FixityNotes' per file.
 renderFixityNotes :: Palette -> Map FilePath FixityNotes -> [Text]

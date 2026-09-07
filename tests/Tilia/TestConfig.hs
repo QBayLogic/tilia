@@ -17,6 +17,9 @@ import Tilia.Fixity
   ( Direction (..),
     Fixity (..),
     OpName (..),
+    Provenance (..),
+    Scope (..),
+    operatorsUsed,
     resolveScope,
   )
 import Tilia.Fixity.Builtin (builtinFixities)
@@ -34,8 +37,22 @@ exampleRenderConfig package source hsModule =
   defaultRenderConfig
     { rcExtensions =
         Set.fromList (effectiveExtensions package source),
-      rcScope = Just (resolveScope exportsOf hsModule)
+      rcScope = Just (underEveryQualifier (resolveScope exportsOf hsModule))
     }
+  where
+    underEveryQualifier scope =
+      scope
+        { scopeQualified =
+            Map.union
+              (scopeQualified scope)
+              ( Map.fromList
+                  [ ((qualifier, op), (fixity, DeclaredIn qualifier))
+                  | (Just qualifier, op) <- operatorsUsed hsModule,
+                    Just exported <- [exportsOf qualifier],
+                    Just fixity <- [Map.lookup op exported]
+                  ]
+              )
+        }
 
 -- | What a module in scope exports, as far as the corpus is concerned.
 exportsOf :: Text -> Maybe (Map OpName Fixity)

@@ -35,13 +35,13 @@ module Tilia.Fixity
     Unknown (..),
     operatorsUsed,
     unknownOperators,
+    operatorSpelling,
 
     -- * What reading a module established
     Established (..),
   )
 where
 
-import Control.Applicative ((<|>))
 import Data.Foldable (toList)
 import Data.Generics.Schemes (listify)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
@@ -289,7 +289,8 @@ importedOp = \case
 data Scope = Scope
   { -- | Reachable without qualification, with where it came from.
     scopeUnqualified :: Map OpName (Fixity, Provenance),
-    -- | Reachable as @M.op@, keyed by the alias actually written.
+    -- | Reachable as @M.op@, keyed by the alias actually written—or by the
+    -- module's own name, under which its own declarations are reachable.
     scopeQualified :: Map (Text, OpName) (Fixity, Provenance),
     -- | The imports whose modules could not be read.
     --
@@ -298,10 +299,10 @@ data Scope = Scope
     -- unread import could have brought it in, and deciding that needs the
     -- whole import rather than the module's name: see 'unreadFor'.
     scopeUnread :: [Import],
-    -- | Operators brought into unqualified scope with two different
-    -- fixities. See the note in the module header: this should be empty for
-    -- anything that compiles.
-    scopeAmbiguous :: [OpName]
+    -- | Operators the imports bring in with two different fixities, as they
+    -- would have to be written to run into it: without a qualifier, or under
+    -- the alias the disagreeing imports share.
+    scopeAmbiguous :: [(Maybe Text, OpName)]
   }
   deriving (Eq, Show)
 
@@ -328,7 +329,9 @@ resolveScope exportsOf hsModule =
     { scopeUnqualified = Map.union own (Map.map fst unqualified),
       scopeQualified = qualified,
       scopeUnread = unread,
-      scopeAmbiguous = Map.keys (Map.filter snd unqualified)
+      scopeAmbiguous =
+        [(Nothing, op) | op <- Map.keys (Map.filter snd unqualified)]
+          <> [(Just alias, op) | (alias, op) <- Map.keys (Map.filter snd qualifiedFrom)]
     }
   where
     own = Map.map (,DeclaredHere) (declaredFixities hsModule)
@@ -345,16 +348,22 @@ resolveScope exportsOf hsModule =
         ]
     disagree (a, aBad) (b, bBad) = (a, aBad || bBad || fst a /= fst b)
 
-    qualified =
+    qualified = Map.union ownQualified (Map.map fst qualifiedFrom)
+
+    ownQualified =
       Map.fromList
-        [ ((importAlias i, op), entry)
-        | i <- imports,
-          (op, entry) <- Map.toList (visible i)
+        [ ((m, op), entry)
+        | m <- toList (moduleName hsModule),
+          (op, entry) <- Map.toList own
         ]
 
-    -- What one import actually brings in, after its list is applied. A
-    -- module we could not read brings in nothing, and is recorded in
-    -- 'scopeUnread' so that its absence is not mistaken for emptiness.
+    qualifiedFrom =
+      Map.unionsWith
+        disagree
+        [ Map.mapKeys (importAlias i,) (Map.map (,False) (visible i))
+        | i <- imports
+        ]
+
     visible i =
       let exported =
             Map.map (,DeclaredIn (importModule i)) $
@@ -410,16 +419,12 @@ lookupFixity scope qualifier op =
   case found of
     Just (fixity, provenance) -> Resolved fixity provenance
     Nothing -> case nonEmpty (unreadFor scope qualifier op) of
-      -- Nothing that could have declared it went unread, so the Report's
-      -- default is not a guess but a conclusion.
       Nothing -> Resolved defaultFixity ReportDefault
       Just missing -> Unresolved missing
   where
     found = case qualifier of
       Nothing -> Map.lookup op (scopeUnqualified scope)
-      Just q ->
-        Map.lookup (q, op) (scopeQualified scope)
-          <|> Map.lookup op (scopeUnqualified scope)
+      Just q -> Map.lookup (q, op) (scopeQualified scope)
 
 -- | The modules of the unread imports that could have settled this use.
 --
@@ -489,20 +494,25 @@ operatorsUsed hsModule = map named (inExpressions <> inTypes)
       Qual m _ -> Just (T.pack (moduleNameString m))
       _ -> Nothing
 
--- | The operators this module uses that the scope cannot settle.
+-- | The operators this module uses that the scope cannot settle, as the
+-- module writes them.
 --
 -- Empty is the only acceptable answer: an operator whose fixity is not
 -- known cannot be laid out, only guessed at.
-unknownOperators :: Scope -> HsModule GhcPs -> [(OpName, Unknown)]
+unknownOperators :: Scope -> HsModule GhcPs -> [((Maybe Text, OpName), Unknown)]
 unknownOperators scope hsModule =
   Map.toList (Map.fromList (mapMaybe unsettled (operatorsUsed hsModule)))
   where
     ambiguous = Set.fromList (scopeAmbiguous scope)
     unsettled (qualifier, op) = case lookupFixity scope qualifier op of
-      Unresolved missing -> Just (op, NotRead missing)
+      Unresolved missing -> Just ((qualifier, op), NotRead missing)
       Resolved _ _
-        | Nothing <- qualifier, Set.member op ambiguous -> Just (op, Ambiguous)
+        | Set.member (qualifier, op) ambiguous -> Just ((qualifier, op), Ambiguous)
         | otherwise -> Nothing
+
+-- | An operator as a use site writes it, qualifier and all.
+operatorSpelling :: Maybe Text -> OpName -> Text
+operatorSpelling qualifier (OpName op) = maybe "" (<> ".") qualifier <> op
 
 ----------------------------------------------------------------------------
 -- What reading a module established

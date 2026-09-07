@@ -341,9 +341,9 @@ failureAbout path = Failed (Unreadable path "no such file")
 
 -- | A case about one operator whose fixity could not be settled.
 about :: Text -> Outcome
-about op = Declined (UnknownFixity "A.hs" [(OpName op, Ambiguous)])
+about op = Declined (UnknownFixity "A.hs" [((Nothing, OpName op), Ambiguous)])
 
 -- | A case about an operator whose fixity is in a module we could not read.
 missing :: Text -> Outcome
 missing modName =
-  Declined (UnknownFixity "A.hs" [(OpName "<|>", NotRead (modName :| []))])
+  Declined (UnknownFixity "A.hs" [((Nothing, OpName "<|>"), NotRead (modName :| []))])

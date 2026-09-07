@@ -37,7 +37,7 @@ import Tilia.Cpp
     usesCpp,
   )
 import Tilia.Equivalence (commentDifference, syntaxDifference)
-import Tilia.Fixity (Fixity, OpName (..), Unknown (..), unknownOperators)
+import Tilia.Fixity (Fixity, OpName, Unknown (..), operatorSpelling, unknownOperators)
 import Tilia.Fixity.Debug (FixityNotes, fixityNotes)
 import Tilia.Fixity.Plan (loadPlan, newResolver, scopeFor)
 import Tilia.Parser
@@ -77,8 +77,9 @@ data FormatError
     PositionPragmas FilePath
   | -- | The file uses the preprocessor in a way we cannot handle.
     CppUnsupported FilePath CppError
-  | -- | An operator the file uses has a fixity we could not establish.
-    UnknownFixity FilePath [(OpName, Unknown)]
+  | -- | An operator the file uses has a fixity we could not establish, as
+    -- the file writes it.
+    UnknownFixity FilePath [((Maybe Text, OpName), Unknown)]
   | -- | The file could not be read at all.
     Unreadable FilePath Text
   | -- | Formatting the file changed its AST.
@@ -114,7 +115,8 @@ describeFormatError palette = \case
       <> ": the fixity of "
       <> T.intercalate ", " (map saying unknown)
     where
-      saying (OpName op, why) = paint palette Operator op <> " " <> because why
+      saying ((qualifier, op), why) =
+        paint palette Operator (operatorSpelling qualifier op) <> " " <> because why
       because = \case
         NotRead missing ->
           "may be declared in "

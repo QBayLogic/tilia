@@ -321,6 +321,6 @@ unsettledIn ::
 unsettledIn resolve (path, hsModule) = do
   scope <- scopeFor resolve hsModule
   pure
-    [ path <> ": " <> show op <> " " <> show why
-    | (op, why) <- unknownOperators scope hsModule
+    [ path <> ": " <> T.unpack (operatorSpelling qualifier op) <> " " <> show why
+    | ((qualifier, op), why) <- unknownOperators scope hsModule
     ]

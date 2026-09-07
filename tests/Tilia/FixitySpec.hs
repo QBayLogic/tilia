@@ -101,16 +101,40 @@ spec = do
   describe "ambiguity" $ do
     it "reports an operator imported with two different fixities" $
       let (_, _, amb) = scopeOf "module M where\nimport Data.Map\nimport Other\n"
-       in amb `shouldBe` [OpName "!"]
+       in amb `shouldBe` [(Nothing, OpName "!")]
 
     it "reports nothing when two imports agree" $
       let (_, _, amb) = scopeOf "module M where\nimport Data.Map\nimport Agreeing\n"
        in amb `shouldBe` []
 
-    it "reports nothing when the clash is only in qualified scope" $
+    it "reports nothing when the two go under different names" $
       let (_, _, amb) =
             scopeOf "module M where\nimport Data.Map\nimport qualified Other\n"
        in amb `shouldBe` []
+
+    it "reports an alias two imports disagree under" $
+      let (_, _, amb) =
+            scopeOf
+              "module M where\nimport qualified Data.Map as M\nimport qualified Other as M\n"
+       in amb `shouldBe` [(Just "M", OpName "!")]
+
+    it "reports nothing when two imports under one alias agree" $
+      let (_, _, amb) =
+            scopeOf
+              "module M where\nimport qualified Data.Map as M\nimport qualified Agreeing as M\n"
+       in amb `shouldBe` []
+
+    it "counts an unqualified import towards the name it goes under" $
+      let (_, _, amb) =
+            scopeOf
+              "module M where\nimport Data.Map\nimport qualified Other as Data.Map\n"
+       in amb `shouldBe` [(Just "Data.Map", OpName "!")]
+
+    it "keeps a clashing alias apart from a clashing bare name" $
+      let (_, _, amb) =
+            scopeOf
+              "module M where\nimport Data.Map\nimport Other\nimport qualified Data.Map as M\nimport qualified Other as M\n"
+       in amb `shouldBe` [(Nothing, OpName "!"), (Just "M", OpName "!")]
 
   describe "lookupFixity" $ do
     it "finds an unqualified operator" $
@@ -148,9 +172,79 @@ spec = do
        in lookupFixity s Nothing (OpName "!")
             `shouldBe` Resolved defaultFixity ReportDefault
 
+  describe "a qualified use is answered from qualified scope alone" $ do
+    it "does not answer a qualifier that brought nothing in from what did" $
+      let s = fullScope "module M where\nimport Data.Map\n"
+       in lookupFixity s (Just "Q") (OpName "!")
+            `shouldBe` Resolved defaultFixity ReportDefault
+
+    it "does not lend the module's own declaration to a foreign qualifier" $
+      let s = fullScope "module M where\ninfixr 3 <+>\n"
+       in lookupFixity s (Just "Q") (OpName "<+>")
+            `shouldBe` Resolved defaultFixity ReportDefault
+
+    it "does not answer through an alias the import does not go under" $
+      let s = fullScope "module M where\nimport qualified Data.Map as M\n"
+       in lookupFixity s (Just "Data.Map") (OpName "!")
+            `shouldBe` Resolved defaultFixity ReportDefault
+
+    it "answers a use qualified by the module's own name" $
+      let s = fullScope "module M where\ninfixr 3 <+>\n"
+       in lookupFixity s (Just "M") (OpName "<+>")
+            `shouldBe` Resolved (Fixity RightAssoc 3) DeclaredHere
+
+    it "answers a plain import under the module's own name" $
+      let s = fullScope "module M where\nimport Data.Map\n"
+       in lookupFixity s (Just "Data.Map") (OpName "!")
+            `shouldBe` Resolved (Fixity LeftAssoc 9) (DeclaredIn "Data.Map")
+
+    it "weighs only the unread imports the qualifier reaches" $
+      let s = fullScope "module M where\nimport qualified Data.Map as M\nimport Opaque\n"
+       in lookupFixity s (Just "M") (OpName "<??>")
+            `shouldBe` Resolved defaultFixity ReportDefault
+
+    it "refuses to conclude when the qualifier reaches an unread import" $
+      let s = fullScope "module M where\nimport qualified Opaque as O\n"
+       in lookupFixity s (Just "O") (OpName "<??>")
+            `shouldBe` Unresolved ("Opaque" :| [])
+
+  describe "what could not be settled" $ do
+    it "says which qualifier the unsettled use was written under" $
+      unsettledIn "module M where\nimport qualified Opaque as O\nf a b = a O.<+> b\n"
+        `shouldBe` [((Just "O", OpName "<+>"), NotRead ("Opaque" :| []))]
+
+    it "keeps a qualified use apart from an unqualified one" $
+      unsettledIn
+        "module M where\nimport Opaque\nimport qualified Opaque as O\nf a b = a <+> b\ng a b = a O.<+> b\n"
+        `shouldBe` [ ((Nothing, OpName "<+>"), NotRead ("Opaque" :| [])),
+                     ((Just "O", OpName "<+>"), NotRead ("Opaque" :| []))
+                   ]
+
+    it "leaves a settled qualified use out, unread imports notwithstanding" $
+      unsettledIn "module M where\nimport qualified Data.Map as M\nimport Opaque\nf m = m M.! 1\n"
+        `shouldBe` []
+
+    it "holds an ambiguous operator against its unqualified use only" $
+      unsettledIn
+        "module M where\nimport Data.Map\nimport Other\nimport qualified Data.Map as M\nf a b = (a ! b, a M.! b)\n"
+        `shouldBe` [((Nothing, OpName "!"), Ambiguous)]
+
+    it "holds a clashing alias against the use written under it" $
+      unsettledIn
+        "module M where\nimport qualified Data.Map as M\nimport qualified Other as M\nf a b = a M.! b\n"
+        `shouldBe` [((Just "M", OpName "!"), Ambiguous)]
+
+    it "leaves the bare operator alone when only an alias is in doubt" $
+      unsettledIn
+        "module M where\nimport Data.Map\nimport qualified Data.Map as M\nimport qualified Other as M\nf a b = (a ! b, a M.! b)\n"
+        `shouldBe` [((Just "M", OpName "!"), Ambiguous)]
+
+    it "spells a use the way the module wrote it" $
+      map (uncurry operatorSpelling . fst) (unsettledIn "module M where\nimport qualified Opaque as O\nf a b = a O.<+> b\n")
+        `shouldBe` ["O.<+>"]
+
   describe "parsing with the module's own pragmas" $
     it "parses a module that needs an extension it declares" $
-      -- Without reading the pragma this does not parse at all.
       declaredIn "{-# LANGUAGE MagicHash #-}\nmodule M where\ninfixl 6 <+>\n"
         `shouldBe` [(OpName "<+>", Fixity LeftAssoc 6)]
 
@@ -190,7 +284,18 @@ declaredIn = Map.toList . declaredFixities . pmModule . parsed
 fullScope :: Text -> Scope
 fullScope = resolveScope exportsOf . pmModule . parsed
 
-scopeOf :: Text -> ([(OpName, Fixity)], [((Text, OpName), Fixity)], [OpName])
+-- | The uses of an operator a module makes that its scope cannot settle.
+unsettledIn :: Text -> [((Maybe Text, OpName), Unknown)]
+unsettledIn src =
+  let hsModule = pmModule (parsed src)
+   in unknownOperators (resolveScope exportsOf hsModule) hsModule
+
+scopeOf ::
+  Text ->
+  ( [(OpName, Fixity)],
+    [((Text, OpName), Fixity)],
+    [(Maybe Text, OpName)]
+  )
 scopeOf src =
   let s = fullScope src
    in ( Map.toList (Map.map fst (scopeUnqualified s)),
