@@ -49,6 +49,7 @@ library
     Tilia.Fixity.ByHand
     Tilia.Fixity.Cabal
     Tilia.Fixity.Cache
+    Tilia.Fixity.Debug
     Tilia.Fixity.Interface
     Tilia.Fixity.PackageDb
     Tilia.Fixity.Plan
@@ -186,6 +187,7 @@ test-suite tests
     Tilia.EquivalenceSpec
     Tilia.Fixity.CabalSpec
     Tilia.Fixity.CacheSpec
+    Tilia.Fixity.DebugSpec
     Tilia.Fixity.DependenciesSpec
     Tilia.Fixity.InterfaceSpec
     Tilia.Fixity.PlanSpec

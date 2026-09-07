@@ -10,6 +10,7 @@ module Tilia.Format
     refused,
     Session,
     newSession,
+    fixityNotesOf,
     formatSource,
   )
 where
@@ -20,8 +21,10 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import Data.Choice (Choice, isTrue)
 import Data.Foldable (traverse_)
+import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -35,6 +38,7 @@ import Tilia.Cpp
   )
 import Tilia.Equivalence (commentDifference, syntaxDifference)
 import Tilia.Fixity (Fixity, OpName (..), Unknown (..), unknownOperators)
+import Tilia.Fixity.Debug (FixityNotes, fixityNotes)
 import Tilia.Fixity.Plan (loadPlan, newResolver, scopeFor)
 import Tilia.Parser
   ( ParseError,
@@ -173,9 +177,13 @@ data Session = Session
     -- | What each file's package puts in force.
     sessionPackage :: PackageReader,
     -- | Whether to check AST equivalence.
-    sessionChecksAst :: Choice "checkAst",
+    sessionCheckAst :: Choice "checkAst",
     -- | Whether to check idempotence.
-    sessionChecksIdempotence :: Choice "checkIdempotence"
+    sessionCheckIdempotence :: Choice "checkIdempotence",
+    -- | An account of how each file's fixities were determined. 'Nothing'
+    -- when this information was not requested, which is what keeps an
+    -- ordinary run from doing any of the work.
+    sessionFixityNotes :: Maybe (IORef (Map FilePath FixityNotes))
   }
 
 -- | Settle everything that does not depend on the file being formatted.
@@ -186,22 +194,39 @@ newSession ::
   Choice "checkAst" ->
   -- | Check idempotence.
   Choice "checkIdempotence" ->
+  -- | Record how every file's fixities were settled, to be read afterwards
+  -- with 'fixityNotesOf'.
+  Choice "debugFixity" ->
   IO (Either FormatError Session)
-newSession start checksAst checksIdempotence = runExceptT $ do
+newSession start checkAst checkIdempotence debugFixity = runExceptT $ do
   root <- prPath <$> (need (NoProject start) =<< liftIO (findProjectRoot start))
   plan <- orElse (NoBuildPlan root) =<< liftIO (loadPlan root)
   resolve <- liftIO (newResolver plan)
   askPackage <- liftIO newPackageReader
+  notes <-
+    if isTrue debugFixity
+      then Just <$> liftIO (newIORef Map.empty)
+      else pure Nothing
   pure
     Session
       { sessionResolve = resolve,
         sessionPackage = askPackage,
-        sessionChecksAst = checksAst,
-        sessionChecksIdempotence = checksIdempotence
+        sessionCheckAst = checkAst,
+        sessionCheckIdempotence = checkIdempotence,
+        sessionFixityNotes = notes
       }
   where
     need :: FormatError -> Maybe a -> ExceptT FormatError IO a
     need e = maybe (throwE e) pure
+
+-- | What the run made of every file's operators, by file.
+--
+-- Empty unless the session was asked to keep an account of it. Nothing here
+-- is rendered; 'Tilia.Fixity.Debug.renderFixityNotes' does that.
+fixityNotesOf :: Session -> IO (Map FilePath FixityNotes)
+fixityNotesOf session = case sessionFixityNotes session of
+  Nothing -> pure Map.empty
+  Just ref -> readIORef ref
 
 -- | Format source that has already been read.
 --
@@ -226,6 +251,11 @@ formatSource session path source = runExceptT $ do
       cpp = usesCpp (effectiveExtensions package source) source
       renderConfigFor extensions hsModule = do
         scope <- liftIO (scopeFor resolve hsModule)
+        liftIO $ case sessionFixityNotes session of
+          Nothing -> pure ()
+          Just ref -> do
+            told <- fixityNotes resolve scope hsModule
+            atomicModifyIORef' ref (\m -> (Map.insertWith (\_ old -> old) path told m, ()))
         case unknownOperators scope hsModule of
           [] ->
             pure
@@ -250,11 +280,11 @@ formatSource session path source = runExceptT $ do
             render <- renderConfigFor extensions (pmModule parsed)
             pure (printDoc defaultRenderOptions (renderModule render parsed))
   formatted <- formatting source
-  when (isTrue (sessionChecksAst session)) $
+  when (isTrue (sessionCheckAst session)) $
     traverse_
       (throwE . NotEquivalent path)
       (rewritten config cpp path source formatted)
-  when (isTrue (sessionChecksIdempotence session)) $ do
+  when (isTrue (sessionCheckIdempotence session)) $ do
     settled <- formatting formatted
     when (settled /= formatted) $
       throwE (NotIdempotent path (whereTheyDiffer formatted settled))

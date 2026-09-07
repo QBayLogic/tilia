@@ -20,10 +20,12 @@ import System.IO (hFlush, stderr, stdout)
 import Tilia.Palette (Color (Bad), Palette, paletteFor)
 import Tilia.Format
   ( FormatError,
+    fixityNotesOf,
     describeFormatError,
     formatErrorExitCode,
     newSession,
   )
+import Tilia.Fixity.Debug (renderFixityNotes)
 import Tilia.Project (findProjectRoot)
 import Tilia.Parser (ghcLibParserVersion)
 import Tilia.Utils (lineWidth)
@@ -57,9 +59,11 @@ main = do
     (maybe (parseTarget "all") parseTarget optTarget)
   files <- filesFor palette target
   session <-
-    newSession "." optCheckAst optCheckIdempotence
+    newSession "." optCheckAst optCheckIdempotence optDebugFixity
       >>= either (dieFormatting palette) pure
   outcomes <- runOver session files
+  fixityNotesOf session
+    >>= traverse_ (T.hPutStrLn stderr) . renderFixityNotes palette
   case optMode of
     Inplace -> do
       traverse_ writeBack outcomes
@@ -127,7 +131,9 @@ data Opts = Opts
     -- | Whether to check AST equivalence.
     optCheckAst :: Choice "checkAst",
     -- | Whether to check idempotence.
-    optCheckIdempotence :: Choice "checkIdempotence"
+    optCheckIdempotence :: Choice "checkIdempotence",
+    -- | Whether to print debugging information about fixities.
+    optDebugFixity :: Choice "debugFixity"
   }
 
 optsParserInfo :: ParserInfo Opts
@@ -155,6 +161,7 @@ optsParser =
         <$> optional targetArgument
         <*> checkAstSwitch
         <*> checkIdempotenceSwitch
+        <*> debugFixitySwitch
     checkAstSwitch =
       fromBool <$> (switch . mconcat)
         [ long "check-ast",
@@ -164,6 +171,11 @@ optsParser =
       fromBool <$> (switch . mconcat)
         [ long "check-idempotence",
           help "Check that formatting twice changes nothing."
+        ]
+    debugFixitySwitch =
+      fromBool <$> (switch . mconcat)
+        [ long "debug-fixity",
+          help "Print debugging information about fixities."
         ]
     targetArgument =
       (strArgument . mconcat)
