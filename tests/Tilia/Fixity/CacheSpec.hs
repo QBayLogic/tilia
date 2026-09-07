@@ -133,6 +133,22 @@ database = around withIsolatedCache $ do
     storeInstalled cache (Installed [containers] [])
     cachedInstalled cache `shouldReturn` Nothing
 
+  it "gives back nothing once the project wants other packages" $ \_ ->
+    withIsolatedDirectory $ \dir ->
+      withDatabase $ \db -> do
+        before' <- open dir (PlanToken "one")
+        storeInstalled before' (Installed [containers] [db])
+        after' <- open dir (PlanToken "two")
+        cachedInstalled after' `shouldReturn` Nothing
+
+  it "gives it back under the plan it was written under" $ \_ ->
+    withIsolatedDirectory $ \dir ->
+      withDatabase $ \db -> do
+        before' <- open dir (PlanToken "one")
+        storeInstalled before' (Installed [containers] [db])
+        again <- open dir (PlanToken "one")
+        cachedInstalled again `shouldReturn` Just [containers]
+
   it "carries a package that exposes nothing" $ \cache ->
     withDatabase $ \db -> do
       let quiet = InstalledPackage {ipName = "rts", ipVersion = "1.0", ipModules = [], ipImportDirs = []}

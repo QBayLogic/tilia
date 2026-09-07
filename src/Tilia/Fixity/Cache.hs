@@ -131,15 +131,16 @@ storeFixities cache package modName answer = do
 
 -- | What the compiler could see when last asked, if it can still see it.
 cachedInstalled :: Cache -> IO (Maybe [InstalledPackage])
-cachedInstalled cache = quietly Nothing $ do
+cachedInstalled cache@(Cache _ (PlanToken token)) = quietly Nothing $ do
   readIfPresent (installedPath cache) T.lines >>= \case
     Nothing -> pure Nothing
     Just ls -> do
       let written =
             [(T.unpack path, stamp) | ["db", path, stamp] <- map fields ls]
+          sameProject = ["plan", token] `elem` map fields ls
       still <- traverse unchanged written
       pure $
-        if not (null written) && and still
+        if sameProject && not (null written) && and still
           then Just (mapMaybe installedFrom ls)
           else Nothing
   where
@@ -164,12 +165,13 @@ cachedInstalled cache = quietly Nothing $ do
 -- can invalidate is worse than no answer, because it never stops being
 -- given.
 storeInstalled :: Cache -> Installed -> IO ()
-storeInstalled cache found
+storeInstalled cache@(Cache _ (PlanToken token)) found
   | null (installedDatabases found) = pure ()
   | otherwise = quietly () $ do
       stamps <- traverse stamped (installedDatabases found)
       writeAtomically (installedPath cache) . T.unlines $
-        [T.intercalate "\t" ["db", T.pack path, stamp] | (path, stamp) <- stamps]
+        [T.intercalate "\t" ["plan", token]]
+          <> [T.intercalate "\t" ["db", T.pack path, stamp] | (path, stamp) <- stamps]
           <> [ T.intercalate "\t" $
                  ["pkg", ipName p, ipVersion p, T.unwords (ipModules p)]
                    <> map T.pack (ipImportDirs p)
