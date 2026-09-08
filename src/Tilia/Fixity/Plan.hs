@@ -25,6 +25,7 @@ module Tilia.Fixity.Plan
     Route (..),
     newResolver,
     newResolverVia,
+    withReexports,
     scopeFor,
   )
 where
@@ -901,17 +902,40 @@ withReexports reach visiting modName hsModule =
       visible <-
         if null (wantedNames items)
           then pure (Just [])
-          else sequence <$> traverse (fromModule . importModule) (moduleImports hsModule)
+          else
+            sequence
+              <$> traverse
+                (\i -> fmap ((,) i) <$> fromModule (importModule i))
+                (moduleImports hsModule)
       wholeModules <- sequence <$> traverse fromModule (wantedModules items)
       pure $ do
         seen <- visible
         whole <- wholeModules
-        let passedOn = Map.restrictKeys (Map.unions seen) (Set.fromList (wantedNames items))
+        let passedOn =
+              Map.fromList
+                [ (op, fixity)
+                | (qualifier, op) <- wantedNames items,
+                  fixity <- take 1 (from qualifier op seen)
+                ]
         pure (Map.unions (own : passedOn : whole))
   where
     own = declaredFixities hsModule
     defined = declaredNames hsModule
-    wantedNames items = [op | ExportName op <- items, not (Set.member op defined)]
+    wantedNames items =
+      [(qualifier, op) | ExportName qualifier op <- items, not (Set.member op defined)]
+    from qualifier op seen =
+      [ fixity
+      | (i, exported) <- seen,
+        case qualifier of
+          Nothing -> not (importQualified i)
+          Just q -> importAlias i == q,
+        admits i op,
+        Just fixity <- [Map.lookup op exported]
+      ]
+    admits i op = case importNames i of
+      Nothing -> True
+      Just (True, hidden) -> op `notElem` hidden
+      Just (False, shown) -> op `elem` shown
     wantedModules items =
       Set.toList . Set.fromList $
         concat [under m | ExportModule m <- items, not (isSelf m)]

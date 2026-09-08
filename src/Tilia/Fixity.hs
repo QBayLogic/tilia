@@ -191,11 +191,18 @@ moduleName = fmap (T.pack . moduleNameString . unLoc) . hsmodName
 
 -- | One entry of a module's export list.
 data ExportItem
-  = -- | A name, which may or may not be declared in this module.
-    ExportName OpName
+  = -- | A name, which may or may not be declared in this module, under the
+    -- qualifier it was written with if it was written with one.
+    ExportName (Maybe Text) OpName
   | -- | @module M@, re-exporting everything that module brought in.
     ExportModule Text
   deriving (Eq, Show)
+
+-- | The qualifier a name was written under.
+qualifierOf :: RdrName -> Maybe Text
+qualifierOf = \case
+  Qual m _ -> Just (T.pack (moduleNameString m))
+  _ -> Nothing
 
 -- | A module's export list, or 'Nothing' if it has none.
 --
@@ -216,7 +223,9 @@ moduleExports =
       IEThingWith _ n _ ns _ -> named n : map named ns
       IEModuleContents _ m -> [ExportModule (T.pack (moduleNameString (unLoc m)))]
       _ -> []
-    named = ExportName . opName . ieWrappedName . unLoc
+    named n =
+      let rdr = ieWrappedName (unLoc n)
+       in ExportName (qualifierOf rdr) (opName rdr)
 
 ----------------------------------------------------------------------------
 -- What a module can see
@@ -490,9 +499,6 @@ operatorsUsed hsModule = map named (inExpressions <> inTypes)
           HsOpTy _ _ _ (L _ n) _ <- [t]
       ]
     named n = (qualifierOf n, OpName (T.pack (occNameString (rdrNameOcc n))))
-    qualifierOf = \case
-      Qual m _ -> Just (T.pack (moduleNameString m))
-      _ -> Nothing
 
 -- | The operators this module uses that the scope cannot settle, as the
 -- module writes them.

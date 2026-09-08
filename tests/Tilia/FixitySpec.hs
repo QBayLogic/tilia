@@ -53,6 +53,22 @@ spec = do
       declaredIn "module M where\nf = g\n  where\n    infixr 3 ###\n    g = 1\n"
         `shouldBe` []
 
+  describe "what a module says it exports" $ do
+    it "has nothing to say about a module with no export list" $
+      exportsOfSource "module M where\nf = 1\n" `shouldBe` Nothing
+
+    it "keeps the qualifier a name was written under" $
+      exportsOfSource "module M ((Disp.<+>)) where\n"
+        `shouldBe` Just [ExportName (Just "Disp") (OpName "<+>")]
+
+    it "has none for a name written plainly" $
+      exportsOfSource "module M ((<+>)) where\n"
+        `shouldBe` Just [ExportName Nothing (OpName "<+>")]
+
+    it "reads a whole module passed on as the module it names" $
+      exportsOfSource "module M (module Data.Map) where\n"
+        `shouldBe` Just [ExportModule "Data.Map"]
+
   describe "layer 2: imports" $ do
     it "sees an unqualified import in both scopes" $
       scopeOf "module M where\nimport Data.Map\n"
@@ -280,6 +296,9 @@ parsed src = case parseModule defaultParserConfig "test.hs" src of
 
 declaredIn :: Text -> [(OpName, Fixity)]
 declaredIn = Map.toList . declaredFixities . pmModule . parsed
+
+exportsOfSource :: Text -> Maybe [ExportItem]
+exportsOfSource = moduleExports . pmModule . parsed
 
 fullScope :: Text -> Scope
 fullScope = resolveScope exportsOf . pmModule . parsed

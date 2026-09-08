@@ -20,6 +20,7 @@ import Data.List (isInfixOf)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
@@ -34,6 +35,7 @@ import Tilia.Parser
 spec :: Spec
 spec = do
   preparation
+  reexports
   plan <- runIO (readBuildPlan (planPathFor "."))
   case plan of
     Left _ -> unavailable "no build plan; run cabal build first"
@@ -46,15 +48,10 @@ spec = do
 preparation :: Spec
 preparation = describe "preparing a project" $ do
   it "solves and then fetches, in the one run" $
-    -- The bug this is here for: a first run solved the project and stopped,
-    -- leaving the tarballs to be fetched by whoever ran the tool next, so
-    -- that cabal appeared twice for what is one project's setting up.
     withTempProject Nothing $ \dir -> do
       steps <- newIORef []
       let cabal args = do
             record steps args
-            -- What a real dry run leaves behind, in the one respect that
-            -- matters here: a plan naming a package nobody has fetched.
             when (args == ["build", "--dry-run"]) (writePlan dir wantingATarball)
             pure (Right ())
       checkReadiness dir `shouldReturn` PlanMissing
@@ -81,6 +78,54 @@ preparation = describe "preparing a project" $ do
       let cabal args = record steps args >> pure (Left "cabal said no")
       prepareWith cabal dir PlanMissing `shouldReturn` Left "cabal said no"
       readIORef steps `shouldReturn` [["build", "--dry-run"]]
+
+-- | Chasing an operator a module passes on rather than declares.
+--
+-- No plan and no network here: the modules a name could have come from
+-- answer out of a table written below, which is what makes it possible to
+-- ask not merely whether an answer came back but which module it came from.
+reexports :: Spec
+reexports = describe "an operator a module passes on" $ do
+  it "comes from the module the qualifier names" $
+    chased "module M ((Disp.<+>)) where\nimport Control.Arrow (first)\nimport qualified Text.PrettyPrint as Disp\n"
+      `shouldReturn` Just (Fixity LeftAssoc 6)
+
+  it "comes from an import that brings it in, not one that hides it" $
+    chased "module M ((<+>)) where\nimport Control.Arrow hiding ((<+>))\nimport Text.PrettyPrint\n"
+      `shouldReturn` Just (Fixity LeftAssoc 6)
+
+  it "comes from an import that brings it in, not one that never names it" $
+    chased "module M ((<+>)) where\nimport Control.Arrow (first)\nimport Text.PrettyPrint\n"
+      `shouldReturn` Just (Fixity LeftAssoc 6)
+
+  it "does not come from a qualified import when it is written plainly" $
+    chased "module M ((<+>)) where\nimport Control.Arrow\nimport qualified Text.PrettyPrint as Disp\n"
+      `shouldReturn` Just (Fixity RightAssoc 5)
+
+  it "is the module's own where the module declares it" $
+    chased "module M ((<+>)) where\nimport Control.Arrow\ninfixr 3 <+>\n(<+>) :: Int -> Int -> Int\na <+> b = a + b\n"
+      `shouldReturn` Just (Fixity RightAssoc 3)
+
+  it "is not answered at all when the module it came from cannot be read" $
+    chased "module M ((<+>)) where\nimport No.Such.Module\n"
+      `shouldReturn` Nothing
+
+-- | What the chase makes of one module's @<+>@, against a world of modules
+-- that disagree about it.
+chased :: Text -> IO (Maybe Fixity)
+chased source = do
+  answer <- withReexports reach Set.empty "M" (pmModule parsed)
+  pure (Map.lookup (OpName "<+>") =<< answer)
+  where
+    parsed = case parseModule defaultParserConfig "M.hs" source of
+      Left _ -> error "the test input did not parse"
+      Right m -> m
+    reach m =
+      pure $ case m of
+        "Control.Arrow" -> Just (Map.fromList [(OpName "<+>", Fixity RightAssoc 5)])
+        "Text.PrettyPrint" -> Just (Map.fromList [(OpName "<+>", Fixity LeftAssoc 6)])
+        "Prelude" -> Just Map.empty
+        _ -> Nothing
 
 withPlan :: BuildPlan -> Spec
 withPlan plan = do
