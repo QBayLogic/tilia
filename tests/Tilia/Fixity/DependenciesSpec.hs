@@ -25,7 +25,8 @@ import Data.Text.Encoding qualified as T
 import GHC.Hs (HsModule)
 import GHC.Hs.Extension (GhcPs)
 import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
-import System.FilePath ((</>))
+import Data.Maybe (listToMaybe)
+import System.FilePath (takeDirectory, (</>))
 import Test.Hspec
 import Tilia.Fixity
 import Tilia.Fixity.Builtin (builtinFixities)
@@ -50,15 +51,31 @@ withPlan plan = do
   fromInterface <- runIO (newResolverVia [FromInterface] plan)
   resolve <- runIO (newResolver plan)
   own <- runIO ownModules
-  let dependencies = dependenciesOf (not . shipped) plan installed
-      preloaded = dependenciesOf shipped plan installed
-      shipped m = Map.member m builtinFixities
-      modules = concatMap depModules dependencies
-      read' = Set.fromList (map depPackage (dependencies <> preloaded))
+  let isShippedModule m = Map.member m builtinFixities
+  dependencies <- runIO (dependenciesOf (not . isShippedModule) plan installed)
+  preloaded <- runIO (dependenciesOf isShippedModule plan installed)
+  let modules = concatMap depModules dependencies
+      compilerDir =
+        listToMaybe
+          [ takeDirectory dir
+          | p <- installedPackages installed,
+            ipName p == "ghc",
+            dir <- take 1 (ipImportDirs p)
+          ]
+      shippedPackages =
+        Set.fromList
+          [ ipName p
+          | p <- installedPackages installed,
+            dir <- take 1 (ipImportDirs p),
+            Just (takeDirectory dir) == compilerDir
+          ]
+      readFromSourcePackages =
+        Set.fromList (map depPackage dependencies)
+          `Set.difference` shippedPackages
   missing <-
     runIO $
       filterM (fmap not . doesFileExist . snd)
-        . filter ((`Set.member` read') . ppName . fst)
+        . filter ((`Set.member` readFromSourcePackages) . ppName . fst)
         =<< plannedTarballs plan
   describe "the tree this project is built against" $ do
     it "is a real dependency tree and not an empty plan" $
@@ -151,20 +168,24 @@ data Dependency = Dependency
 
 -- | The modules of every package in the plan that the compiler can also
 -- see, keeping the ones the predicate wants.
-dependenciesOf :: (Text -> Bool) -> BuildPlan -> Installed -> [Dependency]
+dependenciesOf :: (Text -> Bool) -> BuildPlan -> Installed -> IO [Dependency]
 dependenciesOf wanted plan installed =
-  [ Dependency (ipName package) modules
-  | package <- installedPackages installed,
-    Set.member (ipName package) planned,
-    dir <- take 1 (ipImportDirs package),
-    let modules =
+  filter (not . null . depModules) <$> traverse ofPackage candidates
+  where
+    candidates =
+      [ (package, dir)
+      | package <- installedPackages installed,
+        Set.member (ipName package) planned,
+        dir <- take 1 (ipImportDirs package)
+      ]
+    ofPackage (package, dir) =
+      Dependency (ipName package)
+        <$> filterM
+          (doesFileExist . snd)
           [ (m, dir </> T.unpack (T.replace "." "/" m) <> ".hi")
           | m <- ipModules package,
             wanted m
-          ],
-    not (null modules)
-  ]
-  where
+          ]
     planned = Set.fromList [ppName p | p <- bpPackages plan, not (isLocal p)]
     isLocal p = case ppSource p of
       LocalPackage _ -> True
