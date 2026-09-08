@@ -254,19 +254,26 @@ def escape(op: str) -> str:
     return op.replace("\\", "\\\\").replace('"', '\\"')
 
 def render(table: dict[str, dict[str, tuple[str, int]]], version: str) -> str:
+    """Write the table out as Tilia formats it.
+    """
     entries = []
     for module in sorted(table):
         ops = table[module]
-        head = f'    {"[" if not entries else ","} entry "{module}"'
         if not ops:
-            entries.append(head + " []")
+            entries.append(f'entry "{module}" []')
             continue
         rendered = ", ".join(
             f'("{escape(op)}", {ASSOC[d]}, {p})'
             for op, (d, p) in sorted(ops.items())
         )
-        entries.append(head + "\n        [" + rendered + "]")
-    body = "\n".join(entries)
+        entries.append(f'entry\n        "{module}"\n        [{rendered}]')
+    body = "\n".join(
+        ("    [ " if first else "      ") + entry + ("" if last else ",")
+        for entry, first, last in (
+            (entry, i == 0, i == len(entries) - 1)
+            for i, entry in enumerate(entries)
+        )
+    )
     return f'''{{-# LANGUAGE OverloadedStrings #-}}
 
 -- | Fixities of the operators that ship with the compiler.
