@@ -22,9 +22,9 @@ import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import Data.Choice (Choice, isTrue)
 import Data.Foldable (traverse_)
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
-import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -38,7 +38,7 @@ import Tilia.Cpp
   )
 import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Equivalence (commentDifference, syntaxDifference)
-import Tilia.Fixity (Fixity, OpName, Unknown (..), operatorSpelling, unknownOperators)
+import Tilia.Fixity (Fixity, OpName, Unknown (..), operatorSpelling, spellUnreadIn, unknownOperators)
 import Tilia.Fixity.Debug (FixityNotes, fixityNotes)
 import Tilia.Fixity.Plan (loadPlan, newResolver, scopeFor)
 import Tilia.Package
@@ -118,10 +118,7 @@ describeFormatError palette = \case
       saying ((qualifier, op), why) =
         paint palette Operator (operatorSpelling qualifier op) <> " " <> because why
       because = \case
-        NotRead missing ->
-          "may be declared in "
-            <> T.intercalate " or " (map (paint palette Place) (NE.toList missing))
-            <> ", which could not be read"
+        NotRead missing -> "may be declared in " <> spellUnreadIn palette missing
         Ambiguous -> "is declared differently by two modules in scope"
   where
     file = paint palette Place . T.pack
@@ -176,6 +173,11 @@ refused = \case
 data Session = Session
   { -- | What each module in scope exports.
     sessionResolve :: Text -> IO (Maybe (Map OpName Fixity)),
+    -- | What a module that could not be read says it exports, where that
+    -- can be settled without reading it. Only the complaint about an
+    -- unsettled operator turns on this: it decides which of the unread
+    -- imports could be to blame for one.
+    sessionExportNames :: Text -> IO (Maybe (Set OpName)),
     -- | What each file's package puts in force.
     sessionPackage :: PackageReader,
     -- | Whether to check AST equivalence.
@@ -203,7 +205,7 @@ newSession ::
 newSession start checkAst checkIdempotence debugFixity = runExceptT $ do
   root <- prPath <$> (need (NoProject start) =<< liftIO (findProjectRoot start))
   plan <- orElse (NoBuildPlan root) =<< liftIO (loadPlan root)
-  resolve <- liftIO (newResolver plan)
+  (resolve, exportNames) <- liftIO (newResolver plan)
   askPackage <- liftIO newPackageReader
   notes <-
     if isTrue debugFixity
@@ -212,6 +214,7 @@ newSession start checkAst checkIdempotence debugFixity = runExceptT $ do
   pure
     Session
       { sessionResolve = resolve,
+        sessionExportNames = exportNames,
         sessionPackage = askPackage,
         sessionCheckAst = checkAst,
         sessionCheckIdempotence = checkIdempotence,
@@ -249,10 +252,11 @@ formatSource session path source = runExceptT $ do
     throwE (PositionPragmas path)
   package <- orElse (NoPackage path) =<< liftIO (sessionPackage session path)
   let resolve = sessionResolve session
+      exportNames = sessionExportNames session
       config = parserConfigFor package
       cpp = usesCpp (effectiveExtensions package source) source
       renderConfigFor extensions hsModule = do
-        scope <- liftIO (scopeFor resolve hsModule)
+        scope <- liftIO (scopeFor resolve exportNames hsModule)
         liftIO $ case sessionFixityNotes session of
           Nothing -> pure ()
           Just ref -> do

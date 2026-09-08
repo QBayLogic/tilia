@@ -18,6 +18,7 @@ module Tilia.Fixity
     -- * What a module passes on
     ExportItem (..),
     moduleExports,
+    exportedOperators,
 
     -- * What a module can see
     Import (..),
@@ -36,9 +37,13 @@ module Tilia.Fixity
     operatorsUsed,
     unknownOperators,
     operatorSpelling,
+    spellUnreadIn,
 
     -- * What reading a module established
     Established (..),
+    Exported (..),
+    exportedNames,
+    asExported,
   )
 where
 
@@ -57,6 +62,7 @@ import GHC.Types.Fixity qualified as GHC
 import GHC.Types.Name.Occurrence (occNameString)
 import GHC.Types.Name.Reader (RdrName (..), rdrNameOcc)
 import GHC.Types.SrcLoc (GenLocated (..), unLoc)
+import Tilia.Palette (Color (Place), Palette, paint)
 
 ----------------------------------------------------------------------------
 -- Fixities
@@ -198,6 +204,28 @@ data ExportItem
     ExportModule Text
   deriving (Eq, Show)
 
+-- | The operators a module's export list names, where that list can be
+-- enumerated without reading what the module passes on.
+--
+-- 'Nothing' is a module that keeps its own counsel: one whose export list
+-- hands whole modules on, so that what it exports cannot be known without
+-- reading them. A module with no export list at all exports what it
+-- declares, and the fixities it declares are everything it could supply.
+--
+-- What this is for: an operator nobody could settle is blamed on the
+-- imports that might have declared it, and a module that plainly exports no
+-- such name is not one of them. See 'unreadFor'.
+exportedOperators :: HsModule GhcPs -> Maybe (Set OpName)
+exportedOperators hsModule = case moduleExports hsModule of
+  Nothing -> Just (Map.keysSet (declaredFixities hsModule))
+  Just items
+    | any passesOnAModule items -> Nothing
+    | otherwise -> Just (Set.fromList [op | ExportName _ op <- items])
+  where
+    passesOnAModule = \case
+      ExportModule _ -> True
+      ExportName _ _ -> False
+
 -- | The qualifier a name was written under.
 qualifierOf :: RdrName -> Maybe Text
 qualifierOf = \case
@@ -301,13 +329,21 @@ data Scope = Scope
     -- | Reachable as @M.op@, keyed by the alias actually written—or by the
     -- module's own name, under which its own declarations are reachable.
     scopeQualified :: Map (Text, OpName) (Fixity, Provenance),
-    -- | The imports whose modules could not be read.
+    -- | The imports whose modules could not be read, and what each of them
+    -- is nonetheless known to export.
     --
     -- These are what separate \"no declaration exists\" from \"we did not
     -- manage to look\". An operator that was not found is settled only if no
     -- unread import could have brought it in, and deciding that needs the
     -- whole import rather than the module's name: see 'unreadFor'.
-    scopeUnread :: [Import],
+    --
+    -- Unread is not the same as unknown. A module whose export list can be
+    -- enumerated says what it can and cannot supply whether or not its
+    -- fixities could obtained, and 'Just' is that list. 'Nothing' is a
+    -- module that keeps its own counsel—one whose export list passes whole
+    -- modules on, or that could not be parsed at all—and which therefore
+    -- has to be suspected of everything.
+    scopeUnread :: [(Import, Maybe (Set OpName))],
     -- | Operators the imports bring in with two different fixities, as they
     -- would have to be written to run into it: without a qualifier, or under
     -- the alias the disagreeing imports share.
@@ -331,9 +367,15 @@ data Scope = Scope
 resolveScope ::
   -- | What a module exports, or 'Nothing' if that could not be determined
   (Text -> Maybe (Map OpName Fixity)) ->
+  -- | The operators a module's export list names, where that list can be
+  -- enumerated without reading what it passes on. Asked only about modules
+  -- the first function could not answer for, and only to decide which of
+  -- them an unsettled operator can be blamed on. Answering 'Nothing' to
+  -- everything is allowed, and suspects every unread import of everything.
+  (Text -> Maybe (Set OpName)) ->
   HsModule GhcPs ->
   Scope
-resolveScope exportsOf hsModule =
+resolveScope exportsOf exportNamesOf hsModule =
   Scope
     { scopeUnqualified = Map.union own (Map.map fst unqualified),
       scopeQualified = qualified,
@@ -346,7 +388,11 @@ resolveScope exportsOf hsModule =
     own = Map.map (,DeclaredHere) (declaredFixities hsModule)
     imports = moduleImports hsModule
 
-    unread = [i | i <- imports, Nothing <- [exportsOf (importModule i)]]
+    unread =
+      [ (i, exportNamesOf (importModule i))
+      | i <- imports,
+        Nothing <- [exportsOf (importModule i)]
+      ]
 
     -- Paired with a flag saying whether two imports disagreed about it.
     unqualified =
@@ -455,8 +501,9 @@ unreadFor ::
   -- | The modules that could hold the answer
   [Text]
 unreadFor scope qualifier op =
-  [importModule i | i <- scopeUnread scope, reaches i, brings i]
+  [importModule i | (i, exported) <- scopeUnread scope, reaches i, brings i, exports exported]
   where
+    exports = maybe True (Set.member op)
     reaches i = case qualifier of
       Nothing -> not (importQualified i)
       Just q -> q == importAlias i
@@ -521,6 +568,23 @@ unknownOperators scope hsModule =
 operatorSpelling :: Maybe Text -> OpName -> Text
 operatorSpelling qualifier (OpName op) = maybe "" (<> ".") qualifier <> op
 
+-- | Spell out the modules an unsettled operator may have come from, and the
+-- fact that this run could not read any of them.
+spellUnreadIn ::
+  -- | Whether there is anybody there to see color
+  Palette ->
+  -- | The modules, as 'Unresolved' gives them
+  NonEmpty Text ->
+  Text
+spellUnreadIn palette missing =
+  T.intercalate " or " (map named (toList missing)) <> ", " <> ofThose
+  where
+    named = paint palette Place
+    ofThose = case toList missing of
+      [_] -> "which this run could not read"
+      [_, _] -> "neither of which this run could read"
+      _ -> "none of which this run could read"
+
 ----------------------------------------------------------------------------
 -- What reading a module established
 
@@ -537,3 +601,27 @@ data Established
     -- reaching it means exhausting every way of reading the module.
     Unreadable
   deriving (Eq, Show)
+
+-- | What reading a module established about its export list.
+--
+-- 'exportedOperators' answers the same question as @'Maybe' ('Set'
+-- 'OpName')@, which is the shape 'resolveScope' wants. This is that answer
+-- given a name, so that having one and never having asked can be told apart
+-- where both have to be written down.
+data Exported
+  = -- | The list names these, and they are all the module can supply.
+    Exports (Set OpName)
+  | -- | Nothing that can be enumerated: the list hands whole modules on, or
+    -- the source would not parse.
+    Untellable
+  deriving (Eq, Show)
+
+-- | What 'resolveScope' makes of it.
+exportedNames :: Exported -> Maybe (Set OpName)
+exportedNames = \case
+  Exports names -> Just names
+  Untellable -> Nothing
+
+-- | What to write down for an answer 'exportedOperators' gave.
+asExported :: Maybe (Set OpName) -> Exported
+asExported = maybe Untellable Exports

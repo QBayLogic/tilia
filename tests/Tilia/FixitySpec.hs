@@ -6,6 +6,7 @@ module Tilia.FixitySpec (spec) where
 
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Test.Hspec
 import Tilia.Fixity
@@ -68,6 +69,62 @@ spec = do
     it "reads a whole module passed on as the module it names" $
       exportsOfSource "module M (module Data.Map) where\n"
         `shouldBe` Just [ExportModule "Data.Map"]
+
+  describe "the operators an export list names" $ do
+    it "takes them from an explicit list" $
+      exportedIn "module M ((<+>), (<?>), f) where\n"
+        `shouldBe` Just [OpName "<+>", OpName "<?>", OpName "f"]
+
+    it "takes the members a type or class exports with it" $
+      exportedIn "module M (C (..), (.=)) where\n"
+        `shouldBe` Just [OpName ".=", OpName "C"]
+
+    it "knows nothing of a module that hands a whole module on" $
+      exportedIn "module M ((<+>), module Data.Map) where\n" `shouldBe` Nothing
+
+    it "takes what a module with no export list declares" $
+      exportedIn "module M where\ninfixr 5 <+>\ninfixl 6 <?>\n"
+        `shouldBe` Just [OpName "<+>", OpName "<?>"]
+
+    it "finds nothing in a module with no list and no declarations" $
+      exportedIn "module M where\nf = 1\n" `shouldBe` Just []
+
+  describe "which unread module an unsettled operator is blamed on" $ do
+    it "passes over one whose export list has no such operator" $
+      lookupFixity (scopeKnowing [("Opaque", ["<+>"])] usesUnknown) Nothing (OpName "<??>")
+        `shouldBe` Resolved defaultFixity ReportDefault
+
+    it "blames one whose export list names it" $
+      lookupFixity (scopeKnowing [("Opaque", ["<??>"])] usesUnknown) Nothing (OpName "<??>")
+        `shouldBe` Unresolved ("Opaque" :| [])
+
+    it "blames one that will not say what it exports" $
+      lookupFixity (scopeKnowing [] usesUnknown) Nothing (OpName "<??>")
+        `shouldBe` Unresolved ("Opaque" :| [])
+
+    it "still passes over an import list that does not name it" $
+      lookupFixity
+        (scopeKnowing [("Opaque", ["<??>"])] "module M where\nimport Opaque ((<+>))\n")
+        Nothing
+        (OpName "<??>")
+        `shouldBe` Resolved defaultFixity ReportDefault
+
+    it "blames only the ones that could supply it, of several unread" $
+      lookupFixity
+        (scopeKnowing [("Opaque", ["<+>"]), ("Other.Opaque", ["<??>"])] twoUnread)
+        Nothing
+        (OpName "<??>")
+        `shouldBe` Unresolved ("Other.Opaque" :| [])
+
+    it "settles nothing on its own account when told nothing" $
+      lookupFixity (fullScope usesUnknown) Nothing (OpName "<??>")
+        `shouldBe` Unresolved ("Opaque" :| [])
+
+    it "lets a file be formatted when no unread module could have declared it" $
+      unknownOperators
+        (scopeKnowing [("Opaque", ["<+>"])] usesUnknown)
+        (pmModule (parsed usesUnknown))
+        `shouldBe` []
 
   describe "layer 2: imports" $ do
     it "sees an unqualified import in both scopes" $
@@ -281,8 +338,9 @@ exportsOf = \case
   "Other" -> Just (Map.fromList [(OpName "!", Fixity RightAssoc 4)])
   -- Declares @!@ the same way, as a re-export would.
   "Agreeing" -> Just (Map.fromList [(OpName "!", Fixity LeftAssoc 9)])
-  -- Stands for a module we could not read at all.
+  -- Stand for modules we could not read at all.
   "Opaque" -> Nothing
+  "Other.Opaque" -> Nothing
   _ -> Just Map.empty
 
 parsed :: Text -> ParsedModule
@@ -297,13 +355,36 @@ exportsOfSource :: Text -> Maybe [ExportItem]
 exportsOfSource = moduleExports . pmModule . parsed
 
 fullScope :: Text -> Scope
-fullScope = resolveScope exportsOf . pmModule . parsed
+fullScope = resolveScope exportsOf (const Nothing) . pmModule . parsed
+
+-- | A module that uses an operator nothing in scope declares, alongside an
+-- import that could not be read.
+usesUnknown :: Text
+usesUnknown = "module M where\nimport Opaque\nf a b = a <??> b\n"
+
+-- | The same, with a second unread import to tell apart from the first.
+twoUnread :: Text
+twoUnread = "module M where\nimport Opaque\nimport Other.Opaque\nf a b = a <??> b\n"
+
+-- | A scope in which the unread modules listed say what they export.
+--
+-- A module absent from the list says nothing, which is what 'fullScope'
+-- assumes of every one of them.
+scopeKnowing :: [(Text, [Text])] -> Text -> Scope
+scopeKnowing said =
+  resolveScope exportsOf exportNamesOf . pmModule . parsed
+  where
+    exportNamesOf m = Set.fromList . map OpName <$> lookup m said
+
+-- | The operators a module's export list names, in a settled order.
+exportedIn :: Text -> Maybe [OpName]
+exportedIn = fmap Set.toList . exportedOperators . pmModule . parsed
 
 -- | The uses of an operator a module makes that its scope cannot settle.
 unsettledIn :: Text -> [((Maybe Text, OpName), Unknown)]
 unsettledIn src =
   let hsModule = pmModule (parsed src)
-   in unknownOperators (resolveScope exportsOf hsModule) hsModule
+   in unknownOperators (resolveScope exportsOf (const Nothing) hsModule) hsModule
 
 scopeOf ::
   Text ->

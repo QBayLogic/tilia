@@ -54,7 +54,15 @@ spec = do
     it "says which unread module the answer might have been in" $
       notesFor [("Prelude", Just [])] "import Criterion.Main\nf a b = a <?> b\n"
         >>= ( `shouldContain'`
-                "· <?> unknown: may be declared in Criterion.Main, which could not be read"
+                "· <?> unknown: may be declared in Criterion.Main, which this run could not read"
+            )
+
+    it "counts the unread modules when there is more than one" $
+      notesFor
+        [("Prelude", Just [])]
+        "import Criterion.Main\nimport Test.Tasty\nf a b = a <?> b\n"
+        >>= ( `mentions`
+                "may be declared in Criterion.Main or Test.Tasty, neither of which this run could read"
             )
 
     it "keeps the qualifier an operator was written under" $
@@ -112,7 +120,7 @@ notesFor world source =
   renderFixityNotes Plain . Map.singleton "M.hs"
     <$> fixityNotes (pure . exportsOf) scope hsModule
   where
-    scope = resolveScope exportsOf hsModule
+    scope = resolveScope exportsOf (const Nothing) hsModule
     hsModule = pmModule parsed
     parsed = case parseModule defaultParserConfig "M.hs" ("module M where\n" <> source) of
       Left problem -> error (T.unpack (describeParseError problem))

@@ -129,7 +129,7 @@ chased source = do
 
 withPlan :: BuildPlan -> Spec
 withPlan plan = do
-  resolve <- runIO (newResolver plan)
+  (resolve, exported) <- runIO (newResolver plan)
 
   describe "the plan itself" $ do
     it "names the compiler" $
@@ -257,7 +257,7 @@ withPlan plan = do
               ]
           )
         ]
-      $ \ask ->
+      $ \ask _ ->
         -- The WINDOWS branch imports a module nothing has, which is what
         -- System.IO.CodePage does with System.Win32.CodePage. That branch
         -- is passed over rather than taken as a reason to say nothing.
@@ -281,7 +281,7 @@ withPlan plan = do
               ]
           )
         ]
-      $ \ask -> ask "Disagree" `shouldReturn` Nothing
+      $ \ask _ -> ask "Disagree" `shouldReturn` Nothing
 
     it "says nothing when it can read no configuration at all"
       $ withFakeProject
@@ -298,7 +298,7 @@ withPlan plan = do
               ]
           )
         ]
-      $ \ask ->
+      $ \ask _ ->
         -- Not @Just mempty@: that would be claiming the module declares
         -- nothing, which is a guess rather than the silence it deserves.
         ask "Bothbad" `shouldReturn` Nothing
@@ -307,6 +307,88 @@ withPlan plan = do
     it "answers for one whose re-exports are mutually entangled" $ do
       answer <- resolve "GHC.Hs"
       answer `shouldSatisfy` (/= Nothing)
+
+  describe "what a package module says it exports" $
+    it "names them, read out of the package's own tarball" $
+      exported "Prettyprinter" >>= \case
+        Nothing -> pendingWith "could not read prettyprinter's source"
+        Just names -> names `shouldSatisfy` Set.member (OpName "<+>")
+
+  describe "what a module says it exports, where its fixities are beyond us" $ do
+    it "names them though the module itself went unresolved" $
+      withFakeProject [("src/Opaque.hs", opaqueSource)] $
+        \ask names -> do
+          ask "Opaque" `shouldReturn` Nothing
+          names "Opaque"
+            `shouldReturn` Just (Set.fromList [OpName "<+>", OpName "f"])
+
+    it "says nothing for a module that hands a whole module on"
+      $ withFakeProject
+        [ ( "src/Wide.hs",
+            T.unlines
+              [ "module Wide (module Data.List) where",
+                "import Data.List",
+                "import No.Such.Module"
+              ]
+          )
+        ]
+      $ \_ names -> names "Wide" `shouldReturn` Nothing
+
+    it "says nothing for a module it cannot find at all" $
+      withFakeProject [("src/Opaque.hs", opaqueSource)] $
+        \_ names -> names "No.Such.Module" `shouldReturn` Nothing
+
+    it "says nothing for a module whose source will not parse" $
+      withFakeProject [("src/Bad.hs", "module Bad ((<+>)) where\nf = (((\n")] $
+        \_ names -> names "Bad" `shouldReturn` Nothing
+
+    it "takes them from every configuration the preprocessor allows"
+      $ withFakeProject
+        [ ( "src/Both.hs",
+            T.unlines
+              [ "{-# LANGUAGE CPP #-}",
+                "#ifdef WINDOWS",
+                "module Both ((<+>)) where",
+                "#else",
+                "module Both ((<?>)) where",
+                "#endif",
+                "import No.Such.Module"
+              ]
+          )
+        ]
+      $ \_ names ->
+        names "Both" `shouldReturn` Just (Set.fromList [OpName "<+>", OpName "<?>"])
+
+    it "says nothing when one configuration hands a whole module on"
+      $ withFakeProject
+        [ ( "src/Half.hs",
+            T.unlines
+              [ "{-# LANGUAGE CPP #-}",
+                "#ifdef WINDOWS",
+                "module Half ((<+>)) where",
+                "#else",
+                "module Half (module Data.List) where",
+                "#endif",
+                "import Data.List",
+                "import No.Such.Module"
+              ]
+          )
+        ]
+      $ \_ names -> names "Half" `shouldReturn` Nothing
+
+    it "settles an operator no unread module in scope could have declared" $
+      withFakeProject [("src/Opaque.hs", opaqueSource)] $
+        \ask names -> do
+          scope <- scopeFor ask names (pmModule (parse "module M where\nimport Opaque\n"))
+          lookupFixity scope Nothing (OpName "<??>")
+            `shouldBe` Resolved defaultFixity ReportDefault
+
+    it "leaves one alone that the unread module's list does name" $
+      withFakeProject [("src/Opaque.hs", opaqueSource)] $
+        \ask names -> do
+          scope <- scopeFor ask names (pmModule (parse "module M where\nimport Opaque\n"))
+          lookupFixity scope Nothing (OpName "<+>")
+            `shouldBe` Unresolved ("Opaque" :| [])
 
   describe "the whole pipeline, from source text to a fixity" $ do
     it "resolves an operator through a real import" $
@@ -430,7 +512,7 @@ endToEnd resolve source assertion =
   case parseModule defaultParserConfig "test.hs" source of
     Left _ -> expectationFailure "the test input did not parse"
     Right pm -> do
-      scope <- scopeFor resolve (pmModule pm)
+      scope <- scopeFor resolve (const (pure Nothing)) (pmModule pm)
       assertion scope
 
 -- | Check one expected fixity, returning a description of any mismatch.
@@ -452,13 +534,40 @@ check resolve (modName, op, expected) = do
     | actual /= Just expected
     ]
 
+-- | A module that is perfectly readable and still cannot be resolved: the
+-- operator it exports comes from somewhere nothing can be read from.
+opaqueSource :: Text
+opaqueSource =
+  T.unlines
+    [ "module Opaque ((<+>), f) where",
+      "import No.Such.Module",
+      "f :: Int",
+      "f = 1"
+    ]
+
+parse :: Text -> ParsedModule
+parse source = case parseModule defaultParserConfig "M.hs" source of
+  Left _ -> error "the test input did not parse"
+  Right pm -> pm
+
 -- | A project of made-up modules, with a build plan written by hand.
 --
 -- The plan names one local package and nothing else, which is enough for a
 -- resolver: local modules are read straight off disk, and everything they
 -- import here is either a boot module or does not exist.
-withFakeProject :: [(FilePath, Text)] -> ((Text -> IO (Maybe (Map OpName Fixity))) -> IO a) -> IO a
+withFakeProject ::
+  [(FilePath, Text)] ->
+  -- | Given what a module exports, and what an unread one says it exports
+  ( (Text -> IO (Maybe (Map OpName Fixity))) ->
+    (Text -> IO (Maybe (Set.Set OpName))) ->
+    IO a
+  ) ->
+  IO a
 withFakeProject sources act =
+  withFakePlan sources (\plan -> newResolver plan >>= uncurry act)
+
+withFakePlan :: [(FilePath, Text)] -> (BuildPlan -> IO a) -> IO a
+withFakePlan sources act =
   withSystemTempDirectory "tilia-plan" $ \dir -> do
     createDirectoryIfMissing True (dir </> "src")
     T.writeFile (dir </> "fake.cabal") $
@@ -480,7 +589,7 @@ withFakeProject sources act =
         <> "\"}}]}"
     readBuildPlan (dir </> "plan.json") >>= \case
       Left why -> error (T.unpack why)
-      Right plan -> newResolver plan >>= act
+      Right plan -> act plan
   where
     named (path, _) = T.pack (takeBaseName path)
 

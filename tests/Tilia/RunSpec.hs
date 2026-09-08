@@ -146,6 +146,16 @@ spec = do
               && T.takeWhile (== ' ') continuation == "      "
           _ -> False
 
+    it "lays an unsettled operator at the door of the run, not of the module" $
+      flattened (inplaceReport Plain [("A.hs", missing "Criterion.Main")])
+        `shouldSatisfy` T.isInfixOf
+          "the fixity of <|> may be declared in Criterion.Main, which this run could not read"
+
+    it "counts the modules when the answer could be in more than one" $
+      flattened (inplaceReport Plain [("A.hs", missingIn ["Criterion.Main", "Test.Tasty"])])
+        `shouldSatisfy` T.isInfixOf
+          "may be declared in Criterion.Main or Test.Tasty, neither of which this run could read"
+
     it "keeps all of it off the stream the summary goes to" $
       reportOut (inplaceReport Plain mixed) `shouldBe` []
 
@@ -347,5 +357,17 @@ about op = Declined (UnknownFixity "A.hs" [((Nothing, OpName op), Ambiguous)])
 
 -- | A case about an operator whose fixity is in a module we could not read.
 missing :: Text -> Outcome
-missing modName =
-  Declined (UnknownFixity "A.hs" [((Nothing, OpName "<|>"), NotRead (modName :| []))])
+missing modName = missingIn [modName]
+
+-- | The same, where more than one module could have declared it.
+missingIn :: [Text] -> Outcome
+missingIn modNames =
+  Declined (UnknownFixity "A.hs" [((Nothing, OpName "<|>"), NotRead names)])
+  where
+    names = case modNames of
+      [] -> error "an operator has to be missing from somewhere"
+      m : ms -> m :| ms
+
+-- | A report as one piece of text, with the breaks it was wrapped at undone.
+flattened :: Report -> Text
+flattened = T.unwords . map T.strip . reportErr

@@ -15,6 +15,8 @@ module Tilia.Fixity.Cache
     storeModules,
     cachedFixities,
     storeFixities,
+    cachedExportNames,
+    storeExportNames,
     cachedInstalled,
     storeInstalled,
   )
@@ -23,6 +25,7 @@ where
 import Control.Monad (join)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
@@ -127,6 +130,49 @@ storeFixities cache package modName answer = do
     Cache _ (PlanToken token) = cache
 
 ----------------------------------------------------------------------------
+-- Export names
+
+-- | What a module's export list was found to say, if it was ever read.
+--
+-- Wanted for the modules whose fixities could not be established, and asked
+-- exactly then: a warm cache answers those from 'cachedFixities' without
+-- opening the archive at all, and without this the archive would be opened
+-- anyway to ask this instead.
+cachedExportNames ::
+  -- | Where to look
+  Cache ->
+  -- | The package the module belongs to, as 'cachedFixities' takes it
+  Text ->
+  -- | The module, by its full dotted name
+  Text ->
+  -- | What its export list said, or 'Nothing' if it was never read
+  IO (Maybe Exported)
+cachedExportNames cache package modName =
+  fmap join . readIfPresent (exportsPath cache package modName) $ \contents ->
+    case T.lines contents of
+      ("names" : entries) -> Just (Exports (Set.fromList (map OpName entries)))
+      ["untellable"] -> Just Untellable
+      _ -> Nothing
+
+-- | Remember what a module's export list said.
+storeExportNames ::
+  -- | Where to write
+  Cache ->
+  -- | The package the module belongs to, as 'cachedFixities' takes it
+  Text ->
+  -- | The module, by its full dotted name
+  Text ->
+  -- | What its export list said
+  Exported ->
+  IO ()
+storeExportNames cache package modName answer = do
+  quietly () (createDirectoryIfMissing True (exportsDir cache package))
+  writeAtomically (exportsPath cache package modName) $
+    case answer of
+      Untellable -> T.unlines ["untellable"]
+      Exports names -> T.unlines ("names" : [op | OpName op <- Set.toAscList names])
+
+----------------------------------------------------------------------------
 -- The package database
 
 -- | What the compiler could see when last asked, if it can still see it.
@@ -226,6 +272,13 @@ modulesPath (Cache root _) package = root </> "modules" </> T.unpack package
 fixitiesPath :: Cache -> Text -> Text -> FilePath
 fixitiesPath cache package modName =
   packageDir cache package </> T.unpack modName
+
+exportsDir :: Cache -> Text -> FilePath
+exportsDir (Cache root _) package = root </> "exports" </> T.unpack package
+
+exportsPath :: Cache -> Text -> Text -> FilePath
+exportsPath cache package modName =
+  exportsDir cache package </> T.unpack modName
 
 readIfPresent :: FilePath -> (Text -> a) -> IO (Maybe a)
 readIfPresent path parse = quietly Nothing $ do

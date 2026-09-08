@@ -47,9 +47,9 @@ spec = do
 withPlan :: BuildPlan -> Spec
 withPlan plan = do
   installed <- runIO readInstalledPackages
-  fromSource <- runIO (newResolverVia [FromSource] plan)
-  fromInterface <- runIO (newResolverVia [FromInterface] plan)
-  resolve <- runIO (newResolver plan)
+  (fromSource, _) <- runIO (newResolverVia [FromSource] plan)
+  (fromInterface, _) <- runIO (newResolverVia [FromInterface] plan)
+  (resolve, _) <- runIO (newResolver plan)
   own <- runIO ownModules
   let isShippedModule m = Map.member m builtinFixities
   dependencies <- runIO (dependenciesOf (not . isShippedModule) plan installed)
@@ -363,7 +363,7 @@ unsettledIn ::
   (FilePath, HsModule GhcPs) ->
   IO [String]
 unsettledIn resolve (path, hsModule) = do
-  scope <- scopeFor resolve hsModule
+  scope <- scopeFor resolve (const (pure Nothing)) hsModule
   pure
     [ path <> ": " <> T.unpack (operatorSpelling qualifier op) <> " " <> show why
     | ((qualifier, op), why) <- unknownOperators scope hsModule

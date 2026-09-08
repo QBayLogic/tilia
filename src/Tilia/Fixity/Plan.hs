@@ -410,11 +410,20 @@ data Route
     FromSource
   deriving (Eq, Show)
 
--- | Build a lookup function for "Tilia.Fixity".
+-- | Build the two lookup functions "Tilia.Fixity" asks its questions
+-- through.
 --
--- 'Nothing' means the module could not be read, which is not the same as
--- its having no operators; see 'Tilia.Fixity.resolveScope' for why the
--- difference has to survive.
+-- The first is the resolver proper: what a module exports, with 'Nothing'
+-- for a module that could not be read, which is not the same as its having
+-- no operators; see 'Tilia.Fixity.resolveScope' for why the difference has
+-- to survive. The second is asked only about the modules the first gave up
+-- on—the operators such a module's export list names, where that list can
+-- be enumerated—and is what keeps a module that plainly has no such
+-- operator from being blamed for one.
+--
+-- The two come back together because they share everything: the module
+-- index, the cache, the packages the compiler holds, and the memo of what
+-- has been read. Building them apart would settle all of it twice.
 --
 -- Answers are remembered on disk between runs by "Tilia.Fixity.Cache", so a
 -- package is decompressed and parsed once per machine rather than once per
@@ -422,8 +431,11 @@ data Route
 newResolver ::
   -- | The build plan to use
   BuildPlan ->
-  -- | The resolver
-  IO (Text -> IO (Maybe (Map OpName Fixity)))
+  -- | What a module exports, and what an unread one says it exports
+  IO
+    ( Text -> IO (Maybe (Map OpName Fixity)),
+      Text -> IO (Maybe (Set OpName))
+    )
 newResolver = newResolverVia [FromInterface, FromSource]
 
 -- | 'newResolver', restricted to the routes given.
@@ -432,8 +444,11 @@ newResolverVia ::
   [Route] ->
   -- | The build plan to use
   BuildPlan ->
-  -- | The resolver
-  IO (Text -> IO (Maybe (Map OpName Fixity)))
+  -- | What a module exports, and what an unread one says it exports
+  IO
+    ( Text -> IO (Maybe (Map OpName Fixity)),
+      Text -> IO (Maybe (Set OpName))
+    )
 newResolverVia routes plan = do
   tarballs <- plannedTarballs plan
   cache <- openCache (planToken plan)
@@ -480,7 +495,57 @@ newResolverVia routes plan = do
                 answer <- resolveModule resolver visiting modName
                 atomicModifyIORef' memo (\m -> (Map.insert modName answer m, ()))
                 pure answer
-  pure (reach Set.empty)
+  exportsRead <- newIORef Map.empty
+  let exportNames modName = do
+        seen <- readIORef exportsRead
+        case Map.lookup modName seen of
+          Just names -> pure names
+          Nothing -> do
+            names <- exportNamesOfModule resolver modName
+            atomicModifyIORef' exportsRead (\m -> (Map.insert modName names m, ()))
+            pure names
+  pure (reach Set.empty, exportNames)
+
+-- | The operators a module's export list names, where that list can be
+-- enumerated without reading what it passes on.
+--
+-- Asked only about modules whose fixities could not be established, and
+-- only to decide which of them an unsettled operator can be blamed on. A
+-- module that exports whole modules keeps its own counsel and answers
+-- 'Nothing'; one with no export list exports what it declares, which is
+-- every fixity it could supply.
+exportNamesOfModule :: Resolver -> Text -> IO (Maybe (Set OpName))
+exportNamesOfModule Resolver {rsCache, rsLocal, rsIndex} modName
+  | Just path <- Map.lookup modName rsLocal = (namesIn =<<) <$> readFileText path
+  | Just (package, tarball) <- Map.lookup modName rsIndex =
+      remembered package >>= \case
+        Just answer -> pure (exportedNames answer)
+        Nothing ->
+          readModule tarball modName >>= \case
+            Nothing -> pure Nothing
+            Just text -> do
+              let names = namesIn text
+              store package (asExported names)
+              pure names
+  | otherwise = pure Nothing
+  where
+    remembered package = case rsCache of
+      Nothing -> pure Nothing
+      Just c -> cachedExportNames c package modName
+    store package answer = case rsCache of
+      Nothing -> pure ()
+      Just c -> storeExportNames c package modName answer
+
+    namesIn text =
+      Set.unions
+        <$> ( traverse exportedOperators
+                =<< traverse parsed
+                =<< either (const Nothing) Just (branchLeaves text)
+            )
+    parsed =
+      fmap pmModule
+        . either (const Nothing) Just
+        . parseModule defaultParserConfig (T.unpack modName)
 
 -- | Work out what a module can see, using a resolver to reach its imports.
 --
@@ -493,15 +558,27 @@ scopeFor ::
   -- | What each imported module exports, or 'Nothing' where that could not
   -- be determined
   (Text -> IO (Maybe (Map OpName Fixity))) ->
+  -- | What an import that could not be read nonetheless says it exports,
+  -- which is what keeps a module that plainly has no such operator from
+  -- being named as the reason one went unsettled. Answering 'Nothing' to
+  -- everything is allowed and merely suspects every unread import.
+  (Text -> IO (Maybe (Set OpName))) ->
   -- | The module whose scope is wanted, already parsed
   HsModule GhcPs ->
   -- | Everything that module can see, and what it could not find out
   IO Scope
-scopeFor resolve hsModule = do
+scopeFor resolve exportNames hsModule = do
   let imported = map importModule (moduleImports hsModule)
   answers <- traverse (\m -> (m,) <$> resolve m) imported
   let table = Map.fromList answers
-  pure (resolveScope (\m -> Map.findWithDefault Nothing m table) hsModule)
+      unread = [m | (m, Nothing) <- answers]
+  names <- Map.fromList <$> traverse (\m -> (m,) <$> exportNames m) unread
+  pure
+    ( resolveScope
+        (\m -> Map.findWithDefault Nothing m table)
+        (\m -> Map.findWithDefault Nothing m names)
+        hsModule
+    )
 
 -- | Everything a resolver consults, and the way back into it.
 --

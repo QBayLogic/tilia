@@ -11,7 +11,6 @@ module Tilia.Fixity.Debug
   )
 where
 
-import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
@@ -30,6 +29,7 @@ import Tilia.Fixity
     moduleImports,
     operatorSpelling,
     operatorsUsed,
+    spellUnreadIn,
   )
 import Tilia.Palette (Color (Operator, Place), Palette, paint)
 import Tilia.Utils (indent)
@@ -164,9 +164,7 @@ aboutFile palette notes =
           Resolved fixity provenance ->
             spelled fixity <> ", " <> from provenance <> ambiguously o
           Unresolved missing ->
-            "unknown: may be declared in "
-              <> T.intercalate " or " (map named (NE.toList missing))
-              <> ", which could not be read"
+            "unknown: may be declared in " <> spellUnreadIn palette missing
 
     from = \case
       DeclaredHere -> "declared in this module"

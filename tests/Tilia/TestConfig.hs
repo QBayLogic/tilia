@@ -37,7 +37,7 @@ exampleRenderConfig package source hsModule =
   defaultRenderConfig
     { rcExtensions =
         Set.fromList (effectiveExtensions package source),
-      rcScope = Just (underEveryQualifier (resolveScope exportsOf hsModule))
+      rcScope = Just (underEveryQualifier (resolveScope exportsOf (const Nothing) hsModule))
     }
   where
     underEveryQualifier scope =
