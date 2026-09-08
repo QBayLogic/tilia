@@ -4,7 +4,7 @@
 -- | Running the formatter over a set of files.
 module Tilia.RunSpec (spec) where
 
-import Control.Concurrent (threadDelay)
+import Control.Concurrent (getNumCapabilities, threadDelay)
 import Data.IORef
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -294,10 +294,12 @@ spec = do
       inParallel pure ([] :: [Int]) `shouldReturn` []
 
     it "really does run them at once" $ do
+      capabilities <- getNumCapabilities
+      let rounds = ceiling (20 / fromIntegral capabilities :: Double) :: Int
       started <- getMonotonicTime
       _ <- inParallel (\_ -> threadDelay 100000) [1 .. 20 :: Int]
       finished <- getMonotonicTime
-      (finished - started) `shouldSatisfy` (< 1.0)
+      (finished - started) `shouldSatisfy` (< fromIntegral rounds * 0.1 + 0.4)
 
 ----------------------------------------------------------------------------
 -- Helpers
