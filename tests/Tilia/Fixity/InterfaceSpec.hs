@@ -8,6 +8,7 @@
 module Tilia.Fixity.InterfaceSpec (spec) where
 
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Test.Hspec
 import Tilia.Fixity
@@ -91,6 +92,32 @@ spec = do
     it "leaves a capitalised name this module declared alone" $
       passesOn "exports:\n  Value\n" `shouldBe` []
 
+  describe "what a name carries with it" $ do
+    it "takes the members an entry wears in braces" $
+      carries "exports:\n  GHC.Internal.Base.NonEmpty{GHC.Internal.Base.:|}\n"
+        `shouldBe` [(OpName "NonEmpty", [OpName ":|"])]
+
+    it "takes every one of them" $
+      carries
+        "exports:\n\
+        \  GHC.Internal.Base.Applicative{GHC.Internal.Base.*> GHC.Internal.Base.<*> GHC.Internal.Base.pure}\n"
+        `shouldBe` [(OpName "Applicative", [OpName "*>", OpName "<*>", OpName "pure"])]
+
+    it "takes them from a partial export, which still says what it has" $
+      carries "exports:\n  GHC.Internal.Base.Functor|{GHC.Internal.Base.<$}\n"
+        `shouldBe` [(OpName "Functor", [OpName "<$"])]
+
+    it "takes a name this module declared, written without a module" $
+      carries "exports:\n  WrappedArrow{WrapArrow unwrapArrow}\n"
+        `shouldBe` [(OpName "WrappedArrow", [OpName "WrapArrow", OpName "unwrapArrow"])]
+
+    it "keeps entries apart where several sit on one line" $
+      carries "exports:\n  A{B} C{D}\n"
+        `shouldBe` [(OpName "A", [OpName "B"]), (OpName "C", [OpName "D"])]
+
+    it "has nothing to say about a name that carries nothing" $
+      carries "exports:\n  decode'\n  Data.Aeson.Types.FromJSON..:\n" `shouldBe` []
+
   describe "sections it has no use for" $
     it "is not confused by the rest of the file" $ do
       let out =
@@ -129,3 +156,10 @@ declares = maybe [] (Map.toList . interfaceDeclares) . parseInterface "M" . (hea
 
 passesOn :: Text -> [(Text, OpName)]
 passesOn = maybe [] interfacePassedOn . parseInterface "M" . (header "M" <>)
+
+-- | What each exported name carries with it, in a settled order.
+carries :: Text -> [(OpName, [OpName])]
+carries =
+  maybe [] (map (fmap Set.toList) . Map.toList . interfaceChildren)
+    . parseInterface "M"
+    . (header "M" <>)

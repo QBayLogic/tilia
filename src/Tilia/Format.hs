@@ -24,7 +24,6 @@ import Data.Foldable (traverse_)
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -38,9 +37,9 @@ import Tilia.Cpp
   )
 import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Equivalence (commentDifference, syntaxDifference)
-import Tilia.Fixity (Fixity, OpName, Unknown (..), operatorSpelling, spellUnreadIn, unknownOperators)
+import Tilia.Fixity (OpName, Unknown (..), operatorSpelling, spellUnreadIn, unknownOperators)
 import Tilia.Fixity.Debug (FixityNotes, fixityNotes)
-import Tilia.Fixity.Plan (loadPlan, newResolver, scopeFor)
+import Tilia.Fixity.Plan (Resolver (..), loadPlan, newResolver, scopeFor)
 import Tilia.Package
   ( PackageProblem (..),
     PackageReader,
@@ -171,13 +170,8 @@ refused = \case
 -- about as much as formatting a small file, and none of it depends on which
 -- file is being formatted.
 data Session = Session
-  { -- | What each module in scope exports.
-    sessionResolve :: Text -> IO (Maybe (Map OpName Fixity)),
-    -- | What a module that could not be read says it exports, where that
-    -- can be settled without reading it. Only the complaint about an
-    -- unsettled operator turns on this: it decides which of the unread
-    -- imports could be to blame for one.
-    sessionExportNames :: Text -> IO (Maybe (Set OpName)),
+  { -- | What can be asked about the modules a file imports.
+    sessionResolver :: Resolver,
     -- | What each file's package puts in force.
     sessionPackage :: PackageReader,
     -- | Whether to check AST equivalence.
@@ -205,7 +199,7 @@ newSession ::
 newSession start checkAst checkIdempotence debugFixity = runExceptT $ do
   root <- prPath <$> (need (NoProject start) =<< liftIO (findProjectRoot start))
   plan <- orElse (NoBuildPlan root) =<< liftIO (loadPlan root)
-  (resolve, exportNames) <- liftIO (newResolver plan)
+  resolver <- liftIO (newResolver plan)
   askPackage <- liftIO newPackageReader
   notes <-
     if isTrue debugFixity
@@ -213,8 +207,7 @@ newSession start checkAst checkIdempotence debugFixity = runExceptT $ do
       else pure Nothing
   pure
     Session
-      { sessionResolve = resolve,
-        sessionExportNames = exportNames,
+      { sessionResolver = resolver,
         sessionPackage = askPackage,
         sessionCheckAst = checkAst,
         sessionCheckIdempotence = checkIdempotence,
@@ -251,16 +244,15 @@ formatSource session path source = runExceptT $ do
   when (movesPositions source) $
     throwE (PositionPragmas path)
   package <- orElse (NoPackage path) =<< liftIO (sessionPackage session path)
-  let resolve = sessionResolve session
-      exportNames = sessionExportNames session
+  let resolver = sessionResolver session
       config = parserConfigFor package
       cpp = usesCpp (effectiveExtensions package source) source
       renderConfigFor extensions hsModule = do
-        scope <- liftIO (scopeFor resolve exportNames hsModule)
+        scope <- liftIO (scopeFor resolver hsModule)
         liftIO $ case sessionFixityNotes session of
           Nothing -> pure ()
           Just ref -> do
-            told <- fixityNotes resolve scope hsModule
+            told <- fixityNotes (askFixities resolver) scope hsModule
             atomicModifyIORef' ref (\m -> (Map.insertWith (\_ old -> old) path told m, ()))
         case unknownOperators scope hsModule of
           [] ->

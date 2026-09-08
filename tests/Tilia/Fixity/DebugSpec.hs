@@ -10,7 +10,9 @@ import Test.Hspec
 import Tilia.Fixity
   ( Direction (..),
     Fixity (..),
+    Known (..),
     OpName (..),
+    nothingKnown,
     resolveScope,
   )
 import Tilia.Fixity.Debug (fixityNotes, renderFixityNotes)
@@ -120,7 +122,7 @@ notesFor world source =
   renderFixityNotes Plain . Map.singleton "M.hs"
     <$> fixityNotes (pure . exportsOf) scope hsModule
   where
-    scope = resolveScope exportsOf (const Nothing) hsModule
+    scope = resolveScope nothingKnown {knownFixities = exportsOf} hsModule
     hsModule = pmModule parsed
     parsed = case parseModule defaultParserConfig "M.hs" ("module M where\n" <> source) of
       Left problem -> error (T.unpack (describeParseError problem))

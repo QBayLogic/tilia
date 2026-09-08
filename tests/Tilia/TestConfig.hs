@@ -16,9 +16,11 @@ import GHC.LanguageExtensions.Type (Extension)
 import Tilia.Fixity
   ( Direction (..),
     Fixity (..),
+    Known (..),
     OpName (..),
     Provenance (..),
     Scope (..),
+    nothingKnown,
     operatorsUsed,
     resolveScope,
   )
@@ -37,9 +39,10 @@ exampleRenderConfig package source hsModule =
   defaultRenderConfig
     { rcExtensions =
         Set.fromList (effectiveExtensions package source),
-      rcScope = Just (underEveryQualifier (resolveScope exportsOf (const Nothing) hsModule))
+      rcScope = Just (underEveryQualifier (resolveScope known hsModule))
     }
   where
+    known = nothingKnown {knownFixities = exportsOf}
     underEveryQualifier scope =
       scope
         { scopeQualified =

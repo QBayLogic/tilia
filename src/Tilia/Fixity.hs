@@ -19,11 +19,20 @@ module Tilia.Fixity
     ExportItem (..),
     moduleExports,
     exportedOperators,
+    declaredChildren,
+    moduleChildren,
 
     -- * What a module can see
     Import (..),
+    ImportItem (..),
     moduleImports,
+    namesImported,
+    mightBring,
+    surelyNames,
+    Known (..),
+    nothingKnown,
     Scope (..),
+    Unread (..),
     resolveScope,
 
     -- * Answers
@@ -142,11 +151,30 @@ declaredNames = Set.fromList . concatMap (fromDecl . unLoc) . hsmodDecls
     fromTyCl = \case
       FamDecl _ (FamilyDecl {fdLName}) -> [opName (unLoc fdLName)]
       SynDecl {tcdLName} -> [opName (unLoc tcdLName)]
-      DataDecl {tcdLName, tcdDataDefn} ->
-        opName (unLoc tcdLName) : concatMap (fromCon . unLoc) (consOf (dd_cons tcdDataDefn))
-      ClassDecl {tcdLName, tcdSigs} ->
-        opName (unLoc tcdLName) : concatMap (fromSig . unLoc) tcdSigs
+      d@DataDecl {tcdLName} -> opName (unLoc tcdLName) : membersOf d
+      d@ClassDecl {tcdLName} -> opName (unLoc tcdLName) : membersOf d
 
+    boundByPattern p =
+      [opName n | VarPat _ (L _ n) <- listify isVarPat p]
+    isVarPat :: Pat GhcPs -> Bool
+    isVarPat = \case
+      VarPat {} -> True
+      _ -> False
+
+-- | The names a declaration carries under the name it declares: a data
+-- type's constructors and record fields, a class's methods and the
+-- families it keeps.
+--
+-- These are what @T(..)@ stands for, and each of them can carry a fixity of
+-- its own—@:|@ is a constructor and @infixr 5@ all the same.
+membersOf :: TyClDecl GhcPs -> [OpName]
+membersOf = \case
+  DataDecl {tcdDataDefn} -> concatMap (fromCon . unLoc) (consOf (dd_cons tcdDataDefn))
+  ClassDecl {tcdSigs, tcdATs} ->
+    concatMap (methodsOf . unLoc) tcdSigs
+      <> [opName (unLoc (fdLName (unLoc f))) | f <- tcdATs]
+  _ -> []
+  where
     consOf :: DataDefnCons (LConDecl GhcPs) -> [LConDecl GhcPs]
     consOf = toList
 
@@ -156,7 +184,7 @@ declaredNames = Set.fromList . concatMap (fromDecl . unLoc) . hsmodDecls
       ConDeclH98 {con_name, con_args} ->
         opName (unLoc con_name) : fieldNames con_args
 
-    -- A record field is a name the module defines too, and it may be an
+    -- A record field is a name the type carries too, and it may be an
     -- operator.
     fieldNames :: HsConDeclH98Details GhcPs -> [OpName]
     fieldNames = \case
@@ -167,13 +195,45 @@ declaredNames = Set.fromList . concatMap (fromDecl . unLoc) . hsmodDecls
         ]
       _ -> []
 
-    -- A pattern binding brings in whatever its variables name.
-    boundByPattern p =
-      [opName n | VarPat _ (L _ n) <- listify isVarPat p]
-    isVarPat :: Pat GhcPs -> Bool
-    isVarPat = \case
-      VarPat {} -> True
-      _ -> False
+    methodsOf = \case
+      TypeSig _ ns _ -> map (opName . unLoc) ns
+      ClassOpSig _ _ ns _ -> map (opName . unLoc) ns
+      _ -> []
+
+-- | What each type or class a module declares carries with it.
+--
+-- What @T(..)@ stands for where the module declares @T@ itself. Where it
+-- does not—a type it merely passes on—there is nothing here, and a caller
+-- that finds nothing must not conclude that @T@ brings nothing.
+declaredChildren :: HsModule GhcPs -> Map OpName (Set OpName)
+declaredChildren =
+  Map.fromListWith Set.union . concatMap (fromDecl . unLoc) . hsmodDecls
+  where
+    fromDecl = \case
+      TyClD _ d@DataDecl {tcdLName} -> [entry tcdLName d]
+      TyClD _ d@ClassDecl {tcdLName} -> [entry tcdLName d]
+      _ -> []
+    entry name d = (opName (unLoc name), Set.fromList (membersOf d))
+
+-- | What a module offers under each name, as its export list offers it.
+--
+-- @T(..)@ in the list hands on everything the module has under @T@; @T(A,
+-- B)@ hands on only what it names; no export list at all hands on every
+-- member of everything the module declares. This is the answer to \"what
+-- does @T(..)@ bring in\" asked of the module being imported from, which is
+-- the only place the answer is.
+moduleChildren :: HsModule GhcPs -> Map OpName (Set OpName)
+moduleChildren hsModule = case hsmodExports hsModule of
+  Nothing -> declared
+  Just items -> Map.fromListWith Set.union (concatMap (fromIE . unLoc) (unLoc items))
+  where
+    declared = declaredChildren hsModule
+    fromIE = \case
+      IEThingAll _ n _ ->
+        [(nameOf n, Map.findWithDefault Set.empty (nameOf n) declared)]
+      IEThingWith _ n _ ns _ -> [(nameOf n, Set.fromList (map nameOf ns))]
+      _ -> []
+    nameOf = opName . ieWrappedName . unLoc
 
 -- | Render a parsed name as an operator name.
 opName :: RdrName -> OpName
@@ -200,6 +260,10 @@ data ExportItem
   = -- | A name, which may or may not be declared in this module, under the
     -- qualifier it was written with if it was written with one.
     ExportName (Maybe Text) OpName
+  | -- | @T(..)@: the name, and with it whatever the module has to give
+    -- under that name. Which names those are cannot be read off the list;
+    -- it takes the declaration of @T@, or the module @T@ came from.
+    ExportAll (Maybe Text) OpName
   | -- | @module M@, re-exporting everything that module brought in.
     ExportModule Text
   deriving (Eq, Show)
@@ -219,12 +283,19 @@ exportedOperators :: HsModule GhcPs -> Maybe (Set OpName)
 exportedOperators hsModule = case moduleExports hsModule of
   Nothing -> Just (Map.keysSet (declaredFixities hsModule))
   Just items
-    | any passesOnAModule items -> Nothing
-    | otherwise -> Just (Set.fromList [op | ExportName _ op <- items])
+    | any beyondUs items -> Nothing
+    | otherwise -> Just (Set.unions (map named items))
   where
-    passesOnAModule = \case
+    declared = declaredChildren hsModule
+    beyondUs = \case
       ExportModule _ -> True
+      ExportAll _ parent -> not (Map.member parent declared)
       ExportName _ _ -> False
+    named = \case
+      ExportName _ op -> Set.singleton op
+      ExportAll _ parent ->
+        Set.insert parent (Map.findWithDefault Set.empty parent declared)
+      ExportModule _ -> Set.empty
 
 -- | The qualifier a name was written under.
 qualifierOf :: RdrName -> Maybe Text
@@ -245,15 +316,16 @@ moduleExports =
     fromIE = \case
       IEVar _ n _ -> [named n]
       IEThingAbs _ n _ -> [named n]
-      IEThingAll _ n _ -> [named n]
+      IEThingAll _ n _ -> [as ExportAll n]
       -- The type itself and every member listed with it; a class exports
       -- its operators this way.
       IEThingWith _ n _ ns _ -> named n : map named ns
       IEModuleContents _ m -> [ExportModule (T.pack (moduleNameString (unLoc m)))]
       _ -> []
-    named n =
+    named = as ExportName
+    as item n =
       let rdr = ieWrappedName (unLoc n)
-       in ExportName (qualifierOf rdr) (opName rdr)
+       in item (qualifierOf rdr) (opName rdr)
 
 ----------------------------------------------------------------------------
 -- What a module can see
@@ -269,10 +341,67 @@ data Import = Import
     -- otherwise the module's own name.
     importAlias :: Text,
     -- | The explicit list, if there is one, and whether it is a @hiding@
-    -- list. Only operators are kept; nothing else can carry a fixity.
-    importNames :: Maybe (Bool, [OpName])
+    -- list.
+    --
+    -- Kept as written rather than as a set of names, because @T(..)@ says
+    -- what it brings in only once the module it comes from has been asked.
+    importNames :: Maybe (Bool, [ImportItem])
   }
   deriving (Eq, Show)
+
+-- | One entry of an import list.
+data ImportItem
+  = -- | A plain name.
+    ImportedName OpName
+  | -- | @T(..)@: the name, and everything the module offers under it.
+    ImportedAll OpName
+  | -- | @T(a, b)@: the name and the members written out beside it.
+    ImportedSome OpName [OpName]
+  deriving (Eq, Show)
+
+-- | The names an import list brings in, given what the module it names
+-- offers under each of its names.
+--
+-- A parent nothing is known about brings in nothing but itself, which
+-- understates the list. Callers who cannot afford to understate it should
+-- ask 'mightBring' instead.
+namesImported :: Map OpName (Set OpName) -> [ImportItem] -> Set OpName
+namesImported children = Set.unions . map one
+  where
+    one = \case
+      ImportedName op -> Set.singleton op
+      ImportedAll parent ->
+        Set.insert parent (Map.findWithDefault Set.empty parent children)
+      ImportedSome parent ops -> Set.fromList (parent : ops)
+
+-- | Could this list bring the operator in?
+--
+-- Told what the module keeps under each of its names, this is exact. Told
+-- nothing about a @T(..)@'s @T@, it answers yes, because ruling the
+-- operator out would mean knowing what @T@ has under it and we do not. Used
+-- where being wrong the other way—deciding an operator could not have
+-- arrived through a list that in fact brings it—would settle a fixity that
+-- was never established.
+mightBring :: Map OpName (Set OpName) -> OpName -> [ImportItem] -> Bool
+mightBring carries op = any $ \case
+  ImportedName n -> n == op
+  ImportedSome parent ns -> parent == op || op `elem` ns
+  ImportedAll parent -> maybe True (names parent) (Map.lookup parent carries)
+  where
+    names parent kids = parent == op || Set.member op kids
+
+-- | Does this list certainly name the operator?
+--
+-- The other side of 'mightBring', for a @hiding@ list: a name is hidden
+-- only where the list says so outright. Told what a @T(..)@ carries this
+-- is again exact; told nothing, it still holds that @T(..)@ hides @T@.
+surelyNames :: Map OpName (Set OpName) -> OpName -> [ImportItem] -> Bool
+surelyNames carries op = any $ \case
+  ImportedName n -> n == op
+  ImportedSome parent ns -> parent == op || op `elem` ns
+  ImportedAll parent -> maybe (parent == op) (names parent) (Map.lookup parent carries)
+  where
+    names parent kids = parent == op || Set.member op kids
 
 -- | The imports of a module.
 --
@@ -306,21 +435,44 @@ moduleImports hsModule = implicitPrelude <> written
         }
     fromList (interpretation, names) =
       ( interpretation == EverythingBut,
-        mapMaybe (importedOp . unLoc) (unLoc names)
+        mapMaybe (importedItem . unLoc) (unLoc names)
       )
     modName = T.pack . moduleNameString
 
--- | An operator mentioned in an import list.
---
--- A name is only interesting here if it could carry a fixity, which means
--- it has to be an operator. @IEThingWith@—a type with its constructors, as
--- in @Map(..)@—can bring operators in as well, and is not handled yet; see
--- the note on 'resolveScope'.
-importedOp :: IE GhcPs -> Maybe OpName
-importedOp = \case
-  IEVar _ n _ -> Just (opName (ieWrappedName (unLoc n)))
-  IEThingAbs _ n _ -> Just (opName (ieWrappedName (unLoc n)))
+-- | One entry of an import list, as written.
+importedItem :: IE GhcPs -> Maybe ImportItem
+importedItem = \case
+  IEVar _ n _ -> Just (ImportedName (nameOf n))
+  IEThingAbs _ n _ -> Just (ImportedName (nameOf n))
+  IEThingAll _ n _ -> Just (ImportedAll (nameOf n))
+  IEThingWith _ n _ ns _ -> Just (ImportedSome (nameOf n) (map nameOf ns))
   _ -> Nothing
+  where
+    nameOf :: LIEWrappedName GhcPs -> OpName
+    nameOf = opName . ieWrappedName . unLoc
+
+-- | An import whose module could not be read, and what is known about it
+-- regardless.
+--
+-- Unread is not the same as unknown. Failing to establish a module's
+-- fixities does not stop us reading its export list or its declarations,
+-- and either can rule the module out as the source of an operator. Ruling
+-- it out is what keeps one unreachable package from unsettling a whole
+-- file.
+data Unread = Unread
+  { -- | The import as written.
+    unreadImport :: Import,
+    -- | The operators its export list names, where that list can be
+    -- enumerated. 'Nothing' is a module that keeps its own counsel—one
+    -- whose list passes whole modules on, or that could not be parsed—and
+    -- which therefore has to be suspected of everything.
+    unreadExports :: Maybe (Set OpName),
+    -- | What it keeps under each of its names, for expanding a @T(..)@ in
+    -- the import list. Empty is ignorance, and leaves such a list
+    -- suspected of bringing in anything.
+    unreadCarries :: Map OpName (Set OpName)
+  }
+  deriving (Eq, Show)
 
 -- | Every fixity a module can see, and how.
 data Scope = Scope
@@ -329,27 +481,54 @@ data Scope = Scope
     -- | Reachable as @M.op@, keyed by the alias actually written—or by the
     -- module's own name, under which its own declarations are reachable.
     scopeQualified :: Map (Text, OpName) (Fixity, Provenance),
-    -- | The imports whose modules could not be read, and what each of them
-    -- is nonetheless known to export.
+    -- | The imports whose modules could not be read, and what is
+    -- nonetheless known about each.
     --
     -- These are what separate \"no declaration exists\" from \"we did not
     -- manage to look\". An operator that was not found is settled only if no
     -- unread import could have brought it in, and deciding that needs the
     -- whole import rather than the module's name: see 'unreadFor'.
-    --
-    -- Unread is not the same as unknown. A module whose export list can be
-    -- enumerated says what it can and cannot supply whether or not its
-    -- fixities could obtained, and 'Just' is that list. 'Nothing' is a
-    -- module that keeps its own counsel—one whose export list passes whole
-    -- modules on, or that could not be parsed at all—and which therefore
-    -- has to be suspected of everything.
-    scopeUnread :: [(Import, Maybe (Set OpName))],
+    scopeUnread :: [Unread],
     -- | Operators the imports bring in with two different fixities, as they
     -- would have to be written to run into it: without a qualifier, or under
     -- the alias the disagreeing imports share.
     scopeAmbiguous :: [(Maybe Text, OpName)]
   }
   deriving (Eq, Show)
+
+-- | What is known about the modules a module imports.
+--
+-- Everything 'resolveScope' cannot read off the module in front of it,
+-- gathered into one place. 'nothingKnown' answers none of them, which is
+-- legitimate—it costs coverage, never correctness.
+data Known = Known
+  { -- | What a module exports, or 'Nothing' if that could not be
+    -- determined. 'Nothing' means the module could not be read, which is
+    -- not the same as its exporting nothing; see 'resolveScope'.
+    knownFixities :: Text -> Maybe (Map OpName Fixity),
+    -- | What a module keeps under each of its names, so that a @T(..)@ in
+    -- an import list can be told what it brings in. An empty map is
+    -- ignorance as much as it is emptiness, and understates a list rather
+    -- than overstating it.
+    knownChildren :: Text -> Map OpName (Set OpName),
+    -- | The operators a module's export list names, where that list can be
+    -- enumerated without reading what it passes on. Asked only about
+    -- modules 'knownFixities' could not answer for, and only to decide
+    -- which of them an unsettled operator can be blamed on.
+    knownExportNames :: Text -> Maybe (Set OpName)
+  }
+
+-- | Knowing nothing about anything: every question answered with a shrug.
+--
+-- A scope built on this settles what the module itself declares and
+-- nothing more. Fill in the fields that can be answered.
+nothingKnown :: Known
+nothingKnown =
+  Known
+    { knownFixities = const Nothing,
+      knownChildren = const Map.empty,
+      knownExportNames = const Nothing
+    }
 
 -- | Work out what a module can see.
 --
@@ -365,17 +544,11 @@ data Scope = Scope
 -- "Tilia.Fixity.Plan" already follows, through export lists in source and
 -- through the export section of an interface.
 resolveScope ::
-  -- | What a module exports, or 'Nothing' if that could not be determined
-  (Text -> Maybe (Map OpName Fixity)) ->
-  -- | The operators a module's export list names, where that list can be
-  -- enumerated without reading what it passes on. Asked only about modules
-  -- the first function could not answer for, and only to decide which of
-  -- them an unsettled operator can be blamed on. Answering 'Nothing' to
-  -- everything is allowed, and suspects every unread import of everything.
-  (Text -> Maybe (Set OpName)) ->
+  -- | What is known about the modules this one imports
+  Known ->
   HsModule GhcPs ->
   Scope
-resolveScope exportsOf exportNamesOf hsModule =
+resolveScope known hsModule =
   Scope
     { scopeUnqualified = Map.union own (Map.map fst unqualified),
       scopeQualified = qualified,
@@ -385,11 +558,17 @@ resolveScope exportsOf exportNamesOf hsModule =
           <> [(Just alias, op) | (alias, op) <- Map.keys (Map.filter snd qualifiedFrom)]
     }
   where
+    Known {knownFixities = exportsOf, knownChildren, knownExportNames} = known
+    exportNamesOf = knownExportNames
     own = Map.map (,DeclaredHere) (declaredFixities hsModule)
     imports = moduleImports hsModule
 
     unread =
-      [ (i, exportNamesOf (importModule i))
+      [ Unread
+          { unreadImport = i,
+            unreadExports = exportNamesOf (importModule i),
+            unreadCarries = knownChildren (importModule i)
+          }
       | i <- imports,
         Nothing <- [exportsOf (importModule i)]
       ]
@@ -426,9 +605,11 @@ resolveScope exportsOf exportNamesOf hsModule =
               fromMaybe Map.empty (exportsOf (importModule i))
        in case importNames i of
             Nothing -> exported
-            Just (True, hidden) -> Map.withoutKeys exported (setOf hidden)
-            Just (False, shown) -> Map.restrictKeys exported (setOf shown)
-    setOf = Map.keysSet . Map.fromList . map (,())
+            Just (True, hidden) -> Map.withoutKeys exported (brought i hidden)
+            Just (False, shown) -> Map.restrictKeys exported (brought i shown)
+    -- What the list amounts to for this import, once the module it names
+    -- has said what it keeps under each of its names.
+    brought i = namesImported (knownChildren (importModule i))
 
 ----------------------------------------------------------------------------
 -- Answers
@@ -501,16 +682,25 @@ unreadFor ::
   -- | The modules that could hold the answer
   [Text]
 unreadFor scope qualifier op =
-  [importModule i | (i, exported) <- scopeUnread scope, reaches i, brings i, exports exported]
+  [ importModule (unreadImport u)
+  | u <- scopeUnread scope,
+    reaches (unreadImport u),
+    brings u,
+    exports u
+  ]
   where
-    exports = maybe True (Set.member op)
+    -- A module that says what it exports is taken at its word.
+    exports u = maybe True (Set.member op) (unreadExports u)
     reaches i = case qualifier of
       Nothing -> not (importQualified i)
       Just q -> q == importAlias i
-    brings i = case importNames i of
+    -- What a @T(..)@ in the list stands for is often knowable even where
+    -- the module's fixities are not: reading a module's declarations is
+    -- one thing and settling every operator it passes on is another.
+    brings u = case importNames (unreadImport u) of
       Nothing -> True
-      Just (True, hidden) -> op `notElem` hidden
-      Just (False, shown) -> op `elem` shown
+      Just (True, hidden) -> not (surelyNames (unreadCarries u) op hidden)
+      Just (False, shown) -> mightBring (unreadCarries u) op shown
 
 ----------------------------------------------------------------------------
 -- What could not be answered

@@ -110,13 +110,26 @@ reexports = describe "an operator a module passes on" $ do
     chased "module M ((<+>)) where\nimport No.Such.Module\n"
       `shouldReturn` Nothing
 
+  it "comes from a type handed on whole, which carries it" $
+    chased "module M (Doc (..)) where\nimport Text.PrettyPrint\n"
+      `shouldReturn` Just (Fixity LeftAssoc 6)
+
+  it "does not come from a type handed on by an import that hides it" $
+    chased "module M (Doc (..)) where\nimport Text.PrettyPrint hiding (Doc (..))\nimport Control.Arrow\n"
+      `shouldReturn` Nothing
+
 -- | What the chase makes of one module's @<+>@, against a world of modules
 -- that disagree about it.
 chased :: Text -> IO (Maybe Fixity)
 chased source = do
-  answer <- withReexports reach Set.empty "M" (pmModule parsed)
+  answer <- withReexports reach carries Set.empty "M" (pmModule parsed)
   pure (Map.lookup (OpName "<+>") =<< answer)
   where
+    carries m =
+      pure $ case m of
+        "Text.PrettyPrint" ->
+          Map.fromList [(OpName "Doc", Set.fromList [OpName "<+>"])]
+        _ -> Map.empty
     parsed = case parseModule defaultParserConfig "M.hs" source of
       Left _ -> error "the test input did not parse"
       Right m -> m
@@ -129,7 +142,9 @@ chased source = do
 
 withPlan :: BuildPlan -> Spec
 withPlan plan = do
-  (resolve, exported) <- runIO (newResolver plan)
+  resolver <- runIO (newResolver plan)
+  let resolve = askFixities resolver
+      exported = askExportNames resolver
 
   describe "the plan itself" $ do
     it "names the compiler" $
@@ -257,11 +272,11 @@ withPlan plan = do
               ]
           )
         ]
-      $ \ask _ ->
+      $ \rs ->
         -- The WINDOWS branch imports a module nothing has, which is what
         -- System.IO.CodePage does with System.Win32.CodePage. That branch
         -- is passed over rather than taken as a reason to say nothing.
-        ask "Platform"
+        askFixities rs "Platform"
           >>= (`shouldBe` Just (Map.singleton (OpName "<+>") (Fixity LeftAssoc 6)))
 
     it "still refuses when the configurations it can read disagree"
@@ -281,7 +296,7 @@ withPlan plan = do
               ]
           )
         ]
-      $ \ask _ -> ask "Disagree" `shouldReturn` Nothing
+      $ \rs -> askFixities rs "Disagree" `shouldReturn` Nothing
 
     it "says nothing when it can read no configuration at all"
       $ withFakeProject
@@ -298,10 +313,10 @@ withPlan plan = do
               ]
           )
         ]
-      $ \ask _ ->
+      $ \rs ->
         -- Not @Just mempty@: that would be claiming the module declares
         -- nothing, which is a guess rather than the silence it deserves.
-        ask "Bothbad" `shouldReturn` Nothing
+        askFixities rs "Bothbad" `shouldReturn` Nothing
 
   describe "modules that re-export one another" $
     it "answers for one whose re-exports are mutually entangled" $ do
@@ -314,12 +329,83 @@ withPlan plan = do
         Nothing -> pendingWith "could not read prettyprinter's source"
         Just names -> names `shouldSatisfy` Set.member (OpName "<+>")
 
+  describe "what a module keeps under each of its names" $ do
+    it "reads them out of a package's interface" $ do
+      kept <- askChildren resolver "Data.List.NonEmpty"
+      Map.lookup (OpName "NonEmpty") kept
+        `shouldSatisfy` maybe False (Set.member (OpName ":|"))
+
+    it "has nothing to say about a module it cannot find" $
+      askChildren resolver "No.Such.Module" `shouldReturn` Map.empty
+
+    it "reads them out of a local module's source"
+      $ withFakeProject
+        [("src/Carrier.hs", "module Carrier (T (..)) where\ndata T = A | Int :| Int\n")]
+      $ \rs -> do
+        kept <- askChildren rs "Carrier"
+        Map.lookup (OpName "T") kept
+          `shouldBe` Just (Set.fromList [OpName "A", OpName ":|"])
+
+    it "follows a type to the module that declares it"
+      $ withFakeProject
+        [ ("src/Facade.hs", "module Facade (T (..)) where\nimport Inner\n"),
+          ("src/Inner.hs", "module Inner (T (..)) where\ninfixr 5 :|\ndata T = A | Int :| Int\n")
+        ]
+      $ \rs -> do
+        kept <- askChildren rs "Facade"
+        Map.lookup (OpName "T") kept
+          `shouldBe` Just (Set.fromList [OpName "A", OpName ":|"])
+
+    it "carries the fixity along with it, so the name can be looked up"
+      $ withFakeProject
+        [ ("src/Facade.hs", "module Facade (T (..)) where\nimport Inner\n"),
+          ("src/Inner.hs", "module Inner (T (..)) where\ninfixr 5 :|\ndata T = A | Int :| Int\n")
+        ]
+      $ \rs -> do
+        fixities <- askFixities rs "Facade"
+        (Map.lookup (OpName ":|") =<< fixities)
+          `shouldBe` Just (Fixity RightAssoc 5)
+
+    it "settles an operator that arrives through a façade"
+      $ withFakeProject
+        [ ("src/Facade.hs", "module Facade (T (..)) where\nimport Inner\n"),
+          ("src/Inner.hs", "module Inner (T (..)) where\ninfixr 5 :|\ndata T = A | Int :| Int\n")
+        ]
+      $ \rs -> do
+        scope <- scopeFor rs (pmModule (parse "module M where\nimport Facade (T (..))\n"))
+        lookupFixity scope Nothing (OpName ":|")
+          `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Facade")
+
+    it "follows a whole module handed on"
+      $ withFakeProject
+        [ ("src/Facade.hs", "module Facade (module Inner) where\nimport Inner\n"),
+          ("src/Inner.hs", "module Inner (T (..)) where\ninfixr 5 :|\ndata T = A | Int :| Int\n")
+        ]
+      $ \rs -> do
+        kept <- askChildren rs "Facade"
+        Map.lookup (OpName "T") kept
+          `shouldBe` Just (Set.fromList [OpName "A", OpName ":|"])
+
+    it "comes back from two modules that hand each other on"
+      $ withFakeProject
+        [ ("src/Ping.hs", "module Ping (T (..)) where\nimport Pong\n"),
+          ("src/Pong.hs", "module Pong (T (..)) where\nimport Ping\n")
+        ]
+      $ \rs -> askChildren rs "Ping" `shouldReturn` Map.singleton (OpName "T") Set.empty
+
+    it "keeps to what a local module's export list hands on"
+      $ withFakeProject
+        [("src/Carrier.hs", "module Carrier (T (A)) where\ndata T = A | Int :| Int\n")]
+      $ \rs -> do
+        kept <- askChildren rs "Carrier"
+        Map.lookup (OpName "T") kept `shouldBe` Just (Set.singleton (OpName "A"))
+
   describe "what a module says it exports, where its fixities are beyond us" $ do
     it "names them though the module itself went unresolved" $
       withFakeProject [("src/Opaque.hs", opaqueSource)] $
-        \ask names -> do
-          ask "Opaque" `shouldReturn` Nothing
-          names "Opaque"
+        \rs -> do
+          askFixities rs "Opaque" `shouldReturn` Nothing
+          askExportNames rs "Opaque"
             `shouldReturn` Just (Set.fromList [OpName "<+>", OpName "f"])
 
     it "says nothing for a module that hands a whole module on"
@@ -332,15 +418,49 @@ withPlan plan = do
               ]
           )
         ]
-      $ \_ names -> names "Wide" `shouldReturn` Nothing
+      $ \rs -> askExportNames rs "Wide" `shouldReturn` Nothing
 
     it "says nothing for a module it cannot find at all" $
       withFakeProject [("src/Opaque.hs", opaqueSource)] $
-        \_ names -> names "No.Such.Module" `shouldReturn` Nothing
+        \rs -> askExportNames rs "No.Such.Module" `shouldReturn` Nothing
+
+    it "follows a type it hands on to the module that declares it"
+      $ withFakeProject
+        [ ("src/Facade.hs", "module Facade (T (..), (<+>)) where\nimport Inner\n"),
+          ("src/Inner.hs", "module Inner (T (..)) where\ndata T = A | Int :| Int\n")
+        ]
+      $ \rs ->
+        askExportNames rs "Facade"
+          `shouldReturn` Just (Set.fromList [OpName "T", OpName "A", OpName ":|", OpName "<+>"])
+
+    it "follows a whole module it hands on"
+      $ withFakeProject
+        [ ("src/Facade.hs", "module Facade (module Inner) where\nimport Inner\n"),
+          ("src/Inner.hs", "module Inner ((<+>)) where\ninfixl 6 <+>\n(<+>) :: Int -> Int -> Int\na <+> b = a + b\n")
+        ]
+      $ \rs ->
+        askExportNames rs "Facade" `shouldReturn` Just (Set.singleton (OpName "<+>"))
+
+    it "says nothing when what it hands on cannot be read"
+      $ withFakeProject
+        [("src/Facade.hs", "module Facade (module No.Such.Module) where\nimport No.Such.Module\n")]
+      $ \rs -> askExportNames rs "Facade" `shouldReturn` Nothing
+
+    it "says nothing when a type it hands on is beyond us"
+      $ withFakeProject
+        [("src/Facade.hs", "module Facade (T (..)) where\nimport No.Such.Module\n")]
+      $ \rs -> askExportNames rs "Facade" `shouldReturn` Nothing
+
+    it "comes back from two modules that hand each other on"
+      $ withFakeProject
+        [ ("src/Ping.hs", "module Ping (module Pong) where\nimport Pong\n"),
+          ("src/Pong.hs", "module Pong (module Ping) where\nimport Ping\n")
+        ]
+      $ \rs -> askExportNames rs "Ping" `shouldReturn` Nothing
 
     it "says nothing for a module whose source will not parse" $
       withFakeProject [("src/Bad.hs", "module Bad ((<+>)) where\nf = (((\n")] $
-        \_ names -> names "Bad" `shouldReturn` Nothing
+        \rs -> askExportNames rs "Bad" `shouldReturn` Nothing
 
     it "takes them from every configuration the preprocessor allows"
       $ withFakeProject
@@ -356,8 +476,8 @@ withPlan plan = do
               ]
           )
         ]
-      $ \_ names ->
-        names "Both" `shouldReturn` Just (Set.fromList [OpName "<+>", OpName "<?>"])
+      $ \rs ->
+        askExportNames rs "Both" `shouldReturn` Just (Set.fromList [OpName "<+>", OpName "<?>"])
 
     it "says nothing when one configuration hands a whole module on"
       $ withFakeProject
@@ -374,35 +494,35 @@ withPlan plan = do
               ]
           )
         ]
-      $ \_ names -> names "Half" `shouldReturn` Nothing
+      $ \rs -> askExportNames rs "Half" `shouldReturn` Nothing
 
     it "settles an operator no unread module in scope could have declared" $
       withFakeProject [("src/Opaque.hs", opaqueSource)] $
-        \ask names -> do
-          scope <- scopeFor ask names (pmModule (parse "module M where\nimport Opaque\n"))
+        \rs -> do
+          scope <- scopeFor rs (pmModule (parse "module M where\nimport Opaque\n"))
           lookupFixity scope Nothing (OpName "<??>")
             `shouldBe` Resolved defaultFixity ReportDefault
 
     it "leaves one alone that the unread module's list does name" $
       withFakeProject [("src/Opaque.hs", opaqueSource)] $
-        \ask names -> do
-          scope <- scopeFor ask names (pmModule (parse "module M where\nimport Opaque\n"))
+        \rs -> do
+          scope <- scopeFor rs (pmModule (parse "module M where\nimport Opaque\n"))
           lookupFixity scope Nothing (OpName "<+>")
             `shouldBe` Unresolved ("Opaque" :| [])
 
   describe "the whole pipeline, from source text to a fixity" $ do
     it "resolves an operator through a real import" $
-      endToEnd resolve "module M where\nimport Prettyprinter\n" $ \scope ->
+      endToEnd resolver "module M where\nimport Prettyprinter\n" $ \scope ->
         lookupFixity scope Nothing (OpName "<+>")
           `shouldBe` Resolved (Fixity RightAssoc 6) (DeclaredIn "Prettyprinter")
 
     it "prefers the module's own declaration to an imported one" $
-      endToEnd resolve "module M where\nimport Prettyprinter\ninfixl 2 <+>\n" $ \scope ->
+      endToEnd resolver "module M where\nimport Prettyprinter\ninfixl 2 <+>\n" $ \scope ->
         lookupFixity scope Nothing (OpName "<+>")
           `shouldBe` Resolved (Fixity LeftAssoc 2) DeclaredHere
 
     it "honours a qualified import" $
-      endToEnd resolve "module M where\nimport qualified Prettyprinter as P\n" $ \scope -> do
+      endToEnd resolver "module M where\nimport qualified Prettyprinter as P\n" $ \scope -> do
         lookupFixity scope (Just "P") (OpName "<+>")
           `shouldBe` Resolved (Fixity RightAssoc 6) (DeclaredIn "Prettyprinter")
         -- Qualified-only, so nothing arrives unqualified.
@@ -410,42 +530,67 @@ withPlan plan = do
           `shouldBe` Resolved defaultFixity ReportDefault
 
     it "honours an explicit import list" $
-      endToEnd resolve "module M where\nimport Prettyprinter ((<+>))\n" $ \scope ->
+      endToEnd resolver "module M where\nimport Prettyprinter ((<+>))\n" $ \scope ->
         lookupFixity scope Nothing (OpName "<+>")
           `shouldBe` Resolved (Fixity RightAssoc 6) (DeclaredIn "Prettyprinter")
 
     it "honours a hiding list" $
-      endToEnd resolve "module M where\nimport Prettyprinter hiding ((<+>))\n" $ \scope ->
+      endToEnd resolver "module M where\nimport Prettyprinter hiding ((<+>))\n" $ \scope ->
         lookupFixity scope Nothing (OpName "<+>")
           `shouldBe` Resolved defaultFixity ReportDefault
 
     it "concludes the Report default when everything in scope was read" $
-      endToEnd resolve "module M where\nimport Prettyprinter\n" $ \scope ->
+      endToEnd resolver "module M where\nimport Prettyprinter\n" $ \scope ->
         lookupFixity scope Nothing (OpName "<!@#>")
           `shouldBe` Resolved defaultFixity ReportDefault
 
     it "refuses to conclude anything when an import could not be read" $
-      endToEnd resolve "module M where\nimport No.Such.Module\n" $ \scope ->
+      endToEnd resolver "module M where\nimport No.Such.Module\n" $ \scope ->
         lookupFixity scope Nothing (OpName "<!@#>")
           `shouldBe` Unresolved ("No.Such.Module" :| [])
 
     it "still answers for what it did find, despite an unreadable import" $
-      endToEnd resolve "module M where\nimport Prettyprinter\nimport No.Such.Module\n" $ \scope ->
+      endToEnd resolver "module M where\nimport Prettyprinter\nimport No.Such.Module\n" $ \scope ->
         lookupFixity scope Nothing (OpName "<+>")
           `shouldBe` Resolved (Fixity RightAssoc 6) (DeclaredIn "Prettyprinter")
 
     it "concludes the default through a boot import that exports no operators" $
-      endToEnd resolve "module M where\nimport Data.Char\n" $ \scope ->
+      endToEnd resolver "module M where\nimport Data.Char\n" $ \scope ->
         lookupFixity scope Nothing (OpName "<!@#>")
           `shouldBe` Resolved defaultFixity ReportDefault
 
     it "resolves an operator imported from a boot package" $
-      endToEnd resolve "module M where\nimport Data.Map\n" $ \scope ->
+      endToEnd resolver "module M where\nimport Data.Map\n" $ \scope ->
         lookupFixity scope Nothing (OpName "!")
           `shouldBe` Resolved (Fixity LeftAssoc 9) (DeclaredIn "Data.Map")
 
+    it "resolves an operator that arrives under a type's own name" $
+      endToEnd resolver "module M where\nimport Data.List.NonEmpty (NonEmpty (..))\n" $ \scope ->
+        lookupFixity scope Nothing (OpName ":|")
+          `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Data.List.NonEmpty")
+
+    it "resolves one written out beside its type" $
+      endToEnd resolver "module M where\nimport Data.List.NonEmpty (NonEmpty ((:|)))\n" $ \scope ->
+        lookupFixity scope Nothing (OpName ":|")
+          `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Data.List.NonEmpty")
+
+    it "leaves out an operator no item of the list brings in" $
+      endToEnd resolver "module M where\nimport Data.List.NonEmpty (toList)\n" $ \scope ->
+        lookupFixity scope Nothing (OpName ":|")
+          `shouldBe` Resolved defaultFixity ReportDefault
+
+    it "hides one hidden along with its type" $
+      endToEnd resolver "module M where\nimport Data.List.NonEmpty hiding (NonEmpty (..))\n" $ \scope ->
+        lookupFixity scope Nothing (OpName ":|")
+          `shouldBe` Resolved defaultFixity ReportDefault
+
+    it "brings one in under the qualifier it was imported with" $
+      endToEnd resolver "module M where\nimport qualified Data.List.NonEmpty as NE (NonEmpty (..))\n" $ \scope ->
+        lookupFixity scope (Just "NE") (OpName ":|")
+          `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Data.List.NonEmpty")
+
     it "reports no ambiguity for a module that compiles" $
-      endToEnd resolve "module M where\nimport Prettyprinter\n" $ \scope ->
+      endToEnd resolver "module M where\nimport Prettyprinter\n" $ \scope ->
         scopeAmbiguous scope `shouldBe` []
 
   describe "readiness" $ do
@@ -504,15 +649,15 @@ needs resolve modName assertion =
 
 -- | Parse a module, resolve its imports for real, and hand over the scope.
 endToEnd ::
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  Resolver ->
   Text ->
   (Scope -> Expectation) ->
   Expectation
-endToEnd resolve source assertion =
+endToEnd resolver source assertion =
   case parseModule defaultParserConfig "test.hs" source of
     Left _ -> expectationFailure "the test input did not parse"
     Right pm -> do
-      scope <- scopeFor resolve (const (pure Nothing)) (pmModule pm)
+      scope <- scopeFor resolver (pmModule pm)
       assertion scope
 
 -- | Check one expected fixity, returning a description of any mismatch.
@@ -555,16 +700,9 @@ parse source = case parseModule defaultParserConfig "M.hs" source of
 -- The plan names one local package and nothing else, which is enough for a
 -- resolver: local modules are read straight off disk, and everything they
 -- import here is either a boot module or does not exist.
-withFakeProject ::
-  [(FilePath, Text)] ->
-  -- | Given what a module exports, and what an unread one says it exports
-  ( (Text -> IO (Maybe (Map OpName Fixity))) ->
-    (Text -> IO (Maybe (Set.Set OpName))) ->
-    IO a
-  ) ->
-  IO a
+withFakeProject :: [(FilePath, Text)] -> (Resolver -> IO a) -> IO a
 withFakeProject sources act =
-  withFakePlan sources (\plan -> newResolver plan >>= uncurry act)
+  withFakePlan sources (\plan -> newResolver plan >>= act)
 
 withFakePlan :: [(FilePath, Text)] -> (BuildPlan -> IO a) -> IO a
 withFakePlan sources act =

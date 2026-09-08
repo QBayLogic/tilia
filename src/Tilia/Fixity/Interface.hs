@@ -13,6 +13,8 @@ import Data.Char (isUpper)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Read qualified as T
@@ -29,7 +31,12 @@ data Interface = Interface
     -- module that did. Not only the operators: a plain function can be
     -- given a fixity and used in backticks, and one of these is where the
     -- declaration would be.
-    interfacePassedOn :: [(Text, OpName)]
+    interfacePassedOn :: [(Text, OpName)],
+    -- | What it exports under each name, for the names that carry others
+    -- with them. This is what @T(..)@ in an import list stands for, and the
+    -- compiler has already worked it out: an export entry wears its members
+    -- in braces.
+    interfaceChildren :: Map OpName (Set OpName)
   }
   deriving (Eq, Show)
 
@@ -58,7 +65,9 @@ parseInterface modName out
       Just
         Interface
           { interfaceDeclares = Map.fromList (concatMap declared (sectionsNamed "fixities")),
-            interfacePassedOn = concatMap passedOn (sectionsNamed "exports:")
+            interfacePassedOn = concatMap passedOn (sectionsNamed "exports:"),
+            interfaceChildren =
+              Map.unionsWith Set.union (map childrenIn (sectionsNamed "exports:"))
           }
   where
     holdsModule l = case T.words l of
@@ -67,6 +76,12 @@ parseInterface modName out
     sectionsNamed name = [body | (heading, body) <- sections out, heading == name]
     declared = mapMaybe fixityEntry . T.splitOn ","
     passedOn = concatMap fromExport . T.words
+    childrenIn section =
+      Map.fromListWith
+        Set.union
+        [ (nameOnly parent, Set.fromList (map nameOnly kids))
+        | (parent, kids@(_ : _)) <- exportEntries section
+        ]
 
 -- | Split the output into sections.
 sections :: Text -> [(Text, Text)]
@@ -101,6 +116,32 @@ fixityEntry entry = case T.words entry of
     readPrecedence t = case T.signed T.decimal t of
       Right (p, rest) | T.null rest -> Just p
       _ -> Nothing
+
+-- | Split an exports section into its entries, keeping the members an entry
+-- wears in braces with the name they belong to.
+--
+-- An entry is @Some.Module.T@, or @Some.Module.T{Some.Module.A
+-- Some.Module.B}@ where @T@ carries names with it. A partial export writes
+-- the name as @T|@, which says that not all of them are there; the ones in
+-- the braces are still exactly what @T(..)@ would bring in.
+exportEntries :: Text -> [(Text, [Text])]
+exportEntries = go
+  where
+    go text = case T.uncons (T.dropWhile (== ' ') text) of
+      Nothing -> []
+      Just _ ->
+        let trimmed = T.dropWhile (== ' ') text
+            (name, rest) = T.break (\c -> c == ' ' || c == '{') trimmed
+         in case T.uncons rest of
+              Just ('{', inside) ->
+                let (kids, after) = T.break (== '}') inside
+                 in (bare name, T.words kids) : go (T.drop 1 after)
+              _ -> (bare name, []) : go rest
+    bare = T.dropWhileEnd (`elem` ("|," :: String))
+
+-- | An exported name without the module that declared it.
+nameOnly :: Text -> OpName
+nameOnly t = OpName (maybe t snd (moduleOf t))
 
 -- | The names an export entry passes on, with the module that declared each.
 --

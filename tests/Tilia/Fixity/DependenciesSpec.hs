@@ -47,9 +47,10 @@ spec = do
 withPlan :: BuildPlan -> Spec
 withPlan plan = do
   installed <- runIO readInstalledPackages
-  (fromSource, _) <- runIO (newResolverVia [FromSource] plan)
-  (fromInterface, _) <- runIO (newResolverVia [FromInterface] plan)
-  (resolve, _) <- runIO (newResolver plan)
+  fromSource <- runIO (askFixities <$> newResolverVia [FromSource] plan)
+  fromInterface <- runIO (askFixities <$> newResolverVia [FromInterface] plan)
+  resolver <- runIO (newResolver plan)
+  let resolve = askFixities resolver
   own <- runIO ownModules
   let isShippedModule m = Map.member m builtinFixities
   dependencies <- runIO (dependenciesOf (not . isShippedModule) plan installed)
@@ -154,7 +155,7 @@ withPlan plan = do
       [m | (m, Nothing) <- answers] `shouldBe` []
 
     it "settles every operator they use" $ do
-      unsettled <- traverse (unsettledIn resolve) [(path, m) | (path, Just m) <- own]
+      unsettled <- traverse (unsettledIn resolver) [(path, m) | (path, Just m) <- own]
       concat unsettled `shouldBe` []
 
 ----------------------------------------------------------------------------
@@ -359,11 +360,11 @@ importedByOwn own =
 -- operators are looked up in it. Anything left over is an operator this
 -- project could not be laid out from.
 unsettledIn ::
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  Resolver ->
   (FilePath, HsModule GhcPs) ->
   IO [String]
-unsettledIn resolve (path, hsModule) = do
-  scope <- scopeFor resolve (const (pure Nothing)) hsModule
+unsettledIn resolver (path, hsModule) = do
+  scope <- scopeFor resolver hsModule
   pure
     [ path <> ": " <> T.unpack (operatorSpelling qualifier op) <> " " <> show why
     | ((qualifier, op), why) <- unknownOperators scope hsModule

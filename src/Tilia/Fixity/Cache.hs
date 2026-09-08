@@ -17,14 +17,18 @@ module Tilia.Fixity.Cache
     storeFixities,
     cachedExportNames,
     storeExportNames,
+    cachedChildren,
+    storeChildren,
     cachedInstalled,
     storeInstalled,
   )
 where
 
 import Control.Monad (join)
+import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
+import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -173,6 +177,53 @@ storeExportNames cache package modName answer = do
       Exports names -> T.unlines ("names" : [op | OpName op <- Set.toAscList names])
 
 ----------------------------------------------------------------------------
+-- What a name carries with it
+
+-- | What a module keeps under each of its names, if it was ever read for
+-- it.
+--
+-- Wanted wherever an import list writes @T(..)@, and got at by reading the
+-- module's interface or its source—which on a warm cache is work that
+-- would otherwise not be done at all.
+cachedChildren ::
+  -- | Where to look
+  Cache ->
+  -- | The package the module belongs to, as 'cachedFixities' takes it
+  Text ->
+  -- | The module, by its full dotted name
+  Text ->
+  -- | What it keeps under each name, or 'Nothing' if it was never read
+  IO (Maybe (Map OpName (Set OpName)))
+cachedChildren cache package modName =
+  fmap join . readIfPresent (childrenPath cache package modName) $ \contents ->
+    case T.lines contents of
+      ("children" : entries) -> Just (Map.fromList (mapMaybe childEntry entries))
+      _ -> Nothing
+  where
+    childEntry line = case T.splitOn "\t" line of
+      (parent : kids) -> Just (OpName parent, Set.fromList (map OpName kids))
+      [] -> Nothing
+
+-- | Remember what a module keeps under each of its names.
+storeChildren ::
+  -- | Where to write
+  Cache ->
+  -- | The package the module belongs to, as 'cachedFixities' takes it
+  Text ->
+  -- | The module, by its full dotted name
+  Text ->
+  -- | What it keeps under each name
+  Map OpName (Set OpName) ->
+  IO ()
+storeChildren cache package modName children = do
+  quietly () (createDirectoryIfMissing True (childrenDir cache package))
+  writeAtomically (childrenPath cache package modName) $
+    T.unlines ("children" : map entry (Map.toList children))
+  where
+    entry (OpName parent, kids) =
+      T.intercalate "\t" (parent : [kid | OpName kid <- Set.toAscList kids])
+
+----------------------------------------------------------------------------
 -- The package database
 
 -- | What the compiler could see when last asked, if it can still see it.
@@ -279,6 +330,13 @@ exportsDir (Cache root _) package = root </> "exports" </> T.unpack package
 exportsPath :: Cache -> Text -> Text -> FilePath
 exportsPath cache package modName =
   exportsDir cache package </> T.unpack modName
+
+childrenDir :: Cache -> Text -> FilePath
+childrenDir (Cache root _) package = root </> "children" </> T.unpack package
+
+childrenPath :: Cache -> Text -> Text -> FilePath
+childrenPath cache package modName =
+  childrenDir cache package </> T.unpack modName
 
 readIfPresent :: FilePath -> (Text -> a) -> IO (Maybe a)
 readIfPresent path parse = quietly Nothing $ do

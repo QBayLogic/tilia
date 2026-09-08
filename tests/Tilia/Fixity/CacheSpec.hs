@@ -141,6 +141,37 @@ spec = do
         cachedExportNames cache "thing-1.0" "M"
           `shouldReturn` Just (Exports (Set.singleton (OpName "<+>")))
 
+    describe "what a name carries with it" $ do
+      it "round-trips what each name carries" $ \cache -> do
+        let kept =
+              Map.fromList
+                [ (OpName "NonEmpty", Set.fromList [OpName ":|"]),
+                  (OpName "Seq", Set.fromList [OpName ":<|", OpName ":|>"])
+                ]
+        storeChildren cache "thing-1.0" "M" kept
+        cachedChildren cache "thing-1.0" "M" `shouldReturn` Just kept
+
+      it "remembers a module that carries nothing anywhere" $ \cache -> do
+        storeChildren cache "thing-1.0" "Bare" Map.empty
+        cachedChildren cache "thing-1.0" "Bare" `shouldReturn` Just Map.empty
+
+      it "tells that from a module it was never told about" $ \cache -> do
+        storeChildren cache "thing-1.0" "Bare" Map.empty
+        cachedChildren cache "thing-1.0" "Unasked" `shouldReturn` Nothing
+
+      it "remembers a name that carries nothing among ones that do" $ \cache -> do
+        let kept =
+              Map.fromList
+                [ (OpName "Empty", Set.empty),
+                  (OpName "NonEmpty", Set.singleton (OpName ":|"))
+                ]
+        storeChildren cache "thing-1.0" "M" kept
+        cachedChildren cache "thing-1.0" "M" `shouldReturn` Just kept
+
+      it "keeps packages apart" $ \cache -> do
+        storeChildren cache "one-1.0" "M" (Map.singleton (OpName "T") (Set.singleton (OpName ":|")))
+        cachedChildren cache "two-1.0" "M" `shouldReturn` Nothing
+
     describe "module names with dots" $
       it "files a deeply qualified module without confusion" $ \cache -> do
         storeFixities cache "thing-1.0" "A.B.C.D" (Declares (Map.fromList [(OpName "%", Fixity NoAssoc 5)]))
