@@ -31,6 +31,9 @@ import Data.List (isPrefixOf, isSuffixOf, sort, stripPrefix)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe, maybeToList)
 import Data.Text (Text)
 import Data.Text qualified as T
+import GHC.LanguageExtensions.Type (Extension)
+import Network.HTTP.Client qualified as HTTP
+import Network.HTTP.Req
 import System.Directory
   ( XdgDirectory (..),
     createDirectoryIfMissing,
@@ -43,10 +46,7 @@ import System.Directory
     renameFile,
   )
 import System.Environment (lookupEnv)
-import Network.HTTP.Client qualified as HTTP
-import Network.HTTP.Req
 import System.FilePath (splitDirectories, takeDirectory, (</>))
-import GHC.LanguageExtensions.Type (Extension)
 import Tilia.Package (newPackageReader)
 
 ----------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | The @{-# … #-}@ annotations that appear among declarations.
 --

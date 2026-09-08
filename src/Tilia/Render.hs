@@ -15,28 +15,28 @@ import Data.Set qualified as Set
 import Data.Text (Text)
 import GHC.Hs (HsModule (..), XModulePs (..))
 import GHC.Hs.Extension (GhcPs)
-import GHC.Types.SrcLoc (getLoc)
 import GHC.LanguageExtensions.Type (Extension (..))
+import GHC.Types.SrcLoc (getLoc)
 import Tilia.Comments
   ( Comment (..),
-    commentTrailing,
-    closesItself,
     bracketed,
+    closesItself,
+    commentTrailing,
     escapeTrigger,
     widenTrigger,
   )
 import Tilia.Comments.Attach (attachComments)
+import Tilia.Doc.Combinators
 import Tilia.Fixity (Scope)
 import Tilia.Imports (normalizeImports)
 import Tilia.Parser (ParsedModule (..))
-import Tilia.Source (comments)
-import Tilia.Doc.Combinators
 import Tilia.Render.Context
 import Tilia.Render.Declaration (decls, declsKeepingGroups)
 import Tilia.Render.Expression (hsCmd, hsExprIn, untypedSplice)
 import Tilia.Render.Haddock (haddockSpans)
 import Tilia.Render.Header (HeaderPragma (..), hsModule, takeHeaderPragmas, takeStackHeader)
 import Tilia.Render.Signature (sigDecl)
+import Tilia.Source (comments)
 import Tilia.Span
 import Tilia.Span.Ghc (spanOf, spanOfSrcSpan)
 
@@ -103,8 +103,8 @@ heldOff haddocks = map holdOff
     starts =
       Set.fromList
         [ spanStartLine (commentSpan h)
-          | h <- written,
-            not (commentTrailing h)
+        | h <- written,
+          not (commentTrailing h)
         ]
     holdOff c
       | bracketed c = c

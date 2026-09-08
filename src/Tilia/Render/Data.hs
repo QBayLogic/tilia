@@ -121,7 +121,8 @@ dataDecl ctx style tyCon tyVars tyVarSpan renderTyVar fixity outerBinders HsData
                 -- after the declaration would be read as another
                 -- constructor. One constructor needs no separator and so no
                 -- braces.
-                <> items (if null (drop 1 cons) then NoBrace else MayBrace)
+                <> items
+                  (if null (drop 1 cons) then NoBrace else MayBrace)
                   (map (at_ ctx (conDecl ctx False)) cons)
         | otherwise ->
             layoutFrom ctx (spanOf tyCon <> spansOf cons) . indent $

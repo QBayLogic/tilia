@@ -72,11 +72,10 @@ spec = do
   describe "layer 2: imports" $ do
     it "sees an unqualified import in both scopes" $
       scopeOf "module M where\nimport Data.Map\n"
-        `shouldBe`
-          ( [(OpName "!", Fixity LeftAssoc 9)],
-            [(("Data.Map", OpName "!"), Fixity LeftAssoc 9)],
-            []
-          )
+        `shouldBe` ( [(OpName "!", Fixity LeftAssoc 9)],
+                     [(("Data.Map", OpName "!"), Fixity LeftAssoc 9)],
+                     []
+                   )
 
     it "does not bring a qualified import into unqualified scope" $
       scopeOf "module M where\nimport qualified Data.Map\n"
@@ -88,27 +87,24 @@ spec = do
 
     it "keeps unqualified names when an alias is not qualified" $
       scopeOf "module M where\nimport Data.Map as M\n"
-        `shouldBe`
-          ( [(OpName "!", Fixity LeftAssoc 9)],
-            [(("M", OpName "!"), Fixity LeftAssoc 9)],
-            []
-          )
+        `shouldBe` ( [(OpName "!", Fixity LeftAssoc 9)],
+                     [(("M", OpName "!"), Fixity LeftAssoc 9)],
+                     []
+                   )
 
     it "honours an explicit import list" $
       scopeOf "module M where\nimport Data.Sequence ((|>))\n"
-        `shouldBe`
-          ( [(OpName "|>", Fixity LeftAssoc 5)],
-            [(("Data.Sequence", OpName "|>"), Fixity LeftAssoc 5)],
-            []
-          )
+        `shouldBe` ( [(OpName "|>", Fixity LeftAssoc 5)],
+                     [(("Data.Sequence", OpName "|>"), Fixity LeftAssoc 5)],
+                     []
+                   )
 
     it "honours a hiding list" $
       scopeOf "module M where\nimport Data.Sequence hiding ((|>))\n"
-        `shouldBe`
-          ( [(OpName "<|", Fixity RightAssoc 5)],
-            [(("Data.Sequence", OpName "<|"), Fixity RightAssoc 5)],
-            []
-          )
+        `shouldBe` ( [(OpName "<|", Fixity RightAssoc 5)],
+                     [(("Data.Sequence", OpName "<|"), Fixity RightAssoc 5)],
+                     []
+                   )
 
     it "lets the module's own declaration win over an import" $
       let (unq, _, _) = scopeOf "module M where\nimport Data.Map\ninfixr 3 !\n"
@@ -259,10 +255,10 @@ spec = do
       map (uncurry operatorSpelling . fst) (unsettledIn "module M where\nimport qualified Opaque as O\nf a b = a O.<+> b\n")
         `shouldBe` ["O.<+>"]
 
-  describe "parsing with the module's own pragmas" $
-    it "parses a module that needs an extension it declares" $
-      declaredIn "{-# LANGUAGE MagicHash #-}\nmodule M where\ninfixl 6 <+>\n"
-        `shouldBe` [(OpName "<+>", Fixity LeftAssoc 6)]
+  describe "parsing with the module's own pragmas"
+    $ it "parses a module that needs an extension it declares"
+    $ declaredIn "{-# LANGUAGE MagicHash #-}\nmodule M where\ninfixl 6 <+>\n"
+      `shouldBe` [(OpName "<+>", Fixity LeftAssoc 6)]
 
 ----------------------------------------------------------------------------
 -- Helpers

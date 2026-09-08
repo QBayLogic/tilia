@@ -70,6 +70,7 @@ import GHC.Types.Name.Reader (RdrName (..), rdrNameOcc)
 import GHC.Types.SrcLoc (GenLocated (..))
 import GHC.Types.SrcLoc qualified as GHC
 import Tilia.Comments (Comment (..), CommentStyle (..), commentTrailing)
+import Tilia.Doc.Combinators
 import Tilia.Fixity
   ( Fixity,
     OpName (..),
@@ -77,11 +78,10 @@ import Tilia.Fixity
     Scope,
     lookupFixity,
   )
+import Tilia.Render.Layout (Bracing (..))
 import Tilia.Source (Source, SourceType (..), blankAt)
 import Tilia.Span
 import Tilia.Span.Ghc
-import Tilia.Doc.Combinators
-import Tilia.Render.Layout (Bracing (..))
 
 ----------------------------------------------------------------------------
 -- The context

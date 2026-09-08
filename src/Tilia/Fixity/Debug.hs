@@ -19,8 +19,8 @@ import Data.Text qualified as T
 import GHC.Hs (HsModule)
 import GHC.Hs.Extension (GhcPs)
 import Tilia.Fixity
-  ( Fixity (..),
-    Direction (..),
+  ( Direction (..),
+    Fixity (..),
     Import (..),
     OpName (..),
     Provenance (..),

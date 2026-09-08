@@ -7,8 +7,8 @@ import Data.Text (Text)
 import Test.Hspec
 import Tilia.Comments (Comment (..), renderComment)
 import Tilia.Comments.Place
-import Tilia.Source (comments)
 import Tilia.Parser
+import Tilia.Source (comments)
 import Tilia.Span
 
 spec :: Spec

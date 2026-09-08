@@ -47,23 +47,23 @@ spec = do
         root <- findProjectRoot dir
         (prMarker <$> root) `shouldBe` Just "stack.yaml"
 
-    it "climbs past a package to the project that contains it" $
-      withTree
+    it "climbs past a package to the project that contains it"
+      $ withTree
         [ ("cabal.project", ""),
           ("packages/inner/placeholder", "")
         ]
-        $ \dir -> do
-          root <- findProjectRoot (dir </> "packages" </> "inner")
-          (prMarker <$> root) `shouldBe` Just "cabal.project"
+      $ \dir -> do
+        root <- findProjectRoot (dir </> "packages" </> "inner")
+        (prMarker <$> root) `shouldBe` Just "cabal.project"
 
-    it "stops at an inner package that has its own .cabal" $
-      withTree
+    it "stops at an inner package that has its own .cabal"
+      $ withTree
         [ ("cabal.project", ""),
           ("packages/inner/inner.cabal", "")
         ]
-        $ \dir -> do
-          root <- findProjectRoot (dir </> "packages" </> "inner")
-          (prMarker <$> root) `shouldBe` Just "inner.cabal"
+      $ \dir -> do
+        root <- findProjectRoot (dir </> "packages" </> "inner")
+        (prMarker <$> root) `shouldBe` Just "inner.cabal"
 
   describe "no project" $
     it "gives up rather than guessing" $

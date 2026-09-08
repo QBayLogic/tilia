@@ -20,11 +20,11 @@ where
 import Data.Foldable (toList)
 import Data.List (isSuffixOf, nub, sortOn)
 import Data.Text (Text)
-import GHC.Driver.Session qualified as GHC
 import Data.Text qualified as T
 import GHC.Data.EnumSet qualified as EnumSet
 import GHC.Data.FastString (mkFastString)
 import GHC.Data.StringBuffer qualified as GHC
+import GHC.Driver.Session qualified as GHC
 import GHC.Hs (HsModule (..))
 import GHC.Hs.Extension (GhcPs)
 import GHC.LanguageExtensions.Type (Extension)

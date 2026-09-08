@@ -16,11 +16,11 @@ import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8')
+import GHC.LanguageExtensions.Type (Extension)
 import System.FilePath (replaceExtension)
 import Test.Hspec hiding (Example, after, before, example)
 import Tilia.Corpus
 import Tilia.Corpus.Manifest
-import GHC.LanguageExtensions.Type (Extension)
 import Tilia.Cpp
   ( answeredLeaves,
     answeredLinearLeaves,
@@ -31,10 +31,9 @@ import Tilia.Cpp
     usesCpp,
   )
 import Tilia.Diff (diff)
-import Tilia.Palette (Palette, paletteFor)
-import Tilia.Pragma (effectiveExtensions, movesPositions)
+import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Equivalence (commentDifference, syntaxDifference)
-import Tilia.Source (comments)
+import Tilia.Palette (Palette, paletteFor)
 import Tilia.Parser
   ( ParseError (..),
     ParsedModule (..),
@@ -42,8 +41,9 @@ import Tilia.Parser
     parseModule,
     parserConfigFor,
   )
-import Tilia.Doc (defaultRenderOptions, printDoc)
+import Tilia.Pragma (effectiveExtensions, movesPositions)
 import Tilia.Render (RenderConfig, defaultRenderConfig, renderModule)
+import Tilia.Source (comments)
 import Tilia.Span (spanStartColumn, spanStartLine)
 import Tilia.Span.Ghc (spanOfSrcSpan)
 import Tilia.TestConfig (exampleRenderConfig)
@@ -273,14 +273,16 @@ checkPure palette path package source expected
             against name = diff palette ("input", name) source formatted
          in case parse formatted of
               Nothing ->
-                told formatted
+                told
+                  formatted
                   Broken
                   ( "the formatted output does not parse\n"
                       <> against "output (does not parse)"
                   )
               Just after
                 | Just difference <- syntaxDifference (pmModule before) (pmModule after) ->
-                    told formatted
+                    told
+                      formatted
                       Broken
                       ( "a different program: "
                           <> difference
@@ -292,7 +294,8 @@ checkPure palette path package source expected
                       (pmModule before, pmModule after)
                       (comments (pmSource before))
                       (comments (pmSource after)) ->
-                    told formatted
+                    told
+                      formatted
                       Broken
                       ( "comments: "
                           <> difference
@@ -301,14 +304,16 @@ checkPure palette path package source expected
                       )
                 | settled <- render after,
                   settled /= formatted ->
-                    told formatted
+                    told
+                      formatted
                       Broken
                       ( "formatting is non-idempotent\n"
                           <> diff palette ("first pass", "second pass") formatted settled
                       )
                 | Just reference <- expected,
                   reference /= formatted ->
-                    told formatted
+                    told
+                      formatted
                       Broken
                       ( "does not match the corpus's expected output\n"
                           <> diff palette ("expected", "ours") reference formatted
@@ -339,7 +344,8 @@ checkCpp palette path package source expected = case formatWithCpp parser render
       told formatted Broken ("the output's configurations: " <> describeCppError why <> "\n" <> against formatted)
     (Right went, Right came)
       | went /= came ->
-          told formatted
+          told
+            formatted
             Broken
             ( "formatting changed how many configurations there are, from "
                 <> count went
@@ -380,29 +386,31 @@ checkCpp palette path package source expected = case formatWithCpp parser render
                 told formatted Broken ("the output cannot be formatted again: " <> describeCppError why)
               Right settled
                 | settled /= formatted ->
-                    told formatted
+                    told
+                      formatted
                       Broken
                       ( "formatting is non-idempotent\n"
                           <> diff palette ("first pass", "second pass") formatted settled
                       )
                 | Just reference <- expected,
                   reference /= formatted ->
-                    told formatted
+                    told
+                      formatted
                       Broken
                       ( "does not match the corpus's expected output\n"
                           <> diff palette ("expected", "ours") reference formatted
                       )
                 | otherwise ->
-                  maybe (told formatted Formatted "") (told formatted PartlyChecked) reservation
+                    maybe (told formatted Formatted "") (told formatted PartlyChecked) reservation
     alongside went came =
       [ why
-        | (answers, before) <- went,
-          why <- case Map.lookup answers output of
-            Nothing -> ["a configuration of the input the output does not have"]
-            Just after -> maybe [] pure (sameProgram before after)
+      | (answers, before) <- went,
+        why <- case Map.lookup answers output of
+          Nothing -> ["a configuration of the input the output does not have"]
+          Just after -> maybe [] pure (sameProgram before after)
       ]
         <> [ "a configuration of the output the input does not have"
-             | any (\(answers, _) -> not (Map.member answers input)) came
+           | any (\(answers, _) -> not (Map.member answers input)) came
            ]
       where
         output = Map.fromList came
@@ -456,8 +464,8 @@ linesAround text problem = case spanStartLine <$> spanOfSrcSpan (peSpan problem)
   Just line ->
     T.unlines
       [ (if n == line then "> " else "  ") <> T.pack (show n) <> "  " <> l
-        | (n, l) <- zip [1 :: Int ..] (T.lines text),
-          abs (n - line) <= 4
+      | (n, l) <- zip [1 :: Int ..] (T.lines text),
+        abs (n - line) <= 4
       ]
 
 -- | How many configurations one example gets compared over.

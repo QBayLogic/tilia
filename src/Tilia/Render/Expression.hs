@@ -59,9 +59,9 @@ import GHC.Types.SrcLoc
     unLoc,
   )
 import Language.Haskell.Syntax.Basic (field_label)
-import Tilia.Fixity (Fixity)
 import Tilia.Doc.Body
 import Tilia.Doc.Combinators
+import Tilia.Fixity (Fixity)
 import Tilia.Render.Body
 import Tilia.Render.Context
 import Tilia.Render.Layout
@@ -421,7 +421,8 @@ renderExprChain ctx site = \case
       -- the one that may hang, since it is the block the whole chain exists
       -- to introduce.
       tailPlacement isLast previous operand
-        | isLast, not (maybe True isSingleLine (chainSpan spanOf operand)) =
+        | isLast,
+          not (maybe True isSingleLine (chainSpan spanOf operand)) =
             chainPlacement exprHangs previous operand
         | otherwise = Normal
 
@@ -658,9 +659,10 @@ stmtBody ctx site mkBody = \case
       <> align
         ( at ctx recS_stmts $ \xs ->
             items (siteBracing site) $
-              keepBlanks (separatedByBlank ctx)
+              keepBlanks
+                (separatedByBlank ctx)
                 [ (spanOf s, at_ ctx (stmtBody ctx site mkBody) s)
-                  | s <- xs
+                | s <- xs
                 ]
         )
 

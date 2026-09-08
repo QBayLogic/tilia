@@ -109,124 +109,124 @@ spec = do
               filter (T.isInfixOf "dist-newstyle" . T.pack) files `shouldBe` []
 
   describe "against a project made up for the purpose" $ do
-    it "reads the packages a cabal.project names" $
-      withProject
+    it "reads the packages a cabal.project names"
+      $ withProject
         [ ("cabal.project", "packages: one two\n"),
           ("one/one.cabal", package "one" "src"),
           ("one/src/A.hs", "module A where\n"),
           ("two/two.cabal", package "two" "lib"),
           ("two/lib/B.hs", "module B where\n")
         ]
-        $ \root ->
-          componentsOfTarget root Everything >>= \case
-            Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
-            Right cs -> sort (map componentPackage cs) `shouldBe` ["one", "two"]
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> sort (map componentPackage cs) `shouldBe` ["one", "two"]
 
-    it "expands a glob in the packages field" $
-      withProject
+    it "expands a glob in the packages field"
+      $ withProject
         [ ("cabal.project", "packages: pkgs/*/*.cabal\n"),
           ("pkgs/one/one.cabal", package "one" "src"),
           ("pkgs/two/two.cabal", package "two" "src")
         ]
-        $ \root ->
-          componentsOfTarget root Everything >>= \case
-            Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
-            Right cs -> sort (map componentPackage cs) `shouldBe` ["one", "two"]
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> sort (map componentPackage cs) `shouldBe` ["one", "two"]
 
-    it "passes over a package a comment has taken out" $
-      withProject
+    it "passes over a package a comment has taken out"
+      $ withProject
         [ ("cabal.project", "packages:\n  one\n  -- two\n"),
           ("one/one.cabal", package "one" "src"),
           ("two/two.cabal", package "two" "src")
         ]
-        $ \root ->
-          componentsOfTarget root Everything >>= \case
-            Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
-            Right cs -> map componentPackage cs `shouldBe` ["one"]
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> map componentPackage cs `shouldBe` ["one"]
 
-    it "reads a packages field continued onto later lines" $
-      withProject
+    it "reads a packages field continued onto later lines"
+      $ withProject
         [ ("cabal.project", "packages:\n  one\n  two\n"),
           ("one/one.cabal", package "one" "src"),
           ("two/two.cabal", package "two" "src")
         ]
-        $ \root ->
-          componentsOfTarget root Everything >>= \case
-            Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
-            Right cs -> sort (map componentPackage cs) `shouldBe` ["one", "two"]
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> sort (map componentPackage cs) `shouldBe` ["one", "two"]
 
-    it "reads one continued with tabs, as cabal itself does" $
-      withProject
+    it "reads one continued with tabs, as cabal itself does"
+      $ withProject
         [ ("cabal.project", "packages:\n\tone\n\ttwo\n"),
           ("one/one.cabal", package "one" "src"),
           ("two/two.cabal", package "two" "src")
         ]
-        $ \root ->
-          componentsOfTarget root Everything >>= \case
-            Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
-            Right cs -> sort (map componentPackage cs) `shouldBe` ["one", "two"]
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> sort (map componentPackage cs) `shouldBe` ["one", "two"]
 
-    it "finds one a conditional has put inside a section" $
-      withProject
+    it "finds one a conditional has put inside a section"
+      $ withProject
         [ ("cabal.project", "if impl(ghc >= 9.4)\n  packages: one\n"),
           ("one/one.cabal", package "one" "src")
         ]
-        $ \root ->
-          componentsOfTarget root Everything >>= \case
-            Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
-            Right cs -> map componentPackage cs `shouldBe` ["one"]
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> map componentPackage cs `shouldBe` ["one"]
 
-    it "walks every source directory a component names" $
-      withProject
+    it "walks every source directory a component names"
+      $ withProject
         [ ("only.cabal", packageWith "only" ["src", "gen"]),
           ("src/A.hs", "module A where\n"),
           ("gen/B.hs", "module B where\n")
         ]
-        $ \root ->
-          componentsOfTarget root Everything >>= \case
-            Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
-            Right cs -> do
-              files <- filesOfComponents cs
-              sort (map takeFileName files) `shouldBe` ["A.hs", "B.hs"]
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> do
+            files <- filesOfComponents cs
+            sort (map takeFileName files) `shouldBe` ["A.hs", "B.hs"]
 
-    it "spells a path through a dot source directory without the dot" $
-      withProject
+    it "spells a path through a dot source directory without the dot"
+      $ withProject
         [ ("only.cabal", packageWith "only" ["."]),
           ("A.hs", "module A where\n"),
           ("nested/B.hs", "module B where\n")
         ]
-        $ \root ->
-          componentsOfTarget root Everything >>= \case
-            Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
-            Right cs -> do
-              files <- filesOfComponents cs
-              filter (T.isInfixOf "/./" . T.pack) files `shouldBe` []
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> do
+            files <- filesOfComponents cs
+            filter (T.isInfixOf "/./" . T.pack) files `shouldBe` []
 
-    it "names a file once even when two components reach it" $
-      withProject
+    it "names a file once even when two components reach it"
+      $ withProject
         [ ("both.cabal", twoComponents),
           ("bench/Main.hs", "module Main where\n")
         ]
-        $ \root ->
-          componentsOfTarget root Everything >>= \case
-            Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
-            Right cs -> do
-              files <- filesOfComponents cs
-              length cs `shouldBe` 2
-              map takeFileName files `shouldBe` ["Main.hs"]
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> do
+            files <- filesOfComponents cs
+            length cs `shouldBe` 2
+            map takeFileName files `shouldBe` ["Main.hs"]
 
-    it "leaves hidden directories alone" $
-      withProject
+    it "leaves hidden directories alone"
+      $ withProject
         [ ("only.cabal", package "only" "src"),
           ("src/A.hs", "module A where\n"),
           ("src/.hidden/B.hs", "module B where\n")
         ]
-        $ \root ->
-          componentsOfTarget root Everything >>= \case
-            Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
-            Right cs -> do
-              files <- filesOfComponents cs
-              map takeFileName files `shouldBe` ["A.hs"]
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> do
+            files <- filesOfComponents cs
+            map takeFileName files `shouldBe` ["A.hs"]
 
     it "says so when a cabal.project names nothing that exists" $
       withProject [("cabal.project", "packages: nowhere\n")] $ \root ->
@@ -234,15 +234,15 @@ spec = do
           Right cs -> expectationFailure ("found " <> show (length cs) <> " components")
           Left problem -> describeTargetProblem problem `shouldSatisfy` T.isInfixOf "no packages"
 
-    it "says so when a .cabal file will not parse" $
-      withProject
+    it "says so when a .cabal file will not parse"
+      $ withProject
         [ ("cabal.project", "packages: .\n"),
           ("broken.cabal", "this is not a cabal file at all\n")
         ]
-        $ \root ->
-          componentsOfTarget root Everything >>= \case
-            Right cs -> expectationFailure ("found " <> show (length cs) <> " components")
-            Left problem -> describeTargetProblem problem `shouldSatisfy` T.isInfixOf "does not parse"
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Right cs -> expectationFailure ("found " <> show (length cs) <> " components")
+          Left problem -> describeTargetProblem problem `shouldSatisfy` T.isInfixOf "does not parse"
 
 ----------------------------------------------------------------------------
 -- Helpers

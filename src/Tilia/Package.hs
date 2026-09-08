@@ -14,8 +14,8 @@ where
 import Data.ByteString qualified as BS
 import Data.IORef
 import Data.List (isPrefixOf, isSuffixOf)
-import Data.Map.Strict (Map)
 import Data.List.NonEmpty qualified as NE
+import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T

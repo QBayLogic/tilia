@@ -241,8 +241,8 @@ withPlan plan = do
     -- Built in a temporary directory with a build plan written by hand, so
     -- that the shapes below can be exactly the shapes worth testing. These
     -- are the ones criterion's dependencies turned out to be written in.
-    it "answers from the configurations it can read" $
-      withFakeProject
+    it "answers from the configurations it can read"
+      $ withFakeProject
         [ ( "src/Platform.hs",
             T.unlines
               [ "{-# LANGUAGE CPP #-}",
@@ -257,15 +257,15 @@ withPlan plan = do
               ]
           )
         ]
-        $ \ask ->
-          -- The WINDOWS branch imports a module nothing has, which is what
-          -- System.IO.CodePage does with System.Win32.CodePage. That branch
-          -- is passed over rather than taken as a reason to say nothing.
-          ask "Platform"
-            >>= (`shouldBe` Just (Map.singleton (OpName "<+>") (Fixity LeftAssoc 6)))
+      $ \ask ->
+        -- The WINDOWS branch imports a module nothing has, which is what
+        -- System.IO.CodePage does with System.Win32.CodePage. That branch
+        -- is passed over rather than taken as a reason to say nothing.
+        ask "Platform"
+          >>= (`shouldBe` Just (Map.singleton (OpName "<+>") (Fixity LeftAssoc 6)))
 
-    it "still refuses when the configurations it can read disagree" $
-      withFakeProject
+    it "still refuses when the configurations it can read disagree"
+      $ withFakeProject
         [ ( "src/Disagree.hs",
             T.unlines
               [ "{-# LANGUAGE CPP #-}",
@@ -281,10 +281,10 @@ withPlan plan = do
               ]
           )
         ]
-        $ \ask -> ask "Disagree" `shouldReturn` Nothing
+      $ \ask -> ask "Disagree" `shouldReturn` Nothing
 
-    it "says nothing when it can read no configuration at all" $
-      withFakeProject
+    it "says nothing when it can read no configuration at all"
+      $ withFakeProject
         [ ( "src/Bothbad.hs",
             T.unlines
               [ "{-# LANGUAGE CPP #-}",
@@ -298,10 +298,10 @@ withPlan plan = do
               ]
           )
         ]
-        $ \ask ->
-          -- Not @Just mempty@: that would be claiming the module declares
-          -- nothing, which is a guess rather than the silence it deserves.
-          ask "Bothbad" `shouldReturn` Nothing
+      $ \ask ->
+        -- Not @Just mempty@: that would be claiming the module declares
+        -- nothing, which is a guess rather than the silence it deserves.
+        ask "Bothbad" `shouldReturn` Nothing
 
   describe "modules that re-export one another" $
     it "answers for one whose re-exports are mutually entangled" $ do
@@ -442,7 +442,9 @@ check resolve (modName, op, expected) = do
   got <- resolve modName
   let actual = Map.lookup (OpName op) =<< got
   pure
-    [ T.unpack modName <> "." <> T.unpack op
+    [ T.unpack modName
+        <> "."
+        <> T.unpack op
         <> ": expected "
         <> show expected
         <> " but got "

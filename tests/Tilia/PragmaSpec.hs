@@ -4,8 +4,8 @@
 module Tilia.PragmaSpec (spec) where
 
 import Data.Text (Text)
-import Test.Hspec
 import GHC.LanguageExtensions.Type (Extension (..))
+import Test.Hspec
 import Tilia.Pragma
 
 spec :: Spec

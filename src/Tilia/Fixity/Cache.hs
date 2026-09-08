@@ -25,8 +25,8 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Read qualified as T
 import Data.Text.IO qualified as T
+import Data.Text.Read qualified as T
 import System.Directory
   ( XdgDirectory (XdgCache),
     createDirectoryIfMissing,

@@ -27,9 +27,9 @@ module Tilia.Render.Haddock
   )
 where
 
+import Control.Applicative ((<|>))
 import Data.Data (Data)
 import Data.Generics.Schemes (listify)
-import Control.Applicative ((<|>))
 import Data.List (dropWhileEnd)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.List.NonEmpty qualified as NE

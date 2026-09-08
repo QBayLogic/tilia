@@ -287,7 +287,7 @@ go env = \case
   DCppChoice branches fallback ->
     foldr (flip (.)) id . concat $
       [ [atMargin ("#" <> guard'), go env taken]
-        | (guard', taken) <- branches
+      | (guard', taken) <- branches
       ]
         <> [[atMargin "#else", go env fallback] | fallback /= DEmpty]
         <> [[atMargin "#endif"]]

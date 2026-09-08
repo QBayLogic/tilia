@@ -68,12 +68,12 @@ formatWithCpp ::
 formatWithCpp parser render path source =
   printDoc defaultRenderOptions . fst
     <$> formatAllConfigs
-        parser
-        (knowing render)
-        path
-        (noAnswers source)
-        configurationBudget
-        source
+      parser
+      (knowing render)
+      path
+      (noAnswers source)
+      configurationBudget
+      source
   where
     knowing c =
       c {rcImportBarriers = maybe [] (map dLine) (scanDirectives source)}
@@ -167,11 +167,11 @@ variations source = do
                       { cfgGuards = gsGuards gs,
                         cfgTexts =
                           [ held (\j -> if j == k then i else 0)
-                            | i <- [0 .. gsCount gs - 1]
+                          | i <- [0 .. gsCount gs - 1]
                           ],
                         cfgWholes = Varied (map gsWhole dim)
                       }
-                    | (k, dim@(gs : _)) <- zip [0 :: Int ..] dimensions
+                  | (k, dim@(gs : _)) <- zip [0 :: Int ..] dimensions
                   ]
               }
 
@@ -292,8 +292,9 @@ replacing answers opaque doc = foldl step (Right doc) opaque
     step acc (Opaque n _ t gap)
       | reproducedAt n doc = Left (DirectiveInQuotedText answers (keyword t))
       | otherwise =
-          acc >>= maybe (Left (DirectiveUnplaceable answers (keyword t))) Right
-            . place n written
+          acc
+            >>= maybe (Left (DirectiveUnplaceable answers (keyword t))) Right
+              . place n written
       where
         written = DCppDirective t <> if gap then Doc.blankLine else mempty
     keyword = T.takeWhile (/= ' ')
@@ -389,7 +390,6 @@ merge guards varied = go Broken
 
     alongside _ [] = mempty
     alongside layout xs@(x : _) = case x of
-
       DLocated s _
         | Just tds <- every (\case DLocated t d -> Just (t, d); _ -> Nothing),
           all (meets s . fst) tds ->
@@ -874,12 +874,13 @@ lcs same xs ys =
         start cs = replicate (length cs + 1) (0 :: Int, [])
         row cs previous x = cells 0 [] (zip3 cs previous (drop 1 previous))
           where
-            cells !n acc rest = (n, acc) : case rest of
-              [] -> []
-              ((y, (dn, ds), (an, as')) : more)
-                | anchoring x, same x y -> cells (dn + 1) (x : ds) more
-                | n >= an -> cells n acc more
-                | otherwise -> cells an as' more
+            cells !n acc rest =
+              (n, acc) : case rest of
+                [] -> []
+                ((y, (dn, ds), (an, as')) : more)
+                  | anchoring x, same x y -> cells (dn + 1) (x : ds) more
+                  | n >= an -> cells n acc more
+                  | otherwise -> cells an as' more
 
 -- | Only let something that was printed line two spines up.
 anchored :: (Doc -> Doc -> Bool) -> Doc -> Doc -> Bool
@@ -1118,7 +1119,6 @@ conditionalKeywords = opensGroup <> continuesGroup <> ["endif"]
 -- | The keywords that open a group, continue one, and close one.
 opensGroup, continuesGroup :: [Text]
 opensGroup = ["if", "ifdef", "ifndef"]
-
 continuesGroup = ["elif", "elifdef", "elifndef", "else"]
 
 opaqueKeywords :: [Text]
@@ -1145,11 +1145,11 @@ opaqueDirectives source =
         opText = T.stripEnd (T.intercalate "\n" (body : map lineOf below)),
         opGapBelow = blankAfter (end n) || blank (lineOf (end n))
       }
-    | (n, l) <- numbered,
-      isDirective l,
-      let body = T.stripStart (T.drop 1 (T.stripStart l)),
-      T.takeWhile isAsciiLower body `elem` opaqueKeywords,
-      let below = continuing n
+  | (n, l) <- numbered,
+    isDirective l,
+    let body = T.stripStart (T.drop 1 (T.stripStart l)),
+    T.takeWhile isAsciiLower body `elem` opaqueKeywords,
+    let below = continuing n
   ]
   where
     numbered = zip [1 ..] (T.lines source)
@@ -1183,7 +1183,7 @@ blanking :: [(Int, Int)] -> Text -> Text
 blanking ranges source =
   T.unlines
     [ if any (holds n) ranges then "" else l
-      | (n, l) <- zip [1 ..] (T.lines source)
+    | (n, l) <- zip [1 ..] (T.lines source)
     ]
   where
     holds n (from, to) = from <= n && n <= to

@@ -255,11 +255,12 @@ typeIsDocumented = any documented . spine
 -- list argument documents the element and says nothing about how the
 -- signature it sits in should be laid out.
 spine :: HsType GhcPs -> [HsType GhcPs]
-spine t = t : case t of
-  HsFunTy _ _ a b -> spine (unLoc a) <> spine (unLoc b)
-  HsForAllTy _ _ b -> spine (unLoc b)
-  HsQualTy _ _ b -> spine (unLoc b)
-  _ -> []
+spine t =
+  t : case t of
+    HsFunTy _ _ a b -> spine (unLoc a) <> spine (unLoc b)
+    HsForAllTy _ _ b -> spine (unLoc b)
+    HsQualTy _ _ b -> spine (unLoc b)
+    _ -> []
 
 ----------------------------------------------------------------------------
 -- Contexts

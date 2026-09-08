@@ -13,8 +13,8 @@ where
 
 import Data.Bifunctor (first, second)
 import Data.List (mapAccumL, unsnoc)
-import Data.Maybe (listToMaybe)
 import Data.List.NonEmpty qualified as NE
+import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Tilia.Comments
 import Tilia.Comments.Place

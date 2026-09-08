@@ -30,8 +30,8 @@ import Data.IntMap.Strict qualified as IntMap
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Hs (HsModule)
-import GHC.Parser.Annotation (LEpaComment)
 import GHC.Hs.Extension (GhcPs)
+import GHC.Parser.Annotation (LEpaComment)
 import Tilia.Comments (Comment, commentsOf)
 
 -- | Whether a file is a module or a Backpack signature.

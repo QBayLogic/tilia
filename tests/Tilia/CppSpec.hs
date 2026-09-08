@@ -74,13 +74,13 @@ spec = do
     it "print identically across all three branches of an #elif" $
       disagreements withElif `shouldBe` Right []
 
-  describe "every configuration of the output" $
-    it "is the same program as that configuration of the input" $
-      mapM_ (`shouldBe` Right ()) (map roundTrip everyFixture)
+  describe "every configuration of the output"
+    $ it "is the same program as that configuration of the input"
+    $ mapM_ (`shouldBe` Right ()) (map roundTrip everyFixture)
 
-  describe "formatting an already formatted module" $
-    it "changes nothing, for every module the prototype handles" $
-      mapM_ (`shouldBe` Right ()) (map settles everyFixture)
+  describe "formatting an already formatted module"
+    $ it "changes nothing, for every module the prototype handles"
+    $ mapM_ (`shouldBe` Right ()) (map settles everyFixture)
 
   describe "an #elif chain" $ do
     it "is printed back as one conditional rather than as nested ones" $
@@ -274,10 +274,10 @@ spec = do
     it "still reads back as the same program in every configuration" $
       roundTrip splitExpression `shouldBe` Right ()
 
-  describe "a conditional whose branches say the same thing" $
-    it "is kept, because the branches are not at the same spans" $
-      formatCpp sameEitherWay
-        `shouldBe` Right "module M where\n\n#ifdef FOO\nmid = 2\n#else\nmid = 2\n#endif\n"
+  describe "a conditional whose branches say the same thing"
+    $ it "is kept, because the branches are not at the same spans"
+    $ formatCpp sameEitherWay
+      `shouldBe` Right "module M where\n\n#ifdef FOO\nmid = 2\n#else\nmid = 2\n#endif\n"
 
   describe "a directive that asks nothing" $ do
     it "comes back at the line it was written on" $
@@ -570,7 +570,7 @@ sideBySide n =
             "x" <> T.pack (show i) <> " = 2",
             "#endif"
           ]
-          | i <- [1 .. n]
+        | i <- [1 .. n]
         ]
 
 -- | A module with @n@ conditionals in a row, all asking the same question.
@@ -589,7 +589,7 @@ sameGuard n =
             "x" <> T.pack (show i) <> " = 2",
             "#endif"
           ]
-          | i <- [1 .. n]
+        | i <- [1 .. n]
         ]
 
 -- | One guard asked twice, once at the top level and once inside another

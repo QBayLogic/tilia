@@ -8,9 +8,9 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Test.Hspec
 import Test.QuickCheck
-import Tilia.Gen
 import Tilia.Doc
 import Tilia.Doc.Combinators
+import Tilia.Gen
 import Tilia.Span
 
 spec :: Spec
@@ -84,7 +84,8 @@ spec = do
          in counterexample (show u) (covers u a && covers u b)
 
     it "is idempotent under union" $
-      property $ \(AnySpan a) -> a <> a === a
+      property $
+        \(AnySpan a) -> a <> a === a
 
 -- | Everything that is not whitespace, in order.
 --

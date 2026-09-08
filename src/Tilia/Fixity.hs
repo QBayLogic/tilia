@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Working out the fixity of the operators a module uses.
 module Tilia.Fixity
@@ -47,9 +47,9 @@ import Data.Generics.Schemes (listify)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Hs hiding (Fixity, OpName)
@@ -350,7 +350,8 @@ resolveScope exportsOf hsModule =
 
     -- Paired with a flag saying whether two imports disagreed about it.
     unqualified =
-      Map.unionsWith disagree
+      Map.unionsWith
+        disagree
         [ Map.map (,False) (visible i)
         | i <- imports,
           not (importQualified i)
@@ -489,14 +490,14 @@ operatorsUsed hsModule = map named (inExpressions <> inTypes)
   where
     inExpressions =
       [ n
-        | e :: HsExpr GhcPs <- listify (const True) hsModule,
-          OpApp _ _ op _ <- [e],
-          HsVar _ (L _ n) <- [unLoc op]
+      | e :: HsExpr GhcPs <- listify (const True) hsModule,
+        OpApp _ _ op _ <- [e],
+        HsVar _ (L _ n) <- [unLoc op]
       ]
     inTypes =
       [ n
-        | t :: HsType GhcPs <- listify (const True) hsModule,
-          HsOpTy _ _ _ (L _ n) _ <- [t]
+      | t :: HsType GhcPs <- listify (const True) hsModule,
+        HsOpTy _ _ _ (L _ n) _ <- [t]
       ]
     named n = (qualifierOf n, OpName (T.pack (occNameString (rdrNameOcc n))))
 

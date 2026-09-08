@@ -72,13 +72,13 @@ where
 import Data.List (intersperse)
 import Data.Text (Text)
 import Data.Text qualified as T
-import Tilia.Span (Span, isSingleLine)
 import Tilia.Doc.Internal
   ( Doc (..),
     Layout (..),
     Resume (..),
     groupLayout,
   )
+import Tilia.Span (Span, isSingleLine)
 
 ----------------------------------------------------------------------------
 -- Atoms

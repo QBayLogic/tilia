@@ -17,18 +17,17 @@ import System.Directory (makeRelativeToCurrentDirectory)
 import System.Exit (ExitCode (..))
 import System.Exit qualified
 import System.IO (hFlush, stderr, stdout)
-import Tilia.Palette (Color (Bad), Palette, paletteFor)
+import Tilia.Fixity.Debug (renderFixityNotes)
 import Tilia.Format
   ( FormatError,
-    fixityNotesOf,
     describeFormatError,
+    fixityNotesOf,
     formatErrorExitCode,
     newSession,
   )
-import Tilia.Fixity.Debug (renderFixityNotes)
-import Tilia.Project (findProjectRoot)
+import Tilia.Palette (Color (Bad), Palette, paletteFor)
 import Tilia.Parser (ghcLibParserVersion)
-import Tilia.Utils (lineWidth)
+import Tilia.Project (findProjectRoot)
 import Tilia.Run
   ( Outcome,
     Report (..),
@@ -47,16 +46,18 @@ import Tilia.Target
     filesOfComponents,
     parseTarget,
   )
+import Tilia.Utils (lineWidth)
 
 -- | The program's entry point.
 main :: IO ()
 main = do
   Opts {..} <- customExecParser (prefs (columns lineWidth)) optsParserInfo
   palette <- paletteFor
-  target <- either
-    (die usageExitCode palette)
-    pure
-    (maybe (parseTarget "all") parseTarget optTarget)
+  target <-
+    either
+      (die usageExitCode palette)
+      pure
+      (maybe (parseTarget "all") parseTarget optTarget)
   files <- filesFor palette target
   session <-
     newSession "." optCheckAst optCheckIdempotence optDebugFixity
@@ -163,20 +164,23 @@ optsParser =
         <*> checkIdempotenceSwitch
         <*> debugFixitySwitch
     checkAstSwitch =
-      fromBool <$> (switch . mconcat)
-        [ long "check-ast",
-          help "Check AST equivalence."
-        ]
+      fromBool
+        <$> (switch . mconcat)
+          [ long "check-ast",
+            help "Check AST equivalence."
+          ]
     checkIdempotenceSwitch =
-      fromBool <$> (switch . mconcat)
-        [ long "check-idempotence",
-          help "Check that formatting twice changes nothing."
-        ]
+      fromBool
+        <$> (switch . mconcat)
+          [ long "check-idempotence",
+            help "Check that formatting twice changes nothing."
+          ]
     debugFixitySwitch =
-      fromBool <$> (switch . mconcat)
-        [ long "debug-fixity",
-          help "Print debugging information about fixities."
-        ]
+      fromBool
+        <$> (switch . mconcat)
+          [ long "debug-fixity",
+            help "Print debugging information about fixities."
+          ]
     targetArgument =
       (strArgument . mconcat)
         [ metavar "TARGET",

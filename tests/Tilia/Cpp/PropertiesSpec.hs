@@ -18,35 +18,34 @@ import Tilia.Render (defaultRenderConfig)
 spec :: Spec
 spec = modifyMaxSuccess (const 5000) $
   describe "a module the preprocessor runs over" $ do
+    xit "reaches its answer in one pass" $
+      property $ \m -> formatted m $ \out ->
+        case format out of
+          Left why -> counterexample (T.unpack ("re-formatting refused: " <> why)) False
+          Right settled ->
+            counterexample (T.unpack (diffed out settled)) (settled == out)
 
-  xit "reaches its answer in one pass" $
-    property $ \m -> formatted m $ \out ->
-      case format out of
-        Left why -> counterexample (T.unpack ("re-formatting refused: " <> why)) False
-        Right settled ->
-          counterexample (T.unpack (diffed out settled)) (settled == out)
-
-  it "comes out parseable in every configuration" $
-    property $ \m -> formatted m $ \out ->
-      case answeredLeaves out of
-        Left _ -> property Discard
-        Right configurations ->
-          conjoin
-            [ counterexample (T.unpack ("this configuration does not parse:\n" <> t)) (parses t)
+    it "comes out parseable in every configuration" $
+      property $ \m -> formatted m $ \out ->
+        case answeredLeaves out of
+          Left _ -> property Discard
+          Right configurations ->
+            conjoin
+              [ counterexample (T.unpack ("this configuration does not parse:\n" <> t)) (parses t)
               | (_, t) <- configurations
-            ]
+              ]
 
-  xit "is the same program in every configuration it went in as" $
-    property $ \m -> formatted m $ \out ->
-      case (answeredLeaves (sourceOf m), answeredLeaves out) of
-        (Right went, Right came) ->
-          conjoin
-            [ counterexample (T.unpack (T.unlines [before, "became", after, why])) False
+    xit "is the same program in every configuration it went in as" $
+      property $ \m -> formatted m $ \out ->
+        case (answeredLeaves (sourceOf m), answeredLeaves out) of
+          (Right went, Right came) ->
+            conjoin
+              [ counterexample (T.unpack (T.unlines [before, "became", after, why])) False
               | (answers, before) <- went,
                 Just after <- [lookup answers came],
                 Just why <- [difference before after]
-            ]
-        _ -> property Discard
+              ]
+          _ -> property Discard
 
 ----------------------------------------------------------------------------
 -- Running the formatter

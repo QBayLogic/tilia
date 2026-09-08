@@ -21,6 +21,8 @@ module Tilia.Corpus.Manifest
 where
 
 import Control.Exception (SomeException, try)
+import Crypto.Hash.SHA256 qualified as SHA256
+import Data.ByteString.Base16 qualified as B16
 import Data.List (sortOn)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -28,8 +30,6 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import Data.Text.IO qualified as T
-import Crypto.Hash.SHA256 qualified as SHA256
-import Data.ByteString.Base16 qualified as B16
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (lookupEnv)
 import System.FilePath (takeDirectory)
@@ -147,7 +147,7 @@ writeReport path entries = do
     interesting = [e | e@(_, outcome, _) <- entries, outcome /= Formatted]
     grouped =
       [ (outcome, [(name, why) | (name, o, why) <- sortOn first interesting, o == outcome])
-        | outcome <- sections
+      | outcome <- sections
       ]
     first (name, _, _) = name
     sections = [Broken, DoesNotParse, PartlyChecked, Declined, NotUtf8]
@@ -157,7 +157,8 @@ writeReport path entries = do
         "Generated beside the manifest, and compared against nothing: this",
         "file is the work list, and it is free to say as much as it likes.",
         "",
-        T.pack (show (length entries)) <> " examples, "
+        T.pack (show (length entries))
+          <> " examples, "
           <> T.pack (show (length entries - length interesting))
           <> " formatted.",
         ""

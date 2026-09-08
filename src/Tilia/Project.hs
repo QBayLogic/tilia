@@ -69,4 +69,3 @@ findProjectRoot start = quietly Nothing $ do
         [] -> case filter (".cabal" `isSuffixOf`) entries of
           (packageFile : _) -> Just packageFile
           [] -> Nothing
-

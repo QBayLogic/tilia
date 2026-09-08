@@ -6,6 +6,7 @@ module Tilia.RunSpec (spec) where
 
 import Control.Concurrent (getNumCapabilities, threadDelay)
 import Data.IORef
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
@@ -15,7 +16,6 @@ import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
 import Tilia.Cpp (CppError (..))
-import Data.List.NonEmpty (NonEmpty ((:|)))
 import Tilia.Fixity (OpName (..), Unknown (..))
 import Tilia.Format (FormatError (..), formatErrorExitCode, refused)
 import Tilia.Package (PackageProblem (..))

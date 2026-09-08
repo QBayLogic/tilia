@@ -10,10 +10,10 @@ import Data.Text qualified as T
 import Test.Hspec
 import Tilia.Comments
 import Tilia.Comments.Attach
-import Tilia.Source (comments)
-import Tilia.Parser
 import Tilia.Doc
 import Tilia.Doc.Combinators
+import Tilia.Parser
+import Tilia.Source (comments)
 import Tilia.Span
 
 spec :: Spec
@@ -77,10 +77,10 @@ spec = do
     it "does not touch dashes inside a block comment" $
       bodies "module M where\n{--tight-}\nx = 1\n" `shouldBe` [["{--tight-}"]]
 
-  describe "normalization: trailing whitespace" $
-    it "strips it from every line" $
-      bodies "module M where\n{- one   \n   two   \n   three -}\nx = 1\n"
-        `shouldBe` [["{- one", "   two", "   three -}"]]
+  describe "normalization: trailing whitespace"
+    $ it "strips it from every line"
+    $ bodies "module M where\n{- one   \n   two   \n   three -}\nx = 1\n"
+      `shouldBe` [["{- one", "   two", "   three -}"]]
 
   describe "normalization: dedent" $ do
     it "drops the comment\'s own start column, not all indentation" $
@@ -139,10 +139,10 @@ spec = do
       bodies "module M where\nx = 1\n\n-- | not attached to anything\n"
         `shouldBe` [["-- | not attached to anything"]]
 
-  describe "renderComment" $
-    it "joins the lines back with newlines" $
-      renderComment <$> commentsIn "module M where\n{- one\n   two -}\nx = 1\n"
-        `shouldBe` ["{- one\n   two -}"]
+  describe "renderComment"
+    $ it "joins the lines back with newlines"
+    $ renderComment <$> commentsIn "module M where\n{- one\n   two -}\nx = 1\n"
+      `shouldBe` ["{- one\n   two -}"]
 
   describe "attachment" $ do
     it "puts a comment before the node it precedes" $
@@ -164,9 +164,10 @@ spec = do
     it "appends a comment that follows every node rather than dropping it" $
       let c = one "module M where\nx = 1\n-- after\n"
           d = located (mkSpan (2, 1) (2, 6)) (txt "x = 1")
-       -- The blank line is added: a comment after everything is about the
-       -- file rather than about the line it happens to follow.
-       in render (attachComments [c] d) `shouldBe` "x = 1\n\n-- after\n"
+       in
+          -- The blank line is added: a comment after everything is about the
+          -- file rather than about the line it happens to follow.
+          render (attachComments [c] d) `shouldBe` "x = 1\n\n-- after\n"
 
     it "reaches inside a variant, whichever branch renders" $
       let c = one "module M where\nx = 1 -- note\n"

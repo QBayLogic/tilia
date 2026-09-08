@@ -9,6 +9,7 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.LanguageExtensions.Type (Extension (..))
 import Test.Hspec
+import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Fixity
   ( Direction (..),
     Fixity (..),
@@ -17,7 +18,6 @@ import Tilia.Fixity
     Scope (..),
   )
 import Tilia.Parser (defaultParserConfig, parseModule)
-import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Render
 
 spec :: Spec
@@ -218,9 +218,9 @@ spec = do
   -- Formatting an already formatted file must change nothing. The property
   -- is easy to lose the moment comments move, since where a comment goes is
   -- read off the input and moving it changes what the next pass reads.
-  describe "settling" $
-    it "reaches its answer in one pass" $
-      let once = format awkward
+  describe "settling"
+    $ it "reaches its answer in one pass"
+    $ let once = format awkward
        in formatWith Nothing once `shouldBe` once
 
   describe "layout follows the input" $ do

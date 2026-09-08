@@ -221,9 +221,10 @@ packageFilesOf root
   | prMarker root == "cabal.project" = do
       contents <-
         quietly BS.empty (BS.readFile (prPath root </> "cabal.project"))
-      found <- traverse
-        (packageToCabalFile (prPath root))
-        (packagesInCabalProjectContents contents)
+      found <-
+        traverse
+          (packageToCabalFile (prPath root))
+          (packagesInCabalProjectContents contents)
       pure (Set.toList (Set.fromList (concat found)))
   -- A stack.yaml is not a format this reads, so the packages are whatever
   -- .cabal files sit beside it.
@@ -247,9 +248,10 @@ packagesInCabalProjectContents contents = case readFields contents of
 -- | Turn one entry of a @packages@ field into the @.cabal@ files it names.
 packageToCabalFile :: FilePath -> Text -> IO [FilePath]
 packageToCabalFile root entry = do
-  paths <- packageGlobToCabalFiles
-    root
-    (map T.unpack (T.split (== '/') (T.dropWhile (== '.') stripped)))
+  paths <-
+    packageGlobToCabalFiles
+      root
+      (map T.unpack (T.split (== '/') (T.dropWhile (== '.') stripped)))
   concat <$> traverse asPackage paths
   where
     stripped = T.dropWhile (== '/') (T.strip entry)
@@ -268,9 +270,10 @@ packageGlobToCabalFiles here = \case
   (component : rest)
     | '*' `elem` component -> do
         entries <- quietly [] (listDirectory here)
-        concat <$> traverse
-          (\e -> packageGlobToCabalFiles (here </> e) rest)
-          (sort (filter (globMatching component) entries))
+        concat
+          <$> traverse
+            (\e -> packageGlobToCabalFiles (here </> e) rest)
+            (sort (filter (globMatching component) entries))
     | otherwise -> packageGlobToCabalFiles (here </> component) rest
 
 -- | Does a name match a pattern with @*@ in it?

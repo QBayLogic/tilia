@@ -108,7 +108,8 @@ elsewhere =
     -- @lens@, and the packages that copy its spelling.
     lens =
       infixL 8 ["^.", "^..", "^?", "^?!", "^@.", "^@..", "^@?"]
-        <> infixR 4
+        <> infixR
+          4
           [ ".~",
             "%~",
             "?~",
@@ -144,7 +145,8 @@ elsewhere =
     -- @hspec@ writes its expectations infix, and they are meant to be the
     -- loosest thing on the line.
     hspec =
-      infixN 1
+      infixN
+        1
         [ "shouldBe",
           "shouldNotBe",
           "shouldSatisfy",

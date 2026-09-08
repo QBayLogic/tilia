@@ -128,7 +128,8 @@ moduleOf = go []
       if isUpper c
         then case T.break (== '.') t of
           (before, rest)
-            | Just after <- T.stripPrefix "." rest, not (T.null before) ->
+            | Just after <- T.stripPrefix "." rest,
+              not (T.null before) ->
                 Just (before, after)
           _ -> Nothing
         else Nothing

@@ -18,27 +18,19 @@ import Data.ByteString qualified as BS
 import Data.Data
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.List (sortOn)
-import Data.Map.Strict (Map)
-import Data.Map.Strict qualified as Map
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.List.NonEmpty qualified as NE
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes, isNothing, listToMaybe, mapMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
-import System.IO.Unsafe (unsafePerformIO)
 import GHC.Data.FastString (FastString)
 import GHC.Hs (HsModule (..), XModulePs (..))
-import GHC.Hs.Doc (LHsDoc, WithHsDocIdentifiers (..))
 import GHC.Hs.Decls (DerivClauseTys (..), DocDecl (..), HsDecl (..), LHsDecl)
-import GHC.Hs.ImpExp
-  ( ImportDeclQualifiedStyle,
-    IE (..),
-    LIE,
-    LImportDecl,
-    isImportDeclQualified,
-  )
+import GHC.Hs.Doc (LHsDoc, WithHsDocIdentifiers (..))
 import GHC.Hs.DocString
   ( HsDocString (..),
     HsDocStringChunk (..),
@@ -46,19 +38,27 @@ import GHC.Hs.DocString
   )
 import GHC.Hs.Expr (HsExpr (..), LHsExpr)
 import GHC.Hs.Extension (GhcPs)
+import GHC.Hs.ImpExp
+  ( IE (..),
+    ImportDeclQualifiedStyle,
+    LIE,
+    LImportDecl,
+    isImportDeclQualified,
+  )
 import GHC.Hs.Type (HsType (..), LHsContext, LHsSigType)
-import Language.Haskell.Syntax.Extension (XRec)
 import GHC.Types.Name (Name)
-import GHC.Types.SrcLoc (unLoc)
 import GHC.Types.Name.Occurrence (OccName)
+import GHC.Types.SrcLoc (unLoc)
 import GHC.Unit.Types (Unit)
+import Language.Haskell.Syntax.Extension (XRec)
 import Language.Haskell.Syntax.Module.Name (ModuleName)
+import System.IO.Unsafe (unsafePerformIO)
 import Tilia.Comments
   ( Comment (..),
-    commentTrailing,
     CommentStyle (..),
     Pragma (..),
     commentPragma,
+    commentTrailing,
     escapeTrigger,
     triggerEscaped,
   )
@@ -471,10 +471,11 @@ asDocString path x y = case (cast x, cast y) of
 
 -- | What a doc string says, with the whitespace thrown away.
 docWords :: HsDocString -> [ByteString]
-docWords = concatMap chunkWords . \case
-  MultiLineDocString _ cs -> map unLoc (NE.toList cs)
-  NestedDocString _ c -> [unLoc c]
-  GeneratedDocString c -> [c]
+docWords =
+  concatMap chunkWords . \case
+    MultiLineDocString _ cs -> map unLoc (NE.toList cs)
+    NestedDocString _ c -> [unLoc c]
+    GeneratedDocString c -> [c]
   where
     chunkWords (HsDocStringChunk bytes) =
       filter (not . BS.null) (BS.splitWith isAsciiSpace bytes)
@@ -566,9 +567,9 @@ commentDifference (moduleBefore, moduleAfter) before0 after0
       DocComment
         | "--" `T.isPrefixOf` NE.head (commentBody c) ->
             [ c {commentBody = l :| [], commentCodeBeforeStopsAt = before'}
-              | (n, l) <- zip [0 :: Int ..] (NE.toList (body (escapeTrigger c))),
-                let before' =
-                      if n == 0 then commentCodeBeforeStopsAt c else Nothing
+            | (n, l) <- zip [0 :: Int ..] (NE.toList (body (escapeTrigger c))),
+              let before' =
+                    if n == 0 then commentCodeBeforeStopsAt c else Nothing
             ]
         | otherwise -> [escapeTrigger c]
       _ -> [c]
@@ -663,8 +664,8 @@ pragmasOf = Set.fromList . concatMap entries . mapMaybe commentPragma
     entries p
       | pragmaName p == "LANGUAGE" =
           [ ("LANGUAGE", extension)
-            | e <- T.splitOn "," (pragmaBody p),
-              let extension = T.strip e,
-              not (T.null extension)
+          | e <- T.splitOn "," (pragmaBody p),
+            let extension = T.strip e,
+            not (T.null extension)
           ]
       | otherwise = [(pragmaName p, pragmaBody p)]

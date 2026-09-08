@@ -36,10 +36,18 @@ import Tilia.Cpp
     formatWithCpp,
     usesCpp,
   )
+import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Equivalence (commentDifference, syntaxDifference)
 import Tilia.Fixity (Fixity, OpName, Unknown (..), operatorSpelling, unknownOperators)
 import Tilia.Fixity.Debug (FixityNotes, fixityNotes)
 import Tilia.Fixity.Plan (loadPlan, newResolver, scopeFor)
+import Tilia.Package
+  ( PackageProblem (..),
+    PackageReader,
+    describePackageProblem,
+    newPackageReader,
+  )
+import Tilia.Palette (Color (Operator, Place), Palette, paint)
 import Tilia.Parser
   ( ParseError,
     ParserConfig,
@@ -50,14 +58,6 @@ import Tilia.Parser
     pmSource,
   )
 import Tilia.Pragma (effectiveExtensions, movesPositions)
-import Tilia.Doc (defaultRenderOptions, printDoc)
-import Tilia.Package
-  ( PackageProblem (..),
-    PackageReader,
-    describePackageProblem,
-    newPackageReader,
-  )
-import Tilia.Palette (Color (Operator, Place), Palette, paint)
 import Tilia.Project (ProjectRoot (..), findProjectRoot)
 import Tilia.Render (RenderConfig (..), defaultRenderConfig, renderModule)
 import Tilia.Source (comments)

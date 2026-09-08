@@ -18,6 +18,7 @@ import Data.Foldable (for_)
 import Data.List (isSuffixOf, sort)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (listToMaybe)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -25,7 +26,6 @@ import Data.Text.Encoding qualified as T
 import GHC.Hs (HsModule)
 import GHC.Hs.Extension (GhcPs)
 import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
-import Data.Maybe (listToMaybe)
 import System.FilePath (takeDirectory, (</>))
 import Test.Hspec
 import Tilia.Fixity
@@ -98,22 +98,25 @@ withPlan plan = do
               <> "; fetch them with nix run .#sources"
 
   describe "the operators the compiler ships with" $
-    parallel $ for_ (concatMap testsFor preloaded) $ \(label, chunk) ->
-      it label $ do
-        wrong <- traverse contradicts chunk
-        concat wrong `shouldBe` []
+    parallel $
+      for_ (concatMap testsFor preloaded) $ \(label, chunk) ->
+        it label $ do
+          wrong <- traverse contradicts chunk
+          concat wrong `shouldBe` []
 
   describe "every dependency declares what the compiler recorded" $
-    parallel $ for_ (concatMap testsFor dependencies) $ \(label, chunk) ->
-      it label $ do
-        wrong <- traverse (undeclared fromSource) chunk
-        concat wrong `shouldBe` []
+    parallel $
+      for_ (concatMap testsFor dependencies) $ \(label, chunk) ->
+        it label $ do
+          wrong <- traverse (undeclared fromSource) chunk
+          concat wrong `shouldBe` []
 
   describe "every dependency reads the same both ways" $
-    parallel $ for_ (concatMap testsFor dependencies) $ \(label, chunk) ->
-      it label $ do
-        wrong <- traverse (conflicting fromSource fromInterface . fst) chunk
-        concat wrong `shouldBe` []
+    parallel $
+      for_ (concatMap testsFor dependencies) $ \(label, chunk) ->
+        it label $ do
+          wrong <- traverse (conflicting fromSource fromInterface . fst) chunk
+          concat wrong `shouldBe` []
 
   describe "how much of the tree it reaches" $ do
     it "answers for every module of every dependency" $ do
