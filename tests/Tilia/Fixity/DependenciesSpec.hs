@@ -12,6 +12,7 @@
 -- one by us and one by GHC.
 module Tilia.Fixity.DependenciesSpec (spec) where
 
+import Control.Monad (filterM)
 import Data.ByteString qualified as BS
 import Data.Foldable (for_)
 import Data.List (isSuffixOf, sort)
@@ -23,7 +24,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import GHC.Hs (HsModule)
 import GHC.Hs.Extension (GhcPs)
-import System.Directory (doesDirectoryExist, listDirectory)
+import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
 import System.FilePath ((</>))
 import Test.Hspec
 import Tilia.Fixity
@@ -53,12 +54,31 @@ withPlan plan = do
       preloaded = dependenciesOf shipped plan installed
       shipped m = Map.member m builtinFixities
       modules = concatMap depModules dependencies
+      read' = Set.fromList (map depPackage (dependencies <> preloaded))
+  missing <-
+    runIO $
+      filterM (fmap not . doesFileExist . snd)
+        . filter ((`Set.member` read') . ppName . fst)
+        =<< plannedTarballs plan
   describe "the tree this project is built against" $ do
     it "is a real dependency tree and not an empty plan" $
       length dependencies `shouldSatisfy` (>= 30)
 
     it "holds modules the compiler does not ship a fixity table for" $
       length modules `shouldSatisfy` (>= 500)
+
+    -- What every comparison below reads one of its two sides out of. A
+    -- source that is not here contradicts nothing, so the comparisons would
+    -- pass without having compared anything: this is where that is caught,
+    -- rather than in a hundred quietly hollow ticks.
+    it "has the source of every package it reads" $
+      case map (T.unpack . ppName . fst) missing of
+        [] -> pure ()
+        names ->
+          expectationFailure $
+            "no source for "
+              <> unwords names
+              <> "; fetch them with nix run .#sources"
 
   describe "the operators the compiler ships with" $
     parallel $ for_ (concatMap testsFor preloaded) $ \(label, chunk) ->

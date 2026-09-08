@@ -48,16 +48,19 @@ jobs:
           path: |
             ~/.cache/tilia
             ~/.cache/cabal/packages
-          key: tilia-${{ hashFiles('corpora/hackage/hackage.manifest', 'cabal.project', 'tilia.cabal') }}
+            !~/.cache/cabal/packages/hackage.haskell.org/01-index.*
+          key: tilia-${{ matrix.ghc }}-${{ hashFiles('corpora/hackage/hackage.manifest', 'cabal.project', 'tilia.cabal') }}
           restore-keys: |
-            tilia-
+            tilia-${{ matrix.ghc }}-
       - name: Build
         run: |
           nix build -L --keep-going .#${{ matrix.ghc }}.ci
       - name: Test
         run: |
           tests="$(nix build --no-link --print-out-paths .#${{ matrix.ghc }}.tests-exe)"
-          nix develop -L .#${{ matrix.ghc }} -c bash -c "cabal update && cabal build --dry-run && $tests/bin/tests"
+          nix develop -L .#${{ matrix.ghc }} -c bash -c "cabal update && cabal build --dry-run"
+          nix run .#sources
+          nix develop -L .#${{ matrix.ghc }} -c "$tests/bin/tests"
   format:
     needs: build
     name: Self-format
@@ -77,9 +80,10 @@ jobs:
           path: |
             ~/.cache/tilia
             ~/.cache/cabal/packages
-          key: tilia-${{ hashFiles('corpora/hackage/hackage.manifest', 'cabal.project', 'tilia.cabal') }}
+            !~/.cache/cabal/packages/hackage.haskell.org/01-index.*
+          key: tilia-ghc9103-${{ hashFiles('corpora/hackage/hackage.manifest', 'cabal.project', 'tilia.cabal') }}
           restore-keys: |
-            tilia-
+            tilia-ghc9103-
       - name: Self-format
         run: |
           nix run .#format
