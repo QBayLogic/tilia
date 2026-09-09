@@ -3,7 +3,7 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5202 examples, 5121 formatted.
+5202 examples, 5122 formatted.
 
 ==========================================================================
 broken (9)
@@ -512,7 +512,7 @@ unliftio-0.2.25.1/src/UnliftIO/Directory.hs
     1024 configurations is more than the 64 this checks, so only the ones varying a single conditional were compared
 
 ==========================================================================
-declined (46)
+declined (45)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/Main.hs
@@ -640,9 +640,6 @@ text-2.1.4/tests/Tests/ShareEmpty.hs
 
 time-1.16.0.1/lib/Data/Time/Clock/Internal/CTimeval.hs
     time-1.16.0.1/lib/Data/Time/Clock/Internal/CTimeval.hs:35:16-19: parse error on input `capi', in the configuration taking no branch of #if !defined(javascript_HOST_ARCH), then #ifndef mingw32_HOST_OS, then no branch of #if defined(javascript_HOST_ARCH) || defined(__MHS__)
-
-time-1.16.0.1/test/template/Main.hs
-    time-1.16.0.1/test/template/Main.hs:19:33-34: parse error on input `$$', in the configuration taking #if __GLASGOW_HASKELL__ >= 914
 
 transformers-0.6.3.0/Data/Functor/Constant.hs
     too many configurations to format

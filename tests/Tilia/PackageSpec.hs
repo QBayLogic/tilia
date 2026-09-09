@@ -42,6 +42,16 @@ spec = do
         (has ImportQualifiedPost <$> asked (root </> "M.hs"))
           `shouldReturn` True
 
+    it "is the nearer one when a wider component covers it as well" $
+      inPackage overTheWholeTree ["tests"] $ \root ->
+        (has ImportQualifiedPost <$> asked (root </> "tests" </> "S.hs"))
+          `shouldReturn` True
+
+    it "is still the wider one for a file only it covers" $
+      inPackage overTheWholeTree ["tests"] $ \root ->
+        (has ImportQualifiedPost <$> asked (root </> "M.hs"))
+          `shouldReturn` False
+
   describe "the extensions a component puts in force" $ do
     it "are the language edition's" $
       inPackage twoComponents ["src"] $ \root -> do
@@ -131,6 +141,29 @@ besideTheCabalFile =
       "",
       "library",
       "  exposed-modules: M",
+      "  default-language: GHC2021"
+    ]
+
+-- | A library that spreads over the whole tree, and a suite inside it.
+--
+-- The library names no @hs-source-dirs@ and so takes the package
+-- directory, which holds the test suite's directory as well as its own
+-- modules.
+overTheWholeTree :: Text
+overTheWholeTree =
+  T.unlines
+    [ "cabal-version: 2.4",
+      "name: demo",
+      "version: 0",
+      "",
+      "library",
+      "  exposed-modules: M",
+      "  default-language: Haskell2010",
+      "",
+      "test-suite spec",
+      "  type: exitcode-stdio-1.0",
+      "  main-is: S.hs",
+      "  hs-source-dirs: tests",
       "  default-language: GHC2021"
     ]
 

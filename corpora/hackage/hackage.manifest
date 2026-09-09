@@ -4664,7 +4664,7 @@ formatted       4c37e59c357b  time-1.16.0.1/test/main/Test/LocalTime/TimeOfDay.h
 formatted       db61298fae47  time-1.16.0.1/test/main/Test/LocalTime/TimeRef.hs
 formatted       274e9173e128  time-1.16.0.1/test/main/Test/TestUtil.hs
 formatted       41cfd788db10  time-1.16.0.1/test/main/Test/Types.hs
-declined        -             time-1.16.0.1/test/template/Main.hs
+formatted       2e8ad72db81a  time-1.16.0.1/test/template/Main.hs
 formatted       29972ed619e0  time-1.16.0.1/test/template/Test/TastyWrapper.hs
 formatted       ea580c874e6f  time-1.16.0.1/test/unix/Main.hs
 formatted       2259bf37c138  time-1.16.0.1/test/unix/Test/Format/Format.hs

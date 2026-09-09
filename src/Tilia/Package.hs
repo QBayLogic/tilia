@@ -13,10 +13,11 @@ where
 
 import Data.ByteString qualified as BS
 import Data.IORef
-import Data.List (isPrefixOf, isSuffixOf)
+import Data.List (isPrefixOf, isSuffixOf, sortOn)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Ord (Down (..))
 import Data.Text (Text)
 import Data.Text qualified as T
 import Distribution.Fields.ParseResult (runParseResult)
@@ -81,9 +82,9 @@ newPackageReader = do
       Just cabalFile ->
         componentsOf described cabalFile >>= \case
           Left problem -> pure (Left problem)
-          Right components -> pure $ case filter (`claims` file) components of
-            (c : _) -> Right (componentExtensions c)
-            [] -> Left (FileUnclaimed cabalFile)
+          Right components -> pure $ case claiming file components of
+            Just c -> Right (componentExtensions c)
+            Nothing -> Left (FileUnclaimed cabalFile)
 
 -- | Where to start looking for a @.cabal@ file.
 startingDirectory :: FilePath -> IO FilePath
@@ -99,11 +100,16 @@ data Component = Component
     componentExtensions :: [Extension]
   }
 
--- | Does this component hold the file?
-claims :: Component -> FilePath -> Bool
-claims c file = any covers (componentDirs c)
+-- | Which component holds the file, of those whose directories cover it.
+claiming :: FilePath -> [Component] -> Maybe Component
+claiming file components =
+  case sortOn (Down . fst) [(nearness c, c) | c <- components, covered c] of
+    ((_, c) : _) -> Just c
+    [] -> Nothing
   where
-    covers directory = (directory <> "/") `isPrefixOf` file
+    covered = not . null . covering
+    nearness = maximum . map length . covering
+    covering c = [d | d <- componentDirs c, (d <> "/") `isPrefixOf` file]
 
 -- | The nearest @.cabal@ file at or above a directory.
 findCabalFile ::
