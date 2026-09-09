@@ -1104,7 +1104,7 @@ scanDirectives source = go 0 (zip [1 ..] (T.lines source))
         at here next =
           (Directive {dLine = n, dKeyword = keyword, dGuard = Guard (T.stripEnd body), dLevel = here} :)
             <$> go next ls
-        keyword = T.takeWhile (/= ' ') body
+        keyword = T.takeWhile isAsciiLower body
         body = T.stripStart (T.drop 1 (T.stripStart l))
 
 -- | Every directive the C preprocessor takes, whether or not this module

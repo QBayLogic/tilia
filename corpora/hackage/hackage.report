@@ -3,7 +3,7 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5202 examples, 5122 formatted.
+5202 examples, 5135 formatted.
 
 ==========================================================================
 broken (9)
@@ -436,7 +436,7 @@ leksah-0.16.2.2/src/IDE/Find.hs
     Did you mean to add a space after the '!'?
 
 ==========================================================================
-partly-checked (24)
+partly-checked (25)
 ==========================================================================
 
 QuickCheck-2.18.0.0/src/Test/QuickCheck.hs
@@ -459,6 +459,9 @@ intero-0.1.40/src/GhciInfo.hs
 
 stm-2.5.3.1/Control/Monad/STM.hs
     72 configurations is more than the 64 this checks, so only the ones varying a single conditional were compared
+
+text-2.1.4/src/Data/Text.hs
+    192 configurations is more than the 64 this checks, so only the ones varying a single conditional were compared
 
 th-abstraction-0.7.2.0/test/Main.hs
     4096 configurations is more than the 64 this checks, so only the ones varying a single conditional were compared
@@ -512,7 +515,7 @@ unliftio-0.2.25.1/src/UnliftIO/Directory.hs
     1024 configurations is more than the 64 this checks, so only the ones varying a single conditional were compared
 
 ==========================================================================
-declined (45)
+declined (31)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/Main.hs
@@ -595,48 +598,6 @@ shake-0.19.9/src/General/EscCodes.hs
 
 shake-0.19.9/src/General/FileLock.hs
     shake-0.19.9/src/General/FileLock.hs:28:16-23: parse error on input `CALLCONV', in the configuration taking #ifdef mingw32_HOST_OS, then #ifdef x86_64_HOST_ARCH
-
-text-2.1.4/src/Data/Text.hs
-    a #if directive, which we do not handle
-
-text-2.1.4/src/Data/Text/Array.hs
-    a #if directive, which we do not handle
-
-text-2.1.4/src/Data/Text/Encoding.hs
-    a #if directive, which we do not handle
-
-text-2.1.4/src/Data/Text/Internal.hs
-    a #if directive, which we do not handle
-
-text-2.1.4/src/Data/Text/Internal/Builder.hs
-    a #if directive, which we do not handle
-
-text-2.1.4/src/Data/Text/Internal/Encoding/Utf8.hs
-    a #if directive, which we do not handle
-
-text-2.1.4/src/Data/Text/Lazy.hs
-    a #if directive, which we do not handle
-
-text-2.1.4/tests/Tests/Lift.hs
-    a #if directive, which we do not handle
-
-text-2.1.4/tests/Tests/Properties/Folds.hs
-    a #ifdef directive, which we do not handle
-
-text-2.1.4/tests/Tests/Properties/LowLevel.hs
-    a #ifdef directive, which we do not handle
-
-text-2.1.4/tests/Tests/Properties/Text.hs
-    a #if directive, which we do not handle
-
-text-2.1.4/tests/Tests/QuickCheckUtils.hs
-    a #if directive, which we do not handle
-
-text-2.1.4/tests/Tests/RebindableSyntaxTest.hs
-    a #if directive, which we do not handle
-
-text-2.1.4/tests/Tests/ShareEmpty.hs
-    a #if directive, which we do not handle
 
 time-1.16.0.1/lib/Data/Time/Clock/Internal/CTimeval.hs
     time-1.16.0.1/lib/Data/Time/Clock/Internal/CTimeval.hs:35:16-19: parse error on input `capi', in the configuration taking no branch of #if !defined(javascript_HOST_ARCH), then #ifndef mingw32_HOST_OS, then no branch of #if defined(javascript_HOST_ARCH) || defined(__MHS__)

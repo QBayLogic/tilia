@@ -219,6 +219,14 @@ spec = do
       said (length <$> branchLeaves "module M where\n#if A\nx = 1\n#else\nx = 2\n#endif\n")
         `shouldBe` Right 2
 
+    -- A module written on Windows ends every line with a carriage return,
+    -- @#endif@ included, and one that closes no group leaves the whole
+    -- module unsplittable. Every module of @crypton-pem@ is written this
+    -- way, and refusing them refused everything that reads a certificate.
+    it "gives one per branch when the lines end in a carriage return" $
+      said (length <$> branchLeaves "module M where\r\n#if A\r\nx = 1\r\n#else\r\nx = 2\r\n#endif\r\n")
+        `shouldBe` Right 2
+
     it "is their sum where enumerating them would be their product" $
       (said (length <$> branchLeaves (sideBySide 20)), said (countLeaves (sideBySide 20)))
         `shouldBe` (Right 21, Right (2 ^ (20 :: Int)))
