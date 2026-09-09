@@ -15,7 +15,7 @@ module Tilia.Fixity.PlanSpec (spec) where
 
 import Control.Monad (when)
 import Data.Foldable (traverse_)
-import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
 import Data.List (isInfixOf)
 import Data.List qualified
 import Data.List.NonEmpty (NonEmpty ((:|)))
@@ -76,7 +76,7 @@ tokens = describe "the token a plan is cached under" $ do
                 { ppName = "containers",
                   ppVersion = "0.7",
                   ppSource = PreExisting,
-                  ppComponent = Nothing
+                  ppComponents = []
                 }
             ]
         }
@@ -95,7 +95,7 @@ preparation = describe "preparing a project" $ do
             when (args == ["build", "all", "--dry-run"]) (writePlan dir wantingATarball)
             pure (Right ())
       checkReadiness [] dir `shouldReturn` PlanMissing
-      prepareWith cabal [] dir PlanMissing `shouldReturn` Right ()
+      prepareWith cabal forgetfulSolves [] dir PlanMissing `shouldReturn` Right ()
       readIORef steps
         `shouldReturn` [["build", "all", "--dry-run"], ["build", "all", "--only-download"]]
 
@@ -104,19 +104,19 @@ preparation = describe "preparing a project" $ do
       steps <- newIORef []
       readiness <- checkReadiness [] dir
       readiness `shouldBe` SourcesMissing ["tilia-phantom"]
-      prepareWith (obliging steps) [] dir readiness `shouldReturn` Right ()
+      prepareWith (obliging steps) forgetfulSolves [] dir readiness `shouldReturn` Right ()
       readIORef steps `shouldReturn` [["build", "all", "--only-download"]]
 
   it "runs nothing at all when nothing is missing" $ do
     steps <- newIORef []
-    prepareWith (obliging steps) [] "." Ready `shouldReturn` Right ()
+    prepareWith (obliging steps) forgetfulSolves [] "." Ready `shouldReturn` Right ()
     readIORef steps `shouldReturn` []
 
   it "does not go on to fetch when the solve fails" $
     withTempProject Nothing $ \dir -> do
       steps <- newIORef []
       let cabal args = record steps args >> pure (Left "cabal said no")
-      prepareWith cabal [] dir PlanMissing `shouldReturn` Left "cabal said no"
+      prepareWith cabal forgetfulSolves [] dir PlanMissing `shouldReturn` Left "cabal said no"
       readIORef steps `shouldReturn` [["build", "all", "--dry-run"]]
 
   describe "a plan narrower than the run" $ do
@@ -146,7 +146,7 @@ preparation = describe "preparing a project" $ do
               record steps args
               when (args == ["build", "all", "--dry-run"]) (writePlan dir twoComponents)
               pure (Right ())
-        prepareWith cabal [component "test:tests"] dir (PlanNarrow ["thing:test:tests"])
+        prepareWith cabal forgetfulSolves [component "test:tests"] dir (PlanNarrow ["thing:test:tests"])
           `shouldReturn` Right ()
         readIORef steps `shouldReturn` [["build", "all", "--dry-run"]]
 
@@ -157,6 +157,60 @@ preparation = describe "preparing a project" $ do
         Right p ->
           checkReadiness (plannedComponents p) "."
             `shouldNotReturn` PlanNarrow []
+
+    it "solves only the once when solving does not widen it" $
+      withTempProject (Just twoComponents) $ \dir -> do
+        steps <- newIORef []
+        futile <- newIORef False
+        let cabal args = do
+              record steps args
+              when (args == ["build", "all", "--dry-run"]) (writePlan dir twoComponents)
+              pure (Right ())
+            solves =
+              Solves
+                { solveWasFutile = readIORef futile,
+                  rememberFutileSolve = writeIORef futile True
+                }
+            narrow = PlanNarrow ["thing:test:tests"]
+            once = prepareWith cabal solves [component "test:tests"] dir narrow
+        once `shouldReturn` Right ()
+        readIORef futile `shouldReturn` True
+        once `shouldReturn` Right ()
+        readIORef steps `shouldReturn` [["build", "all", "--dry-run"]]
+
+    it "goes on solving while solving still widens it" $
+      withTempProject (Just twoComponents) $ \dir -> do
+        steps <- newIORef []
+        futile <- newIORef False
+        let cabal args = do
+              record steps args
+              when (args == ["build", "all", "--dry-run"]) (writePlan dir threeComponents)
+              pure (Right ())
+            solves =
+              Solves
+                { solveWasFutile = readIORef futile,
+                  rememberFutileSolve = writeIORef futile True
+                }
+        prepareWith cabal solves [component "test:tests"] dir (PlanNarrow ["thing:test:tests"])
+          `shouldReturn` Right ()
+        readIORef futile `shouldReturn` False
+        readIORef steps `shouldReturn` [["build", "all", "--dry-run"]]
+
+  describe "a package the plan could not take apart" $ do
+    it "counts the components it lists under one entry" $
+      withTempProject (Just plannedWhole) $ \dir ->
+        checkReadiness [component "lib", component "test:spec"] dir
+          `shouldReturn` Ready
+
+    it "still misses one that entry does not list" $
+      withTempProject (Just plannedWhole) $ \dir ->
+        checkReadiness [component "bench:speed"] dir
+          `shouldReturn` PlanNarrow ["thing:bench:speed"]
+
+    it "does not offer the Setup program as a component" $ do
+      plan' <- withTempProject (Just plannedWhole) (readBuildPlan . planPathFor)
+      fmap plannedComponents plan'
+        `shouldBe` Right [component "lib", component "test:spec"]
 
 -- | Chasing an operator a module passes on rather than declares.
 --
@@ -730,6 +784,26 @@ twoComponents =
   \\"pkg-src\":{\"type\":\"local\",\"path\":\"/nowhere\"}},\
   \{\"pkg-name\":\"thing\",\"pkg-version\":\"1.0\",\"component-name\":\"exe:thing\",\
   \\"pkg-src\":{\"type\":\"local\",\"path\":\"/nowhere\"}}]}"
+
+-- | The same, with a component a solve could go on to add.
+threeComponents :: Text
+threeComponents =
+  "{\"compiler-id\":\"ghc-0.0\",\"install-plan\":\
+  \[{\"pkg-name\":\"thing\",\"pkg-version\":\"1.0\",\"component-name\":\"lib\",\
+  \\"pkg-src\":{\"type\":\"local\",\"path\":\"/nowhere\"}},\
+  \{\"pkg-name\":\"thing\",\"pkg-version\":\"1.0\",\"component-name\":\"exe:thing\",\
+  \\"pkg-src\":{\"type\":\"local\",\"path\":\"/nowhere\"}},\
+  \{\"pkg-name\":\"thing\",\"pkg-version\":\"1.0\",\"component-name\":\"test:tests\",\
+  \\"pkg-src\":{\"type\":\"local\",\"path\":\"/nowhere\"}}]}"
+
+-- | A package planned whole, as @cabal@ plans one with a @Custom@ build
+-- type: no @component-name@, and a @components@ object instead.
+plannedWhole :: Text
+plannedWhole =
+  "{\"compiler-id\":\"ghc-0.0\",\"install-plan\":\
+  \[{\"pkg-name\":\"thing\",\"pkg-version\":\"1.0\",\"type\":\"configured\",\
+  \\"pkg-src\":{\"type\":\"local\",\"path\":\"/nowhere\"},\
+  \\"components\":{\"lib\":{},\"test:spec\":{},\"setup\":{}}}]}"
 
 -- | A component of that package, by the name a plan gives it.
 component :: Text -> PlanComponent

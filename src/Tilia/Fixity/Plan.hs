@@ -23,6 +23,8 @@ module Tilia.Fixity.Plan
     planPathFor,
     checkReadiness,
     plannedTarballs,
+    Solves (..),
+    forgetfulSolves,
     prepareWith,
     loadPlan,
 
@@ -40,7 +42,7 @@ import Codec.Archive.Tar qualified as Tar
 import Codec.Compression.GZip qualified as GZip
 import Control.Monad (filterM, foldM, join)
 import Crypto.Hash.SHA256 qualified as SHA256
-import Data.Aeson (FromJSON (..), eitherDecodeFileStrict, withObject, (.:), (.:?))
+import Data.Aeson (FromJSON (..), Value, eitherDecodeFileStrict, withObject, (.:), (.:?))
 import Data.ByteString qualified as BS
 import Data.ByteString.Base16 qualified as B16
 import Data.ByteString.Lazy qualified as BL
@@ -50,7 +52,7 @@ import Data.List (isSuffixOf)
 import Data.List qualified
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, listToMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -109,8 +111,14 @@ data PlanPackage = PlanPackage
     ppVersion :: Text,
     -- | Package source
     ppSource :: PackageSource,
-    -- | Which component of the package the entry is about
-    ppComponent :: Maybe Text
+    -- | Which components of the package the entry is about.
+    --
+    -- Usually one, because @cabal@ configures a package one component at a
+    -- time and gives each its own entry. A package it cannot take apart—one
+    -- with a @Custom@ build type, whose @Setup.hs@ is entitled to do as it
+    -- pleases—is planned whole instead, and its entry is about every
+    -- component at once. Empty where the entry is about none of them.
+    ppComponents :: [Text]
   }
   deriving (Eq, Show)
 
@@ -210,12 +218,13 @@ instance FromJSON PlanPackage where
     sourceKind <- o .:? "pkg-src" >>= traverse (.: "type")
     sourcePath <- o .:? "pkg-src" >>= traverse (.:? "path")
     sourceHash <- o .:? "pkg-src-sha256"
-    component <- o .:? "component-name"
+    named <- o .:? "component-name"
+    whole <- o .:? "components"
     pure
       PlanPackage
         { ppName = name,
           ppVersion = version,
-          ppComponent = component,
+          ppComponents = componentsOf named whole,
           ppSource = case (kind :: Maybe Text, sourceKind :: Maybe Text) of
             (Just "pre-existing", _) -> PreExisting
             (_, Just "repo-tar") -> HackagePackage sourceHash
@@ -223,6 +232,23 @@ instance FromJSON PlanPackage where
             -- Anything else is treated as already present.
             _ -> PreExisting
         }
+
+-- | The components one plan entry is about.
+--
+-- @cabal@ writes this two ways. An entry for a single component names it in
+-- @component-name@; an entry for a package planned whole carries a
+-- @components@ object instead, keyed by the very same spellings. Reading
+-- only the first would leave every @Custom@ package looking like one the
+-- plan says nothing about, and a run would keep asking @cabal@ to solve
+-- again for components a fresh solve would file exactly where this one did.
+--
+-- @setup@ is dropped. It is the @Setup.hs@ program @cabal@ builds in order
+-- to build the package, not a component of the package, and nothing in the
+-- project will ever be formatted as part of it.
+componentsOf :: Maybe Text -> Maybe (Map Text Value) -> [Text]
+componentsOf named whole = case named of
+  Just component -> [component]
+  Nothing -> filter (/= "setup") (Map.keys (fromMaybe Map.empty whole))
 
 -- | Read @plan.json@.
 readBuildPlan :: FilePath -> IO (Either Text BuildPlan)
@@ -253,7 +279,7 @@ plannedComponents plan =
   [ PlanComponent (ppName p) component
   | p <- bpPackages plan,
     LocalPackage _ <- [ppSource p],
-    Just component <- [ppComponent p]
+    component <- ppComponents p
   ]
 
 -- | Whether everything the resolver needs is on disk.
@@ -289,7 +315,7 @@ checkReadiness wanted projectDir =
   readBuildPlan (planPathFor projectDir) >>= \case
     Left _ -> pure PlanMissing
     Right plan -> do
-      newer <- filesNewerThanPlan projectDir
+      newer <- filesNewerThanPlan plan projectDir
       let covered = plannedComponents plan
           missing = [spellComponent c | c <- wanted, c `notElem` covered]
       case (newer, missing) of
@@ -322,22 +348,28 @@ builtAlready installed p = any matches installed
 -- and resolving fixities against it would answer for packages that are no
 -- longer in play. Comparing modification times is one @stat@ each, so this
 -- costs nothing to check every time.
-filesNewerThanPlan :: FilePath -> IO [FilePath]
-filesNewerThanPlan projectDir = quietly [] $ do
+filesNewerThanPlan :: BuildPlan -> FilePath -> IO [FilePath]
+filesNewerThanPlan plan projectDir = quietly [] $ do
   planTime <- getModificationTime (planPathFor projectDir)
-  entries <- quietly [] (listDirectory projectDir)
+  atRoot <- quietly [] (listDirectory projectDir)
+  inPackages <- concat <$> traverse cabalFilesIn (localDirs plan)
   let candidates =
-        filter
-          (\f -> f `elem` projectFiles || ".cabal" `isSuffixOf` f)
-          entries
+        [projectDir </> f | f <- atRoot, f `elem` projectFiles]
+          <> [projectDir </> f | f <- atRoot, ".cabal" `isSuffixOf` f]
+          <> inPackages
   newer <- traverse (isNewerThan planTime) candidates
   pure [f | Just f <- newer]
   where
     projectFiles =
       ["cabal.project", "cabal.project.local", "cabal.project.freeze"]
-    isNewerThan planTime f = quietly Nothing $ do
-      t <- getModificationTime (projectDir </> f)
-      pure (if t > planTime then Just f else Nothing)
+    localDirs p =
+      Data.List.nub [dir | LocalPackage dir <- map ppSource (bpPackages p)]
+    cabalFilesIn dir = quietly [] $ do
+      entries <- listDirectory dir
+      pure [dir </> f | f <- entries, ".cabal" `isSuffixOf` f]
+    isNewerThan planTime path = quietly Nothing $ do
+      t <- getModificationTime path
+      pure (if t > planTime then Just path else Nothing)
 
 -- | Do whatever is missing, by asking @cabal@.
 --
@@ -350,12 +382,46 @@ filesNewerThanPlan projectDir = quietly [] $ do
 -- call rather than something 'newResolver' does behind the caller's back.
 -- An editor formatting on save must not block on it.
 prepare :: [PlanComponent] -> FilePath -> Readiness -> IO (Either Text ())
-prepare wanted projectDir = prepareWith (runCabal projectDir) wanted projectDir
+prepare wanted projectDir readiness =
+  prepareWith (runCabal projectDir) (solvesFor projectDir) wanted projectDir readiness
 
--- | 'prepare', given a way to run @cabal@.
+-- | What a run knows about solves already asked for, and how to add to it.
+data Solves = Solves
+  { -- | Has solving this plan already been tried and left it as narrow?
+    solveWasFutile :: IO Bool,
+    -- | Remember that it has.
+    rememberFutileSolve :: IO ()
+  }
+
+-- | Solves remembered nowhere, for a caller with nothing to remember them
+-- in.
+forgetfulSolves :: Solves
+forgetfulSolves = Solves {solveWasFutile = pure False, rememberFutileSolve = pure ()}
+
+-- | Solves remembered in the cache, under the plan the project has now.
+--
+-- A project with no readable plan has no token to file anything under, and
+-- nothing to remember either: a solve is exactly what it needs.
+solvesFor :: FilePath -> Solves
+solvesFor projectDir =
+  Solves
+    { solveWasFutile = withCache False cachedFutileSolve,
+      rememberFutileSolve = withCache () storeFutileSolve
+    }
+  where
+    withCache fallback use =
+      readBuildPlan (planPathFor projectDir) >>= \case
+        Left _ -> pure fallback
+        Right plan -> do
+          opened <- openCache =<< tokenFor plan
+          maybe (pure fallback) use opened
+
+-- | 'prepare', given a way to run @cabal@ and a memory of earlier solves.
 prepareWith ::
   -- | Run @cabal@ with these arguments
   ([String] -> IO (Either Text ())) ->
+  -- | What is known about solves already asked for
+  Solves ->
   -- | The components the run is about to format
   [PlanComponent] ->
   -- | The project being prepared
@@ -363,12 +429,15 @@ prepareWith ::
   -- | What it was found to be short of
   Readiness ->
   IO (Either Text ())
-prepareWith cabal wanted projectDir = \case
+prepareWith cabal solves wanted projectDir = \case
   Ready -> pure (Right ())
   SourcesMissing _ -> fetch
   PlanMissing -> solveThenFetch
   PlanStale _ -> solveThenFetch
-  PlanNarrow _ -> solveThenFetch
+  PlanNarrow _ ->
+    solveWasFutile solves >>= \case
+      True -> pure (Right ())
+      False -> solveThenFetch
   where
     fetch = cabal ["build", "all", "--only-download"]
     solveThenFetch =
@@ -377,9 +446,7 @@ prepareWith cabal wanted projectDir = \case
         Right () ->
           checkReadiness wanted projectDir >>= \case
             SourcesMissing _ -> fetch
-            -- Either there is nothing left to do, or the plan @cabal@ has
-            -- just written is one we still cannot read. A second dry run
-            -- would not say anything the first did not.
+            PlanNarrow _ -> rememberFutileSolve solves >> pure (Right ())
             _ -> pure (Right ())
 
 -- | Run @cabal@ in a project directory, letting it speak for itself.

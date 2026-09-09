@@ -21,6 +21,8 @@ module Tilia.Fixity.Cache
     storeChildren,
     cachedInstalled,
     storeInstalled,
+    cachedFutileSolve,
+    storeFutileSolve,
   )
 where
 
@@ -42,7 +44,7 @@ import System.Directory
     getXdgDirectory,
     renameFile,
   )
-import System.FilePath ((</>))
+import System.FilePath (takeDirectory, (</>))
 import Tilia.Fixity
 import Tilia.Fixity.PackageDb (Installed (..), InstalledPackage (..))
 import Tilia.Utils (quietly)
@@ -288,6 +290,21 @@ storeInstalled cache found
       pure (path, stamp)
 
 ----------------------------------------------------------------------------
+-- Solves that came to nothing
+
+-- | Whether asking @cabal@ to solve this plan again has already been tried
+-- and left the plan saying exactly what it said before.
+cachedFutileSolve :: Cache -> IO Bool
+cachedFutileSolve cache =
+  quietly False (doesFileExist (futileSolvePath cache))
+
+-- | Remember that solving again did not widen the plan.
+storeFutileSolve :: Cache -> IO ()
+storeFutileSolve cache = quietly () $ do
+  createDirectoryIfMissing True (takeDirectory (futileSolvePath cache))
+  writeAtomically (futileSolvePath cache) ""
+
+----------------------------------------------------------------------------
 -- Entries
 
 renderEntry :: ((Namespace, OpName), Fixity) -> Text
@@ -342,6 +359,10 @@ packageDir (Cache root _) package = root </> "fixities" </> T.unpack package
 installedPath :: Cache -> FilePath
 installedPath (Cache root (PlanToken token)) =
   root </> "installed" </> T.unpack token
+
+futileSolvePath :: Cache -> FilePath
+futileSolvePath (Cache root (PlanToken token)) =
+  root </> "solves" </> T.unpack token
 
 modulesPath :: Cache -> Text -> FilePath
 modulesPath (Cache root _) package = root </> "modules" </> T.unpack package
