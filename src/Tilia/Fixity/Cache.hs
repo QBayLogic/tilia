@@ -48,15 +48,21 @@ import Tilia.Fixity.PackageDb (Installed (..), InstalledPackage (..))
 import Tilia.Utils (quietly)
 
 -- | Where cached answers are kept together with a token unique to this
--- build plan.
+-- build plan, read in this environment.
 data Cache = Cache FilePath PlanToken
 
--- | A token that is unique to this plan. It is needed in order to be able
--- to cache the expensive class of lookup failures that are related to
--- chasing module re-export chains. Rather than track which packages each
--- failure leaned on, all of them are tied to the plan as a whole: anything
--- that could turn a failure into an answer changes the plan, and failures
--- are few enough that re-deriving them when it does costs little.
+-- | A token that is unique to this plan, read in this environment. It is
+-- needed in order to be able to cache the expensive class of lookup
+-- failures that are related to chasing module re-export chains. Rather than
+-- track what each failure leaned on, all of them are tied to the pair as a
+-- whole: anything that could turn a failure into an answer changes one or
+-- the other, and failures are few enough that re-deriving them when it does
+-- costs little.
+--
+-- The environment belongs in it because a module the plan names is
+-- unreadable where the compiler cannot be asked about its package and
+-- readable where it can, and that is settled outside the project. See
+-- 'Tilia.Fixity.PackageDb.compilerIdentity'.
 newtype PlanToken = PlanToken Text
   deriving (Eq, Show)
 
@@ -77,6 +83,7 @@ openCache token = quietly Nothing $ do
   root <- (</> formatVersion) <$> getXdgDirectory XdgCache "tilia"
   createDirectoryIfMissing True (root </> "modules")
   createDirectoryIfMissing True (root </> "fixities")
+  createDirectoryIfMissing True (root </> "installed")
   pure (Just (Cache root token))
 
 -- | The modules a package exposes, if that was worked out before.
@@ -227,17 +234,19 @@ storeChildren cache package modName children = do
 -- The package database
 
 -- | What the compiler could see when last asked, if it can still see it.
+--
+-- Whose answer this is, is settled by the path it was found at rather than
+-- by anything written inside it. See 'installedPath'.
 cachedInstalled :: Cache -> IO (Maybe [InstalledPackage])
-cachedInstalled cache@(Cache _ (PlanToken token)) = quietly Nothing $ do
+cachedInstalled cache = quietly Nothing $ do
   readIfPresent (installedPath cache) T.lines >>= \case
     Nothing -> pure Nothing
     Just ls -> do
       let written =
             [(T.unpack path, stamp) | ["db", path, stamp] <- map fields ls]
-          sameProject = ["plan", token] `elem` map fields ls
       still <- traverse unchanged written
       pure $
-        if sameProject && not (null written) && and still
+        if not (null written) && and still
           then Just (mapMaybe installedFrom ls)
           else Nothing
   where
@@ -262,13 +271,12 @@ cachedInstalled cache@(Cache _ (PlanToken token)) = quietly Nothing $ do
 -- can invalidate is worse than no answer, because it never stops being
 -- given.
 storeInstalled :: Cache -> Installed -> IO ()
-storeInstalled cache@(Cache _ (PlanToken token)) found
+storeInstalled cache found
   | null (installedDatabases found) = pure ()
   | otherwise = quietly () $ do
       stamps <- traverse stamped (installedDatabases found)
       writeAtomically (installedPath cache) . T.unlines $
-        [T.intercalate "\t" ["plan", token]]
-          <> [T.intercalate "\t" ["db", T.pack path, stamp] | (path, stamp) <- stamps]
+        [T.intercalate "\t" ["db", T.pack path, stamp] | (path, stamp) <- stamps]
           <> [ T.intercalate "\t" $
                  ["pkg", ipName p, ipVersion p, T.unwords (ipModules p)]
                    <> map T.pack (ipImportDirs p)
@@ -324,8 +332,16 @@ parseEntry line = case T.splitOn "\t" line of
 packageDir :: Cache -> Text -> FilePath
 packageDir (Cache root _) package = root </> "fixities" </> T.unpack package
 
+-- | Under the token, as everything else here is filed under the key that
+-- decides it.
+--
+-- One file shared by every token could only ever carry a check saying whose
+-- it was, which answers \"is this mine?\" and never \"where is mine?\": two
+-- environments formatting the same project would take turns discarding each
+-- other's answer and asking @ghc-pkg@ again.
 installedPath :: Cache -> FilePath
-installedPath (Cache root _) = root </> "installed"
+installedPath (Cache root (PlanToken token)) =
+  root </> "installed" </> T.unpack token
 
 modulesPath :: Cache -> Text -> FilePath
 modulesPath (Cache root _) package = root </> "modules" </> T.unpack package

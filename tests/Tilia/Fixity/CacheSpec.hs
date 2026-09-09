@@ -201,12 +201,10 @@ database = around withIsolatedCache $ do
     cachedInstalled cache `shouldReturn` Nothing
 
   it "remembers nothing it has no way to stop believing" $ \cache -> do
-    -- No database to stamp means no way to notice a change, and an answer
-    -- nothing can invalidate is worse than none: it never stops being given.
     storeInstalled cache (Installed [containers] [])
     cachedInstalled cache `shouldReturn` Nothing
 
-  it "gives back nothing once the project wants other packages" $ \_ ->
+  it "gives back nothing to a token it was not written under" $ \_ ->
     withIsolatedDirectory $ \dir ->
       withDatabase $ \db -> do
         before' <- open dir (PlanToken "one")
@@ -214,7 +212,7 @@ database = around withIsolatedCache $ do
         after' <- open dir (PlanToken "two")
         cachedInstalled after' `shouldReturn` Nothing
 
-  it "gives it back under the plan it was written under" $ \_ ->
+  it "gives it back under the token it was written under" $ \_ ->
     withIsolatedDirectory $ \dir ->
       withDatabase $ \db -> do
         before' <- open dir (PlanToken "one")
@@ -222,9 +220,18 @@ database = around withIsolatedCache $ do
         again <- open dir (PlanToken "one")
         cachedInstalled again `shouldReturn` Just [containers]
 
+  it "keeps one token's answer when another writes its own" $ \_ ->
+    withIsolatedDirectory $ \dir ->
+      withDatabase $ \db -> do
+        one <- open dir (PlanToken "one")
+        storeInstalled one (Installed [containers] [db])
+        two <- open dir (PlanToken "two")
+        storeInstalled two (Installed [quiet] [db])
+        cachedInstalled one `shouldReturn` Just [containers]
+        cachedInstalled two `shouldReturn` Just [quiet]
+
   it "carries a package that exposes nothing" $ \cache ->
     withDatabase $ \db -> do
-      let quiet = InstalledPackage {ipName = "rts", ipVersion = "1.0", ipModules = [], ipImportDirs = []}
       storeInstalled cache (Installed [containers, quiet] [db])
       cachedInstalled cache `shouldReturn` Just [containers, quiet]
   where
@@ -234,6 +241,13 @@ database = around withIsolatedCache $ do
           ipVersion = "0.7",
           ipModules = ["Data.Map", "Data.Map.Strict", "Data.Set"],
           ipImportDirs = ["/nowhere/containers-0.7"]
+        }
+    quiet =
+      InstalledPackage
+        { ipName = "rts",
+          ipVersion = "1.0",
+          ipModules = [],
+          ipImportDirs = []
         }
 
 -- | A directory standing in for a package database, with a timestamp that

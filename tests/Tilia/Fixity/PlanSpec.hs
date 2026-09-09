@@ -29,17 +29,57 @@ import System.FilePath (takeBaseName, takeDirectory, (</>))
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
 import Tilia.Fixity
+import Tilia.Fixity.PackageDb (compilerIdentity)
 import Tilia.Fixity.Plan
 import Tilia.Parser
 
 spec :: Spec
 spec = do
   preparation
+  tokens
   reexports
   plan <- runIO (readBuildPlan (planPathFor "."))
   case plan of
     Left _ -> unavailable "no build plan; run cabal build first"
     Right p -> withPlan p
+
+-- | What a cached failure is filed under.
+--
+-- A failure to read a module leans on the plan and on the compiler this run
+-- can ask, so both have to be in the token. Were the environment left out,
+-- a shell that cannot see a package would hand its "could not be read" to
+-- one that can.
+tokens :: Spec
+tokens = describe "the token a plan is cached under" $ do
+  it "differs between environments over the same plan" $
+    planToken "/one/bin/ghc-pkg" onePackage
+      `shouldNotBe` planToken "/another/bin/ghc-pkg" onePackage
+
+  it "differs between plans in the same environment" $
+    planToken here onePackage `shouldNotBe` planToken here noPackages
+
+  it "is the same twice over for the same plan and environment" $
+    planToken here onePackage `shouldBe` planToken here onePackage
+
+  it "asks the environment it is actually going to read in" $ do
+    asked <- tokenFor onePackage
+    environment <- compilerIdentity
+    asked `shouldBe` planToken environment onePackage
+  where
+    here = "/somewhere/bin/ghc-pkg"
+    noPackages = BuildPlan {bpCompiler = "ghc-9.10.3", bpPackages = []}
+    onePackage =
+      BuildPlan
+        { bpCompiler = "ghc-9.10.3",
+          bpPackages =
+            [ PlanPackage
+                { ppName = "containers",
+                  ppVersion = "0.7",
+                  ppSource = PreExisting,
+                  ppComponent = Nothing
+                }
+            ]
+        }
 
 -- | What a run does before it trusts the plan.
 --

@@ -12,6 +12,8 @@ module Tilia.Fixity.Plan
     sourceHashOf,
     BuildPlan (..),
     readBuildPlan,
+    planToken,
+    tokenFor,
 
     -- * Readiness
     Readiness (..),
@@ -155,9 +157,22 @@ whatTheCompilerSees cache =
   where
     remembered = maybe (pure Nothing) cachedInstalled cache
 
--- | Summarize a 'BuildPlan' by hashing over it.
-planToken :: BuildPlan -> PlanToken
-planToken plan =
+-- | Summarize a 'BuildPlan', and the environment it will be read in, by
+-- hashing over both.
+--
+-- The plan alone would not do. What a failure to read a module leans on is
+-- partly the plan and partly the compiler this run can ask: a package the
+-- plan names is unreadable where @ghc-pkg@ does not expose it and readable
+-- where it does, and one shell can differ from another in that while
+-- solving the very same plan. Tying failures to the plan alone would let
+-- one shell's \"could not be read\" be handed to a shell that can.
+tokenFor :: BuildPlan -> IO PlanToken
+tokenFor plan = flip planToken plan <$> compilerIdentity
+
+-- | 'tokenFor' without the asking, so that what goes into the token is
+-- visible in one place.
+planToken :: Text -> BuildPlan -> PlanToken
+planToken environment plan =
   PlanToken
     . T.take 16
     . T.decodeUtf8Lenient
@@ -166,7 +181,7 @@ planToken plan =
     . T.encodeUtf8
     $ T.intercalate
       "\n"
-      (bpCompiler plan : Data.List.sort (map cacheKey (bpPackages plan)))
+      (environment : bpCompiler plan : Data.List.sort (map cacheKey (bpPackages plan)))
 
 -- | The SHA-256 the plan expects this package's tarball to have.
 sourceHashOf :: PlanPackage -> Maybe Text
@@ -287,7 +302,7 @@ checkReadiness wanted projectDir =
             if null absent
               then pure []
               else do
-                cache <- openCache (planToken plan)
+                cache <- openCache =<< tokenFor plan
                 installed <- whatTheCompilerSees cache
                 pure (filter (not . builtAlready installed) absent)
           pure $ case map ppName short of
@@ -500,7 +515,7 @@ newResolverVia ::
   IO Resolver
 newResolverVia routes plan = do
   tarballs <- plannedTarballs plan
-  cache <- openCache (planToken plan)
+  cache <- openCache =<< tokenFor plan
   installed <- whatTheCompilerSees cache
   index <- buildModuleIndex cache installed tarballs
   let interfaces = interfaceIndex installed

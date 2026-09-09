@@ -19,6 +19,7 @@ module Tilia.Fixity.PackageDb
   ( InstalledPackage (..),
     Installed (..),
     readInstalledPackages,
+    compilerIdentity,
   )
 where
 
@@ -29,7 +30,7 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
-import System.Directory (doesDirectoryExist)
+import System.Directory (doesDirectoryExist, findExecutable)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
 import System.Process (readProcessWithExitCode)
@@ -80,6 +81,24 @@ readInstalledPackages = quietly (Installed [] []) $ do
             installedDatabases = databases
           }
     _ -> pure (Installed [] [])
+
+-- | What tells one compiler environment from another.
+--
+-- The resolved path of the @ghc-pkg@ that 'readInstalledPackages' will run.
+-- Which packages a run can see is settled by that program and by nothing in
+-- the project, so it is what an answer about them has to be filed under.
+-- Under Nix the path is a store path, and it changes exactly when the
+-- environment does; elsewhere it is stable, which is the same thing said of
+-- an environment that does not change.
+--
+-- Hashing the databases themselves would be more exact, but they cannot be
+-- named without running @ghc-pkg dump@—the very thing being remembered.
+--
+-- Empty where there is no @ghc-pkg@ to find, which is a state a run can be
+-- in and has to be told apart from the others.
+compilerIdentity :: IO Text
+compilerIdentity =
+  quietly "" (maybe "" T.pack <$> findExecutable "ghc-pkg")
 
 -- | The databases a set of records came out of.
 databasesIn :: [Map.Map Text Text] -> [FilePath]
