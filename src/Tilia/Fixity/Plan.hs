@@ -326,19 +326,32 @@ checkReadiness wanted projectDir =
       case (newer, missing) of
         (_ : _, _) -> pure (PlanStale newer)
         ([], _ : _) -> pure (PlanNarrow missing)
-        ([], []) -> do
-          tarballs <- filter (isFetchable . fst) <$> plannedTarballs plan
-          absent <- map fst <$> filterM (fmap not . doesFileExist . snd) tarballs
-          short <-
-            if null absent
-              then pure []
-              else do
-                cache <- openCache =<< tokenFor plan
-                installed <- whatTheCompilerSees cache
-                pure (filter (not . builtAlready installed) absent)
-          pure $ case map ppName short of
-            [] -> Ready
-            ns -> SourcesMissing ns
+        ([], []) ->
+          sourcesShortOf plan >>= \case
+            [] -> pure Ready
+            ns -> pure (SourcesMissing ns)
+
+-- | The packages the plan expects to fetch whose sources are not here.
+--
+-- Asked apart from the rest of 'checkReadiness' because it is a different
+-- question with a different answer. Whether the plan covers the components
+-- a run is about to format is about the plan; whether the sources it names
+-- are on this machine is about the machine, and a plan that will never
+-- cover everything—one component of the project does not build, and the
+-- solver leaves it out—must not stop the sources for the rest being
+-- fetched.
+sourcesShortOf :: BuildPlan -> IO [Text]
+sourcesShortOf plan = do
+  tarballs <- filter (isFetchable . fst) <$> plannedTarballs plan
+  absent <- map fst <$> filterM (fmap not . doesFileExist . snd) tarballs
+  short <-
+    if null absent
+      then pure []
+      else do
+        cache <- openCache =<< tokenFor plan
+        installed <- whatTheCompilerSees cache
+        pure (filter (not . builtAlready installed) absent)
+  pure (map ppName short)
 
 -- | Has the compiler got this package already?
 builtAlready :: [InstalledPackage] -> PlanPackage -> Bool
@@ -441,17 +454,24 @@ prepareWith cabal solves wanted projectDir = \case
   PlanStale _ -> solveThenFetch
   PlanNarrow _ ->
     solveWasFutile solves >>= \case
-      True -> pure (Right ())
+      True -> fetchWhatIsShort
       False -> solveThenFetch
   where
     fetch = cabal ["build", "all", "--only-download"]
+    fetchWhatIsShort =
+      readBuildPlan (planPathFor projectDir) >>= \case
+        Left _ -> pure (Right ())
+        Right plan ->
+          sourcesShortOf plan >>= \case
+            [] -> pure (Right ())
+            _ -> fetch
     solveThenFetch =
       cabal ["build", "all", "--dry-run"] >>= \case
         Left err -> pure (Left err)
         Right () ->
           checkReadiness wanted projectDir >>= \case
             SourcesMissing _ -> fetch
-            PlanNarrow _ -> rememberFutileSolve solves >> pure (Right ())
+            PlanNarrow _ -> rememberFutileSolve solves >> fetchWhatIsShort
             _ -> pure (Right ())
 
 -- | Run @cabal@ in a project directory, letting it speak for itself.

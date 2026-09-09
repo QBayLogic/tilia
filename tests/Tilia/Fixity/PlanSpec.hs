@@ -190,6 +190,33 @@ preparation = describe "preparing a project" $ do
         once `shouldReturn` Right ()
         readIORef steps `shouldReturn` [["build", "all", "--dry-run"]]
 
+    it "fetches what a plan it cannot widen is short of" $
+      withTempProject (Just narrowAndWanting) $ \dir -> do
+        steps <- newIORef []
+        let cabal args = do
+              record steps args
+              when (args == ["build", "all", "--dry-run"]) (writePlan dir narrowAndWanting)
+              pure (Right ())
+            narrow = PlanNarrow ["thing:test:tests"]
+        prepareWith cabal forgetfulSolves [component "test:tests"] dir narrow
+          `shouldReturn` Right ()
+        readIORef steps
+          `shouldReturn` [["build", "all", "--dry-run"], ["build", "all", "--only-download"]]
+
+    it "fetches it even once solving again has been given up on" $
+      withTempProject (Just narrowAndWanting) $ \dir -> do
+        steps <- newIORef []
+        futile <- newIORef True
+        let solves =
+              Solves
+                { solveWasFutile = readIORef futile,
+                  rememberFutileSolve = writeIORef futile True
+                }
+            narrow = PlanNarrow ["thing:test:tests"]
+        prepareWith (obliging steps) solves [component "test:tests"] dir narrow
+          `shouldReturn` Right ()
+        readIORef steps `shouldReturn` [["build", "all", "--only-download"]]
+
     it "goes on solving while solving still widens it" $
       withTempProject (Just twoComponents) $ \dir -> do
         steps <- newIORef []
@@ -882,6 +909,19 @@ threeComponents =
   \\"pkg-src\":{\"type\":\"local\",\"path\":\"/nowhere\"}},\
   \{\"pkg-name\":\"thing\",\"pkg-version\":\"1.0\",\"component-name\":\"test:tests\",\
   \\"pkg-src\":{\"type\":\"local\",\"path\":\"/nowhere\"}}]}"
+
+-- | Narrow and short at once: two components, neither of them the one a
+-- run wants, and a dependency whose tarball is nowhere.
+--
+-- The shape @servant@ has, where two cookbook executables are named by the
+-- project and left out of every plan @cabal@ writes.
+narrowAndWanting :: Text
+narrowAndWanting =
+  "{\"compiler-id\":\"ghc-0.0\",\"install-plan\":\
+  \[{\"pkg-name\":\"thing\",\"pkg-version\":\"1.0\",\"component-name\":\"lib\",\
+  \\"pkg-src\":{\"type\":\"local\",\"path\":\"/nowhere\"}},\
+  \{\"pkg-name\":\"tilia-phantom\",\"pkg-version\":\"9.9.9\",\
+  \\"pkg-src\":{\"type\":\"repo-tar\"}}]}"
 
 -- | A package planned whole, as @cabal@ plans one with a @Custom@ build
 -- type: no @component-name@, and a @components@ object instead.
