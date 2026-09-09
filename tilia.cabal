@@ -191,6 +191,7 @@ test-suite tests
     Tilia.Fixity.DebugSpec
     Tilia.Fixity.DependenciesSpec
     Tilia.Fixity.InterfaceSpec
+    Tilia.Fixity.PackageDbSpec
     Tilia.Fixity.PlanSpec
     Tilia.FixitySpec
     Tilia.Gen

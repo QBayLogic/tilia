@@ -20,6 +20,7 @@ module Tilia.Fixity.PackageDb
     Installed (..),
     readInstalledPackages,
     compilerIdentity,
+    fromFields,
   )
 where
 
@@ -135,8 +136,17 @@ fromFields fields = do
             (maybe [] moduleNames . (`Map.lookup` fields))
             ["exposed-modules", "hidden-modules"],
         ipImportDirs =
-          maybe [] (map (T.unpack . unquote) . T.words) (Map.lookup "import-dirs" fields)
+          maybe
+            []
+            (map (T.unpack . rooted fields . unquote) . T.words)
+            (Map.lookup "import-dirs" fields)
       }
+
+-- | Put the package's root where its registration only left a variable.
+rooted :: Map.Map Text Text -> Text -> Text
+rooted fields path = case Map.lookup "pkgroot" fields of
+  Nothing -> path
+  Just root -> T.replace "${pkgroot}" (unquote root) path
 
 -- | The module names in an @exposed-modules@ field.
 moduleNames :: Text -> [Text]
