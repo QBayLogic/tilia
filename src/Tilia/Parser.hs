@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Turning source text into a syntax tree and a comment stream.
@@ -11,7 +10,6 @@ module Tilia.Parser
     describeParseError,
     ParserConfig (..),
     defaultParserConfig,
-    sourceTypeOf,
     parserConfigFor,
     ghcLibParserVersion,
   )

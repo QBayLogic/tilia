@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 -- | Turning a parsed module into a document.
 module Tilia.Render
   ( RenderConfig (..),

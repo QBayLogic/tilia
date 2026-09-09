@@ -1,10 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Reading @exposed-modules@ out of a @.cabal@ file.
+-- | Reading a @.cabal@ file's fields without a cabal parser.
 module Tilia.Fixity.CabalSpec (spec) where
 
 import Data.Text (Text)
-import Data.Text qualified as T
 import GHC.LanguageExtensions.Type (Extension (..))
 import Test.Hspec
 import Tilia.Fixity.Cabal
@@ -31,9 +30,9 @@ spec = do
       exposed "library\n  build-depends: base\n" `shouldBe` []
 
   describe "what must not be picked up" $ do
-    it "ignores other-modules" $
+    it "takes other-modules too, which a re-export may lead into" $
       exposed "library\n  exposed-modules: A\n  other-modules: B\n"
-        `shouldMatchList` ["A"]
+        `shouldMatchList` ["A", "B"]
 
     it "ignores reexported-modules" $
       exposed "library\n  exposed-modules: A\n  reexported-modules: B\n"
@@ -130,6 +129,22 @@ spec = do
       extensions "library\n  default-language: Haskell2010\n"
         `shouldSatisfy` notElem TypeOperators
 
+    it "takes what every edition in the file puts in force" $
+      extensions
+        "library\n\
+        \  default-language: Haskell2010\n\
+        \test-suite spec\n\
+        \  default-language: GHC2021\n"
+        `shouldSatisfy` elem TypeOperators
+
+    it "still has the earlier edition's own extensions" $
+      extensions
+        "library\n\
+        \  default-language: Haskell2010\n\
+        \test-suite spec\n\
+        \  default-language: GHC2021\n"
+        `shouldSatisfy` elem ImplicitPrelude
+
     it "passes over a name no compiler knows" $
       extensions "library\n  default-extensions: LambdaCase, NotAnExtension\n"
         `shouldSatisfy` elem LambdaCase
@@ -156,8 +171,9 @@ spec = do
               \    exposed-modules: Old\n"
       both `shouldMatchList` ["New", "Old"]
 
+-- | The modules a @.cabal@ of this shape holds.
 exposed :: Text -> [Text]
-exposed = exposedModules . T.pack . T.unpack
+exposed = containedModules
 
 -- | What a @.cabal@ of this shape puts in force.
 extensions :: Text -> [Extension]

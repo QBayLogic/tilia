@@ -4,8 +4,7 @@
 -- | Reading a package's exposed modules out of its @.cabal@ file.
 module Tilia.Fixity.Cabal
   ( packageModules,
-    findCabalFile,
-    exposedModules,
+    cabalFileInArchive,
     containedModules,
     sourceDirs,
     declaredExtensions,
@@ -18,7 +17,7 @@ import Data.ByteString.Lazy qualified as BL
 import Data.Char (isSpace)
 import Data.List (isSuffixOf)
 import Data.List qualified
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
@@ -34,36 +33,26 @@ import Tilia.Utils (quietly)
 packageModules :: FilePath -> IO (Maybe [Text])
 packageModules tarball = quietly Nothing $ do
   bytes <- BL.readFile tarball
-  pure (containedModules <$> findCabalFile (Tar.read (GZip.decompress bytes)))
+  pure (containedModules <$> cabalFileInArchive (Tar.read (GZip.decompress bytes)))
 
 -- | The first @.cabal@ file at the top level of an archive.
 --
 -- Stops as soon as it finds one. The archive is decompressed lazily, so a
 -- @.cabal@ near the front costs a fraction of the whole file.
-findCabalFile :: Tar.Entries e -> Maybe Text
-findCabalFile = \case
+cabalFileInArchive :: Tar.Entries e -> Maybe Text
+cabalFileInArchive = \case
   Tar.Next entry rest
     | ".cabal" `isSuffixOf` Tar.entryPath entry,
       depth (Tar.entryPath entry) == 2,
       Tar.NormalFile content _ <- Tar.entryContent entry ->
         Just (T.decodeUtf8Lenient (BL.toStrict content))
-    | otherwise -> findCabalFile rest
+    | otherwise -> cabalFileInArchive rest
   Tar.Done -> Nothing
   Tar.Fail _ -> Nothing
   where
     -- Top level of the archive: @pkg-1.0/pkg.cabal@ and nothing deeper, so
     -- that a @.cabal@ bundled in a test fixture is not mistaken for it.
     depth path = 1 + length (filter (== '/') path)
-
--- | Every module named by an @exposed-modules@ field, from every branch of
--- every conditional, in every library stanza.
---
--- @other-modules@ is excluded: those cannot be imported, so their fixities
--- can never be in scope. @reexported-modules@ is excluded too, but for the
--- opposite reason—the modules it names live in another package, and looking
--- there is a separate step this does not take.
-exposedModules :: Text -> [Text]
-exposedModules = modulesUnder "exposed-modules"
 
 -- | Every module a package holds, whether it exposes it or not.
 --
@@ -109,10 +98,13 @@ sourceDirs contents = Data.List.nub (named <> ["."])
 -- | The extensions a package puts in force, read from its @.cabal@ file.
 declaredExtensions :: Text -> [Extension]
 declaredExtensions contents =
-  foldl apply (GHC.languageExtensions edition) named
+  foldl apply baseline named
   where
     ls = T.lines contents
-    edition = listToMaybe (mapMaybe languageNamed (fieldsNamed "default-language" ls))
+    baseline = case mapMaybe languageNamed (fieldsNamed "default-language" ls) of
+      [] -> GHC.languageExtensions Nothing
+      editions ->
+        Data.List.nub (concatMap (GHC.languageExtensions . Just) editions)
     named =
       concatMap (T.split (== ',')) . concatMap T.words $
         fieldsNamed "default-extensions" ls

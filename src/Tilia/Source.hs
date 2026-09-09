@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 -- | The module as its author wrote it.
 --
 -- Almost everything the formatter decides about layout is a question about

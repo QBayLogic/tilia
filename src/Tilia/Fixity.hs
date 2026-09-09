@@ -27,7 +27,6 @@ module Tilia.Fixity
     Import (..),
     ImportItem (..),
     moduleImports,
-    namesImported,
     mightBring,
     surelyNames,
     Known (..),
@@ -35,11 +34,9 @@ module Tilia.Fixity
     Namespace (..),
     Fixities,
     inBothNamespaces,
-    fixitiesIn,
     Scope (..),
     Reach (..),
     reachIn,
-    settledFor,
     Unread (..),
     resolveScope,
 
@@ -47,7 +44,6 @@ module Tilia.Fixity
     Provenance (..),
     Resolution (..),
     lookupFixity,
-    unreadFor,
 
     -- * What could not be answered
     Unknown (..),
@@ -436,21 +432,6 @@ data ImportItem
   | -- | @T(a, b)@: the name and the members written out beside it.
     ImportedSome OpName [OpName]
   deriving (Eq, Show)
-
--- | The names an import list brings in, given what the module it names
--- offers under each of its names.
---
--- A parent nothing is known about brings in nothing but itself, which
--- understates the list. Callers who cannot afford to understate it should
--- ask 'mightBring' instead.
-namesImported :: Map OpName (Set OpName) -> [ImportItem] -> Set OpName
-namesImported children = Set.unions . map one
-  where
-    one = \case
-      ImportedName op -> Set.singleton op
-      ImportedAll parent ->
-        Set.insert parent (Map.findWithDefault Set.empty parent children)
-      ImportedSome parent ops -> Set.fromList (parent : ops)
 
 -- | Could this list bring the operator in?
 --

@@ -287,23 +287,6 @@ spec = do
       exportedChildrenIn "module M (T (..)) where\nimport Elsewhere\n"
         `shouldBe` [(OpName "T", [])]
 
-  describe "what an import list brings in" $ do
-    it "brings in what a name carries, where that is known" $
-      brought [(OpName "NonEmpty", [OpName ":|"])] "import Data.List.NonEmpty (NonEmpty (..))\n"
-        `shouldBe` [OpName ":|", OpName "NonEmpty"]
-
-    it "brings in the members written out beside a name" $
-      brought [] "import Data.List.NonEmpty (NonEmpty ((:|)))\n"
-        `shouldBe` [OpName ":|", OpName "NonEmpty"]
-
-    it "brings in a plain name and nothing else" $
-      brought [(OpName "NonEmpty", [OpName ":|"])] "import Data.List.NonEmpty (toList)\n"
-        `shouldBe` [OpName "toList"]
-
-    it "brings in only the name itself where nothing is known" $
-      brought [] "import Data.List.NonEmpty (NonEmpty (..))\n"
-        `shouldBe` [OpName "NonEmpty"]
-
   describe "layer 2: imports" $ do
     it "brings in an operator a type carries" $
       lookupFixity (scopeCarrying "import Carrier (T (..))\n") InTerms Nothing (OpName ":|")
@@ -660,20 +643,6 @@ exportedChildrenIn = settled . moduleChildren . pmModule . parsed
 
 settled :: Map.Map OpName (Set.Set OpName) -> [(OpName, [OpName])]
 settled = map (fmap Set.toList) . Map.toList
-
--- | The names one import list brings in, told what the module it names
--- keeps under each of its names.
-brought :: [(OpName, [OpName])] -> Text -> [OpName]
-brought carries source =
-  case [items | i <- written, Just (_, items) <- [importNames i]] of
-    [items] -> Set.toList (namesImported children items)
-    other -> error ("expected one import with a list, got " <> show other)
-  where
-    written =
-      moduleImports
-        (Is #implicitPrelude)
-        (pmModule (parsed ("module M where\n" <> source)))
-    children = Map.fromList [(parent, Set.fromList kids) | (parent, kids) <- carries]
 
 -- | A scope over a world where Carrier keeps @:|@ under @T@.
 --

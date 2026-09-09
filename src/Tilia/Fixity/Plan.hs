@@ -88,9 +88,9 @@ import Tilia.Fixity
 import Tilia.Fixity.Builtin (builtinFixities)
 import Tilia.Fixity.ByHand (byHandFixities)
 import Tilia.Fixity.Cabal
-  ( containedModules,
+  ( cabalFileInArchive,
+    containedModules,
     declaredExtensions,
-    findCabalFile,
     packageModules,
     sourceDirs,
   )
@@ -660,7 +660,7 @@ newResolverVia routes plan = do
       fromTarball tarball =
         quietly [] $ do
           bytes <- BL.readFile tarball
-          pure (foldMap declaredExtensions (findCabalFile (Tar.read (GZip.decompress bytes))))
+          pure (foldMap declaredExtensions (cabalFileInArchive (Tar.read (GZip.decompress bytes))))
       children visiting modName
         | modName `Set.member` visiting = pure Map.empty
         | otherwise = do
@@ -722,13 +722,7 @@ exportNamesOfModule
           modName
           hsModule
       visiting' = Set.insert modName visiting
-      parsedLeaves text = do
-        leaves <- either (const Nothing) Just (branchLeaves text)
-        traverse parsed leaves
-      parsed leaf =
-        (,) (hasImplicitPrelude [] leaf) . pmModule
-          <$> whatParsed (parseModule defaultParserConfig named leaf)
-      named = T.unpack modName
+      parsedLeaves = configurationsOf Nothing modName
 
 -- | What a module keeps under each of its names, so that a @T(..)@ in an
 -- import list can be told what it brings in.
@@ -793,13 +787,7 @@ childrenOfModule
           modName
           hsModule
       visiting' = Set.insert modName visiting
-      parsedLeaves extensions text = do
-        leaves <- either (const Nothing) Just (branchLeaves text)
-        traverse (parsed extensions) leaves
-      parsed extensions leaf =
-        (,) (hasImplicitPrelude extensions leaf) . pmModule
-          <$> whatParsed (parseModule (configFor extensions leaf) named leaf)
-      named = T.unpack modName
+      parsedLeaves extensions = configurationsOf (Just extensions) modName
 
 -- | Work out what a module can see, using a resolver to reach its imports.
 --
@@ -1192,16 +1180,11 @@ fromText ::
   Text ->
   IO (Maybe (Fixities))
 fromText extensions reach reachChildren visiting source modName =
-  case traverse parsed =<< configurations of
+  case configurationsOf (Just extensions) modName source of
     Nothing -> pure Nothing
     Just modules ->
       agreeing <$> traverse readOne modules
   where
-    configurations = either (const Nothing) Just (branchLeaves source)
-    parsed leaf =
-      (,) (hasImplicitPrelude extensions leaf) . pmModule
-        <$> whatParsed (parseModule (configFor extensions leaf) named leaf)
-    named = T.unpack modName
     readOne (implicitPrelude, hsModule) =
       withReexports
         implicitPrelude
@@ -1494,6 +1477,31 @@ configFor extensions source = parserConfigFor (effectiveExtensions extensions so
 whatParsed :: Either e a -> Maybe a
 whatParsed = either (const Nothing) Just
 
+-- | Every configuration the preprocessor allows of a module's text,
+-- parsed, each with whether it has the Prelude without importing it.
+--
+-- 'Nothing' where any of them will not parse: a module read in part is a
+-- module whose fixities are a guess.
+configurationsOf ::
+  -- | What the module's package puts in force, or 'Nothing' where nothing
+  -- is known about it. Then it is parsed under the most generous edition
+  -- rather than the narrowest, and taken to have the Prelude unless it
+  -- says otherwise—both being the way to be wrong that costs least.
+  Maybe [Extension] ->
+  -- | The module's name, for the parser to put in its errors
+  Text ->
+  -- | Its text
+  Text ->
+  Maybe [(Choice "implicitPrelude", HsModule GhcPs)]
+configurationsOf extensions modName text =
+  traverse parsed =<< whatParsed (branchLeaves text)
+  where
+    parsed leaf =
+      (,) (hasImplicitPrelude (fromMaybe [] extensions) leaf) . pmModule
+        <$> whatParsed (parseModule (configOf leaf) named leaf)
+    configOf leaf = maybe defaultParserConfig (`configFor` leaf) extensions
+    named = T.unpack modName
+
 -- | Does this module see the Prelude without importing it?
 hasImplicitPrelude :: [Extension] -> Text -> Choice "implicitPrelude"
 hasImplicitPrelude extensions source =
@@ -1503,7 +1511,7 @@ hasImplicitPrelude extensions source =
 readModule :: FilePath -> Text -> IO (Maybe Text)
 readModule tarball modName = quietly Nothing $ do
   bytes <- BL.readFile tarball
-  let dirs = maybe [] sourceDirs (findCabalFile (Tar.read (GZip.decompress bytes)))
+  let dirs = maybe [] sourceDirs (cabalFileInArchive (Tar.read (GZip.decompress bytes)))
   pure (pick dirs (matching (Tar.read (GZip.decompress bytes))))
   where
     suffix = "/" <> T.unpack (T.replace "." "/" modName) <> ".hs"

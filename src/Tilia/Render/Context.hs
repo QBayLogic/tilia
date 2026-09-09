@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 -- | What the syntax walk needs to know that the syntax tree does not say.
 --
 -- Printing a Haskell module is very nearly a fold over its syntax tree, but
