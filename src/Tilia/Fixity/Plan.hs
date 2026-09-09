@@ -86,9 +86,10 @@ import System.Process
 import Tilia.Cpp (branchLeaves)
 import Tilia.Fixity
 import Tilia.Fixity.Builtin (builtinFixities)
-import Tilia.Fixity.ByHand (byHandFixities)
+import Tilia.Fixity.ByHand (byHandFixities, hscFixities)
 import Tilia.Fixity.Cabal
-  ( cabalFileInArchive,
+  ( cabalFileAtTop,
+    cabalFileInArchive,
     containedModules,
     declaredExtensions,
     packageModules,
@@ -691,6 +692,9 @@ exportNamesOfModule
   Workings {wkCache, wkLocal, wkIndex, wkReachChildren, wkReachExports}
   visiting
   modName
+    | Just path <- Map.lookup modName wkLocal,
+      writtenForHsc path =
+        pure (Just (hscSupplies modName))
     | Just path <- Map.lookup modName wkLocal = namesIn =<< readFileText path
     | Just (package, tarball) <- Map.lookup modName wkIndex =
         remembered package >>= \case
@@ -698,7 +702,11 @@ exportNamesOfModule
           Nothing ->
             readModule tarball modName >>= \case
               Nothing -> pure Nothing
-              Just text -> do
+              Just ForHsc -> do
+                let names = Just (hscSupplies modName)
+                store package (asExported names)
+                pure names
+              Just (Haskell text) -> do
                 names <- namesIn (Just text)
                 store package (asExported names)
                 pure names
@@ -740,6 +748,9 @@ childrenOfModule
     }
   visiting
   modName
+    | Just path <- Map.lookup modName wkLocal,
+      writtenForHsc path =
+        pure Map.empty
     | Just path <- Map.lookup modName wkLocal =
         readFileText path >>= \case
           Nothing -> pure Map.empty
@@ -753,7 +764,11 @@ childrenOfModule
         FromSource -> case Map.lookup modName wkIndex of
           Nothing -> pure Nothing
           Just (package, tarball) ->
-            keptUnder package (traverse inSource =<< readModule tarball modName)
+            keptUnder package $
+              readModule tarball modName >>= \case
+                Nothing -> pure Nothing
+                Just ForHsc -> pure (Just Map.empty)
+                Just (Haskell text) -> Just <$> inSource text
       firstAnswer [] = pure Map.empty
       firstAnswer (route : rest) =
         route >>= \case
@@ -901,6 +916,9 @@ resolveModule
   visiting
   modName
     | Just builtin <- Map.lookup modName builtinFixities = pure (Just builtin)
+    | Just path <- Map.lookup modName wkLocal,
+      writtenForHsc path =
+        pure (Just (fixitiesDeclared (hscDeclares modName)))
     | Just path <- Map.lookup modName wkLocal =
         readFileText path >>= \case
           Nothing -> pure Nothing
@@ -1148,7 +1166,8 @@ fromSource extensions reach reachChildren visiting tarball modName =
     True ->
       readModule tarball modName >>= \case
         Nothing -> pure (FromArchive Unreadable)
-        Just source ->
+        Just ForHsc -> pure (FromArchive (hscDeclares modName))
+        Just (Haskell source) ->
           FromArchive . maybe Unreadable Declares
             <$> fromText extensions reach reachChildren visiting source modName
 
@@ -1248,10 +1267,16 @@ localModules plan =
     -- does not say which one holds which module, so they are tried in turn
     -- and the first that has the file wins.
     locate dir dirs m = do
-      found <- filterM doesFileExist [dir </> T.unpack d </> modulePath m | d <- dirs]
+      found <-
+        filterM
+          doesFileExist
+          [ dir </> T.unpack d </> modulePath m ending
+          | d <- dirs,
+            ending <- moduleEndings
+          ]
       pure [(m, path) | path <- take 1 found]
 
-    modulePath m = T.unpack (T.replace "." "/" m) <> ".hs"
+    modulePath m ending = T.unpack (T.replace "." "/" m) <> ending
 
 -- | Read a file, if it is there and is text.
 readFileText :: FilePath -> IO (Maybe Text)
@@ -1507,26 +1532,85 @@ hasImplicitPrelude :: [Extension] -> Text -> Choice "implicitPrelude"
 hasImplicitPrelude extensions source =
   fromBool (ImplicitPrelude `elem` effectiveExtensions extensions source)
 
--- | Find a module inside a tarball and decode it.
-readModule :: FilePath -> Text -> IO (Maybe Text)
+-- | Find a module inside a tarball and say what was found.
+--
+-- Looked for under each of the endings a package may write a module with,
+-- Haskell first. An @.hsc@ is reported rather than read: it is not Haskell
+-- until @hsc2hs@ has been over it, and what it declares is answered out of
+-- 'hscFixities' instead.
+readModule :: FilePath -> Text -> IO (Maybe InArchive)
 readModule tarball modName = quietly Nothing $ do
   bytes <- BL.readFile tarball
-  let dirs = maybe [] sourceDirs (cabalFileInArchive (Tar.read (GZip.decompress bytes)))
-  pure (pick dirs (matching (Tar.read (GZip.decompress bytes))))
+  let (cabal, candidates) = sweep Nothing [] (Tar.read (GZip.decompress bytes))
+      dirs = maybe [] sourceDirs cabal
+  pure (listToMaybe (mapMaybe (pick dirs candidates) moduleEndings))
   where
-    suffix = "/" <> T.unpack (T.replace "." "/" modName) <> ".hs"
-    matching = go []
+    suffix ending = "/" <> T.unpack (T.replace "." "/" modName) <> ending
+    suffixes = map suffix moduleEndings
+    sweep cabal found = \case
+      Tar.Next entry rest
+        | Tar.NormalFile content _ <- Tar.entryContent entry,
+          cabalFileAtTop (Tar.entryPath entry),
+          Nothing <- cabal ->
+            sweep (Just (decode content)) found rest
+        | Tar.NormalFile content _ <- Tar.entryContent entry,
+          any (`isSuffixOf` Tar.entryPath entry) suffixes ->
+            sweep cabal ((Tar.entryPath entry, decode content) : found) rest
+        | otherwise -> sweep cabal found rest
+      _ -> (cabal, reverse found)
+    pick dirs candidates ending =
+      inArchive ending . snd
+        <$> listToMaybe (under sfx dirs matching <> matching)
       where
-        go found = \case
-          Tar.Next entry rest
-            | suffix `isSuffixOf` Tar.entryPath entry,
-              Tar.NormalFile content _ <- Tar.entryContent entry ->
-                go ((Tar.entryPath entry, decode content) : found) rest
-            | otherwise -> go found rest
-          _ -> reverse found
-    pick dirs found = snd <$> listToMaybe (under dirs found <> found)
-    under dirs found = [e | d <- dirs, e <- found, inDir d (fst e)]
-    inDir d path
-      | d == "." = takeWhile (/= '/') path <> suffix == path
-      | otherwise = ("/" <> T.unpack d <> suffix) `isSuffixOf` path
+        sfx = suffix ending
+        matching = [c | c <- candidates, sfx `isSuffixOf` fst c]
+    under sfx dirs matching = [e | d <- dirs, e <- matching, inDir sfx d (fst e)]
+    inDir sfx d path
+      | d == "." = takeWhile (/= '/') path <> sfx == path
+      | otherwise = ("/" <> T.unpack d <> sfx) `isSuffixOf` path
     decode = T.decodeUtf8Lenient . BL.toStrict
+
+-- | The endings a package may write a module under, in the order they are
+-- tried.
+--
+-- Plain Haskell first: a package that ships both has generated the one from
+-- the other, and the generated one is the module as it will be compiled.
+moduleEndings :: [String]
+moduleEndings = [".hs", ".hsc"]
+
+-- | What an archive holds for a module.
+data InArchive
+  = -- | Haskell, as the package wrote it.
+    Haskell Text
+  | -- | A module written for @hsc2hs@. Its text is not kept: there is
+    -- nothing to be done with it, and 'hscFixities' answers for it.
+    ForHsc
+
+-- | What was found under one ending amounts to.
+inArchive :: String -> Text -> InArchive
+inArchive ending text
+  | writtenForHsc ending = ForHsc
+  | otherwise = Haskell text
+
+-- | Is this a module @hsc2hs@ writes rather than one anybody compiles?
+writtenForHsc :: FilePath -> Bool
+writtenForHsc = isSuffixOf ".hsc"
+
+-- | What an @.hsc@ module declares, which is nothing unless it is named.
+--
+-- See 'hscFixities' for why an absence is an answer here and not a refusal
+-- to give one.
+hscDeclares :: Text -> Established
+hscDeclares modName =
+  Declares (maybe Map.empty inBothNamespaces (Map.lookup modName hscFixities))
+
+-- | The fixities an 'Established' holds, where it holds any.
+fixitiesDeclared :: Established -> Fixities
+fixitiesDeclared = \case
+  Declares fixities -> fixities
+  Unreadable -> Map.empty
+
+-- | The operators an @.hsc@ module can supply, on the same reasoning.
+hscSupplies :: Text -> Set OpName
+hscSupplies modName =
+  maybe Set.empty Map.keysSet (Map.lookup modName hscFixities)

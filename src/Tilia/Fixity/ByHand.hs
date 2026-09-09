@@ -3,6 +3,7 @@
 -- | Fixities for the few modules whose source defeats us.
 module Tilia.Fixity.ByHand
   ( byHandFixities,
+    hscFixities,
   )
 where
 
@@ -27,6 +28,44 @@ byHandFixities =
           (".||.", RightAssoc, 1),
           ("===", NoAssoc, 4),
           ("=/=", NoAssoc, 4)
+        ]
+    ]
+  where
+    entry name ops =
+      (name, Map.fromList [(OpName o, Fixity d p) | (o, d, p) <- ops])
+
+-- | What the modules written for @hsc2hs@ declare.
+--
+-- A different question from 'byHandFixities', and asked at a different
+-- moment. That table is a last resort for a module nothing could be made
+-- of; this one is the whole answer for an @.hsc@, given instead of reading
+-- it, and a module absent from here declares nothing rather than being
+-- unreadable.
+--
+-- The claim behind the absence is that @hsc2hs@ modules hardly ever declare
+-- a fixity. Of three hundred @.hsc@ files across the packages this project
+-- builds against, exactly one module declares one, and it is below. One
+-- other defines operators at all — @regex-posix@'s @Text.Regex.Posix.Wrap@,
+-- which gives @=~@ and @=~~@ and no fixity for either, so the Report's
+-- @infixl 9@ is what they have and is what an absence here already says.
+-- Neither module can be parsed even with the @hsc2hs@ constructs blanked
+-- out, so there was never a reading that would have found them.
+--
+-- Being wrong here costs indentation and nothing else: a fixity decides
+-- how a chain of operators is grouped when it is broken across lines, and
+-- nothing in the renderer adds or removes a parenthesis. A module missing
+-- from this table is laid out as though its operators were @infixl 9@.
+hscFixities :: Map Text (Map OpName Fixity)
+hscFixities =
+  Map.fromList
+    [ -- @addSignal@ and @deleteSignal@ take a signal on the left and a set
+      -- on the right, so a chain of them only typechecks to the right, and
+      -- the module says so with a bare @infixr@—precedence 9, as the
+      -- Report has it when none is written.
+      entry
+        "System.Posix.Signals"
+        [ ("addSignal", RightAssoc, 9),
+          ("deleteSignal", RightAssoc, 9)
         ]
     ]
   where

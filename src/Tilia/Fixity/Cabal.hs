@@ -5,6 +5,7 @@
 module Tilia.Fixity.Cabal
   ( packageModules,
     cabalFileInArchive,
+    cabalFileAtTop,
     containedModules,
     sourceDirs,
     declaredExtensions,
@@ -42,17 +43,18 @@ packageModules tarball = quietly Nothing $ do
 cabalFileInArchive :: Tar.Entries e -> Maybe Text
 cabalFileInArchive = \case
   Tar.Next entry rest
-    | ".cabal" `isSuffixOf` Tar.entryPath entry,
-      depth (Tar.entryPath entry) == 2,
+    | cabalFileAtTop (Tar.entryPath entry),
       Tar.NormalFile content _ <- Tar.entryContent entry ->
         Just (T.decodeUtf8Lenient (BL.toStrict content))
     | otherwise -> cabalFileInArchive rest
   Tar.Done -> Nothing
   Tar.Fail _ -> Nothing
+
+-- | Is this the path of a package's own @.cabal@ file?
+cabalFileAtTop :: FilePath -> Bool
+cabalFileAtTop path = ".cabal" `isSuffixOf` path && depth path == 2
   where
-    -- Top level of the archive: @pkg-1.0/pkg.cabal@ and nothing deeper, so
-    -- that a @.cabal@ bundled in a test fixture is not mistaken for it.
-    depth path = 1 + length (filter (== '/') path)
+    depth = (1 +) . length . filter (== '/')
 
 -- | Every module a package holds, whether it exposes it or not.
 --

@@ -16,7 +16,12 @@
 -- cache — each test says so and is marked pending rather than failing.
 module Tilia.Fixity.PlanSpec (spec) where
 
+import Codec.Archive.Tar qualified as Tar
+import Codec.Archive.Tar.Entry qualified as Tar
+import Codec.Compression.GZip qualified as GZip
+import Control.Exception (bracket)
 import Control.Monad (when)
+import Data.ByteString.Lazy qualified as BL
 import Data.Choice (pattern Is)
 import Data.Foldable (traverse_)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
@@ -27,9 +32,11 @@ import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as T
 import Data.Text.IO qualified as T
 import System.Directory (createDirectoryIfMissing)
-import System.FilePath (takeBaseName, takeDirectory, (</>))
+import System.Environment (lookupEnv, setEnv, unsetEnv)
+import System.FilePath (dropExtension, takeBaseName, takeDirectory, (</>))
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
 import Tilia.Fixity
@@ -42,6 +49,7 @@ spec = do
   preparation
   tokens
   reexports
+  hscModules
   plan <- runIO (readBuildPlan (planPathFor "."))
   case plan of
     Left _ -> unavailable "no build plan; run cabal build first"
@@ -254,6 +262,58 @@ reexports = describe "an operator a module passes on" $ do
   it "does not come from a type handed on by an import that hides it" $
     chased "module M (Doc (..)) where\nimport Text.PrettyPrint hiding (Doc (..))\nimport Control.Arrow\n"
       `shouldReturn` Nothing
+
+-- | What a module written for @hsc2hs@ amounts to, by either route to one.
+--
+-- Both fixtures below are what @hsc2hs@ takes and no compiler does, and
+-- both write a fixity that the answer is expected to ignore. That is the
+-- point: a module nothing can read is answered out of
+-- 'Tilia.Fixity.ByHand.hscFixities' or not at all, and were either answer
+-- arrived at by reading the file there would be no answer to give.
+hscModules :: Spec
+hscModules = describe "a module written for hsc2hs" $ do
+  it "declares nothing, where it is one of the project's own" $
+    withFakeProject [("src/Cursed.hsc", cursed)] $
+      \rs -> do
+        askFixities rs "Cursed" `shouldReturn` Just Map.empty
+        askExportNames rs "Cursed" `shouldReturn` Just Set.empty
+        askChildren rs "Cursed" `shouldReturn` Map.empty
+
+  it "declares what the table says, where it comes out of a tarball"
+    $ withFakeArchive
+      [ ("Cursed.hsc", cursed),
+        ("System/Posix/Signals.hsc", signals)
+      ]
+    $ \rs -> do
+      askFixities rs "Cursed" `shouldReturn` Just Map.empty
+      askExportNames rs "System.Posix.Signals"
+        `shouldReturn` Just (Set.fromList [OpName "addSignal", OpName "deleteSignal"])
+
+-- | A module of the kind @hsc2hs@ takes, declaring an operator nothing can
+-- get at.
+cursed :: Text
+cursed =
+  T.unlines
+    [ "#include <signal.h>",
+      "module Cursed (interrupt, (<+>)) where",
+      "infixr 5 <+>",
+      "(<+>) :: Int -> Int -> Int",
+      "a <+> b = a + b",
+      "interrupt :: Int",
+      "interrupt = #const SIGINT"
+    ]
+
+-- | What @unix@ writes, in miniature: a fixity declaration for a name used
+-- in backticks, in a file no reading of ours reaches.
+signals :: Text
+signals =
+  T.unlines
+    [ "#include <signal.h>",
+      "module System.Posix.Signals (addSignal, deleteSignal) where",
+      "infixr `addSignal`, `deleteSignal`",
+      "addSignal :: Int -> Int -> Int",
+      "addSignal s m = m + #const SIGINT"
+    ]
 
 -- | What the chase makes of one module's @<+>@, against a world of modules
 -- that disagree about it.
@@ -954,8 +1014,80 @@ withFakePlan sources act =
       Left why -> error (T.unpack why)
       Right plan -> act plan
   where
-    haskellIn = filter ((".hs" `Data.List.isSuffixOf`) . fst)
+    haskellIn = filter (isModule . fst)
+    isModule path = any (`Data.List.isSuffixOf` path) [".hs", ".hsc"]
     named (path, _) = T.pack (takeBaseName path)
+
+-- | A project whose one dependency is a package off Hackage, with the
+-- tarball @cabal@ would have fetched written where it would have put it.
+--
+-- Nothing here is local: this is the other route to a module, the one that
+-- opens an archive. @CABAL_DIR@ says where the package cache is and
+-- @XDG_CACHE_HOME@ where what is read gets remembered, so the run reaches
+-- the tarball below and no further, and leaves nothing behind.
+withFakeArchive :: [(FilePath, Text)] -> (Resolver -> IO a) -> IO a
+withFakeArchive sources act =
+  withSystemTempDirectory "tilia-archive" $ \dir -> do
+    let held = T.unpack (name <> "-" <> version)
+        tarball =
+          dir
+            </> "packages"
+            </> "hackage.haskell.org"
+            </> T.unpack name
+            </> T.unpack version
+            </> held
+              <> ".tar.gz"
+    createDirectoryIfMissing True (takeDirectory tarball)
+    writeTarball tarball $
+      (held </> T.unpack name <> ".cabal", cabal)
+        : [(held </> path, text) | (path, text) <- sources]
+    T.writeFile (dir </> "plan.json") plan
+    withEnvironment [("CABAL_DIR", dir), ("XDG_CACHE_HOME", dir </> "cache")] $
+      readBuildPlan (dir </> "plan.json") >>= \case
+        Left why -> error (T.unpack why)
+        Right p -> newResolver p >>= act
+  where
+    name = "tilia-hsc-fixture"
+    version = "1.0"
+    cabal =
+      T.unlines
+        [ "cabal-version: 2.4",
+          "name: " <> name,
+          "version: " <> version,
+          "library",
+          "  exposed-modules: " <> T.intercalate ", " (map moduleIn sources),
+          "  hs-source-dirs: .",
+          "  default-language: Haskell2010"
+        ]
+    moduleIn (path, _) = T.replace "/" "." (T.pack (dropExtension path))
+    plan =
+      "{\"compiler-id\":\"ghc-0.0\",\"install-plan\":\
+      \[{\"pkg-name\":\""
+        <> name
+        <> "\",\"pkg-version\":\""
+        <> version
+        <> "\",\"pkg-src\":{\"type\":\"repo-tar\"}}]}"
+
+-- | Write the named files as a gzipped tarball.
+writeTarball :: FilePath -> [(FilePath, Text)] -> IO ()
+writeTarball path entries =
+  BL.writeFile path . GZip.compress . Tar.write =<< traverse entry entries
+  where
+    entry (inside, text) = case Tar.toTarPath False inside of
+      Left why -> error why
+      Right tarPath -> pure (Tar.fileEntry tarPath (BL.fromStrict (T.encodeUtf8 text)))
+
+-- | Run something with the given variables set, and the environment as it
+-- was afterwards however it turns out.
+withEnvironment :: [(String, String)] -> IO a -> IO a
+withEnvironment vars act = bracket set restore (const act)
+  where
+    set = traverse remember vars
+    remember (key, value) = do
+      was <- lookupEnv key
+      setEnv key value
+      pure (key, was)
+    restore = traverse_ (\(key, was) -> maybe (unsetEnv key) (setEnv key) was)
 
 -- | Say why nothing could be tested, once, instead of failing repeatedly.
 unavailable :: String -> Spec
