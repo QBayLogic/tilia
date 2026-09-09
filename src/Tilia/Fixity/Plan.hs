@@ -470,7 +470,7 @@ data Resolver = Resolver
   { -- | What a module exports, with 'Nothing' for one that could not be
     -- read, which is not the same as its having no operators; see
     -- 'Tilia.Fixity.resolveScope' for why the difference has to survive.
-    askFixities :: Text -> IO (Maybe (Map OpName Fixity)),
+    askFixities :: Text -> IO (Maybe (Fixities)),
     -- | What a module keeps under each of its names, for the sake of a
     -- @T(..)@ in an import list.
     askChildren :: Text -> IO (Map OpName (Set OpName)),
@@ -775,7 +775,7 @@ data Workings = Workings
     -- | How to reach another module. Tied back on itself by
     -- 'newResolverVia', so that the memo it keeps covers the recursive
     -- calls too.
-    wkReach :: Set Text -> Text -> IO (Maybe (Map OpName Fixity)),
+    wkReach :: Set Text -> Text -> IO (Maybe (Fixities)),
     -- | How to reach another module for what its names carry with them,
     -- tied back the same way and against a visiting set of its own.
     wkReachChildren :: Set Text -> Text -> IO (Map OpName (Set OpName)),
@@ -802,7 +802,7 @@ resolveModule ::
   Text ->
   -- | Its operator fixities, or 'Nothing' if they could not be
   -- established.
-  IO (Maybe (Map OpName Fixity))
+  IO (Maybe (Fixities))
 resolveModule
   Workings
     { wkRoutes,
@@ -877,7 +877,7 @@ resolveModule
       answered = \case
         Declares fixities -> Just fixities
         Unreadable -> byHand modName
-      byHand = (`Map.lookup` byHandFixities)
+      byHand = fmap inBothNamespaces . (`Map.lookup` byHandFixities)
       cachedFor package = case wkCache of
         Nothing -> pure Nothing
         Just c -> cachedFixities c package modName
@@ -943,7 +943,7 @@ interfaceIndex installed =
         <> T.take 24 (T.decodeUtf8Lenient (B16.encode (SHA256.hash (T.encodeUtf8 (T.pack dir)))))
 
 -- | Present a fixity map as an 'Interface'.
-asInterface :: Map OpName Fixity -> Interface
+asInterface :: Fixities -> Interface
 asInterface fixities =
   Interface
     { interfaceDeclares = fixities,
@@ -966,11 +966,10 @@ fromInterface interfaceOf modName =
       pure $ case traverse snd declarers of
         Nothing -> Unreadable
         Just _ ->
-          Declares . Map.union (interfaceDeclares iface) . Map.fromList $
-            [ (op, fixity)
+          Declares . Map.union (interfaceDeclares iface) . Map.unions $
+            [ Map.filterWithKey (\(_, o) _ -> o == op) (interfaceDeclares declarer)
             | (m, op) <- interfacePassedOn iface,
-              Just (Just declarer) <- [lookup m declarers],
-              Just fixity <- [Map.lookup op (interfaceDeclares declarer)]
+              Just (Just declarer) <- [lookup m declarers]
             ]
   where
     asked m = do
@@ -1047,7 +1046,7 @@ fromSource ::
   -- | How to reach another module, for chasing re-exports. This is
   -- 'resolveModule' tied back on itself, with the visiting set already
   -- extended.
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  (Text -> IO (Maybe (Fixities))) ->
   -- | How to reach another module for what its names carry with them.
   (Text -> IO (Map OpName (Set OpName))) ->
   -- | Modules currently being resolved, passed through so that a
@@ -1086,7 +1085,7 @@ fromText ::
   -- | How to reach another module, for chasing re-exports. This is
   -- 'resolveModule' tied back on itself, with the visiting set already
   -- extended.
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  (Text -> IO (Maybe (Fixities))) ->
   -- | How to reach another module for what its names carry with them.
   (Text -> IO (Map OpName (Set OpName))) ->
   -- | Modules currently being resolved, passed through so that a
@@ -1096,7 +1095,7 @@ fromText ::
   Text ->
   -- | Its name.
   Text ->
-  IO (Maybe (Map OpName Fixity))
+  IO (Maybe (Fixities))
 fromText extensions reach reachChildren visiting source modName =
   case traverse parsed =<< configurations of
     Nothing -> pure Nothing
@@ -1128,7 +1127,7 @@ fromText extensions reach reachChildren visiting source modName =
 -- Every configuration unresolvable is still no answer. There is nothing
 -- left to agree, and saying the module declares nothing would be a guess
 -- rather than the silence it deserves.
-agreeing :: [Maybe (Map OpName Fixity)] -> Maybe (Map OpName Fixity)
+agreeing :: [Maybe (Fixities)] -> Maybe (Fixities)
 agreeing answers = case catMaybes answers of
   [] -> Nothing
   readable -> foldM together Map.empty readable
@@ -1183,7 +1182,7 @@ readFileText path = quietly Nothing $ do
 -- whichever module the name came from.
 withReexports ::
   -- | How to reach another module, for names this one only passes on.
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  (Text -> IO (Maybe (Fixities))) ->
   -- | How to reach another module for what its names carry with them,
   -- which is what a @T(..)@ this module hands on amounts to.
   (Text -> IO (Map OpName (Set OpName))) ->
@@ -1197,7 +1196,7 @@ withReexports ::
   HsModule GhcPs ->
   -- | What it declares together with what it re-exports, or 'Nothing' if a
   -- module it passes names on from could not be read.
-  IO (Maybe (Map OpName Fixity))
+  IO (Maybe (Fixities))
 withReexports reach reachChildren visiting modName hsModule =
   case moduleExports hsModule of
     Nothing -> pure (Just own)
@@ -1217,10 +1216,10 @@ withReexports reach reachChildren visiting modName hsModule =
         seen <- visible
         whole <- wholeModules
         let passedOn =
-              Map.fromList
-                [ (op, fixity)
+              Map.unions
+                [ found
                 | (qualifier, op) <- wanted,
-                  fixity <- take 1 (from qualifier op seen)
+                  found <- take 1 (from qualifier op seen)
                 ]
         pure (Map.unions (own : passedOn : whole))
   where
@@ -1236,10 +1235,11 @@ withReexports reach reachChildren visiting modName hsModule =
         not (Set.member op defined)
       ]
     from qualifier op seen =
-      [ fixity
+      [ found
       | (i, exported) <- seen,
         canSupply qualifier op i,
-        Just fixity <- [Map.lookup op exported]
+        let found = Map.filterWithKey (\(_, o) _ -> o == op) exported,
+        not (Map.null found)
       ]
     fromModule m
       | m `Set.member` visiting = pure (Just Map.empty)
@@ -1287,7 +1287,7 @@ exportNamesWithReexports ::
   IO (Maybe (Set OpName))
 exportNamesWithReexports reachNames reachChildren modName hsModule =
   case moduleExports hsModule of
-    Nothing -> pure (Just (Map.keysSet (declaredFixities hsModule)))
+    Nothing -> pure (Just (Set.fromList [op | (_, op) <- Map.keys (declaredFixities hsModule)]))
     Just items -> do
       carried <- carriedNames reachChildren hsModule items
       wholes <- traverse reachNames (wantedModules modName hsModule items)

@@ -13,12 +13,14 @@ where
 
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Hs (HsModule)
 import GHC.Hs.Extension (GhcPs)
 import Tilia.Fixity
   ( Direction (..),
+    Fixities,
     Fixity (..),
     Import (..),
     OpName (..),
@@ -29,6 +31,9 @@ import Tilia.Fixity
     moduleImports,
     operatorSpelling,
     operatorsUsed,
+    reachAmbiguous,
+    reachIn,
+    reachUnqualified,
     spellUnreadIn,
   )
 import Tilia.Palette (Color (Operator, Place), Palette, paint)
@@ -74,7 +79,7 @@ data OperatorNote = OperatorNote
 -- | Record everything that decided one module's fixities.
 fixityNotes ::
   -- | What each module in scope exports, as the resolver answers it
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  (Text -> IO (Maybe (Fixities))) ->
   -- | The scope the module was formatted under
   Scope ->
   -- | The module
@@ -99,22 +104,32 @@ fixityNotes resolve scope hsModule = do
                 then Nothing
                 else Just (importAlias i),
             noteQualified = importQualified i,
-            noteBrought = Map.size <$> answer
+            noteBrought = Set.size . Set.fromList . map snd . Map.keys <$> answer
           }
 
     used =
-      Map.elems (Map.fromList [(uncurry operatorSpelling u, u) | u <- operatorsUsed hsModule])
+      Map.elems
+        ( Map.fromList
+            [ ((namespace, uncurry operatorSpelling u), (namespace, u))
+            | (namespace, u) <- operatorsUsed hsModule
+            ]
+        )
 
     here =
       [ (op, fixity)
-      | (OpName op, (fixity, DeclaredHere)) <- Map.toList (scopeUnqualified scope)
+      | (OpName op, (fixity, DeclaredHere)) <- Map.toList declaredHere
       ]
+    declaredHere =
+      Map.union
+        (reachUnqualified (scopeInTerms scope))
+        (reachUnqualified (scopeInTypes scope))
 
-    aboutOperator (qualifier, op) =
+    aboutOperator (namespace, (qualifier, op)) =
       OperatorNote
         { noteSpelling = operatorSpelling qualifier op,
-          noteResolution = lookupFixity scope qualifier op,
-          noteAmbiguous = (qualifier, op) `elem` scopeAmbiguous scope
+          noteResolution = lookupFixity scope namespace qualifier op,
+          noteAmbiguous =
+            (qualifier, op) `elem` reachAmbiguous (reachIn namespace scope)
         }
 
 -- | Set out all the 'FixityNotes' per file.

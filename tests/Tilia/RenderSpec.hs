@@ -15,6 +15,7 @@ import Tilia.Fixity
     Fixity (..),
     OpName (..),
     Provenance (..),
+    Reach (..),
     Scope (..),
   )
 import Tilia.Parser (defaultParserConfig, parseModule)
@@ -307,13 +308,24 @@ spreadChain =
 arithmetic :: Scope
 arithmetic =
   Scope
-    { scopeUnqualified =
-        Map.fromList
-          [ (OpName "$", (Fixity RightAssoc 0, DeclaredHere)),
-            (OpName "+", (Fixity LeftAssoc 6, DeclaredHere)),
-            (OpName "*", (Fixity LeftAssoc 7, DeclaredHere))
-          ],
-      scopeQualified = Map.empty,
-      scopeUnread = [],
-      scopeAmbiguous = []
+    { scopeInTypes = nothingReaches,
+      scopeInTerms =
+        nothingReaches
+          { reachUnqualified =
+              Map.fromList
+                [ (OpName "$", (Fixity RightAssoc 0, DeclaredHere)),
+                  (OpName "+", (Fixity LeftAssoc 6, DeclaredHere)),
+                  (OpName "*", (Fixity LeftAssoc 7, DeclaredHere))
+                ]
+          },
+      scopeUnread = []
+    }
+
+-- | A namespace with nothing in it.
+nothingReaches :: Reach
+nothingReaches =
+  Reach
+    { reachUnqualified = Map.empty,
+      reachQualified = Map.empty,
+      reachAmbiguous = []
     }

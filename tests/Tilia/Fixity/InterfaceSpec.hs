@@ -92,6 +92,35 @@ spec = do
     it "leaves a capitalised name this module declared alone" $
       passesOn "exports:\n  Value\n" `shouldBe` []
 
+  describe "which namespace a fixity governs" $ do
+    it "gives one to types where the module declares a type of that name" $
+      declaresIn "fixities infix 4 :~:\nab12\n  data (:~:) a b where\n"
+        `shouldBe` [((InTypes, OpName ":~:"), Fixity NoAssoc 4)]
+
+    it "gives one to terms where nothing declares a type of that name" $
+      declaresIn "fixities infixl 9 !\nab12\n  (!) :: Int -> Int -> Int\n"
+        `shouldBe` [((InTerms, OpName "!"), Fixity LeftAssoc 9)]
+
+    it "reads a type synonym as a type" $
+      declaresIn "fixities infixr 5 :+\nab12\n  type (:+) :: * -> * -> *\n"
+        `shouldBe` [((InTypes, OpName ":+"), Fixity RightAssoc 5)]
+
+    it "reads a type family as a type" $
+      declaresIn "fixities infixl 6 ==\nab12\n  type family (==) a b where\n"
+        `shouldBe` [((InTypes, OpName "=="), Fixity LeftAssoc 6)]
+
+    it "reads a class as a type" $
+      declaresIn "fixities infixl 4 <%>\nab12\n  class (<%>) a where\n"
+        `shouldBe` [((InTypes, OpName "<%>"), Fixity LeftAssoc 4)]
+
+    it "takes a role declaration as saying the name is a type" $
+      declaresIn "fixities infixl 9 !\nab12\n  type role (!) nominal\n"
+        `shouldBe` [((InTypes, OpName "!"), Fixity LeftAssoc 9)]
+
+    it "is not misled by declarations of other names" $
+      declaresIn "fixities infixl 9 !\nab12\n  data Other a b where\n  (!) :: Int\n"
+        `shouldBe` [((InTerms, OpName "!"), Fixity LeftAssoc 9)]
+
   describe "what a name carries with it" $ do
     it "takes the members an entry wears in braces" $
       carries "exports:\n  GHC.Internal.Base.NonEmpty{GHC.Internal.Base.:|}\n"
@@ -132,7 +161,7 @@ spec = do
             \orphans: Data.Orphans\n\
             \trusted: none\n"
       fmap (Map.toList . interfaceDeclares) (parseInterface "Data.Aeson" out)
-        `shouldBe` Just [(OpName "!", Fixity LeftAssoc 9)]
+        `shouldBe` Just [((InTerms, OpName "!"), Fixity LeftAssoc 9)]
       fmap interfacePassedOn (parseInterface "Data.Aeson" out)
         `shouldBe` Just [("Data.Aeson.Types.FromJSON", OpName ".:")]
 
@@ -151,8 +180,18 @@ spec = do
 header :: Text -> Text
 header modName = "interface " <> modName <> " 9103\n"
 
+-- | The fixities an interface of this shape declares, by name alone.
 declares :: Text -> [(OpName, Fixity)]
-declares = maybe [] (Map.toList . interfaceDeclares) . parseInterface "M" . (header "M" <>)
+declares =
+  map (\((_, op), fixity) -> (op, fixity))
+    . maybe [] (Map.toList . interfaceDeclares)
+    . parseInterface "M"
+    . (header "M" <>)
+
+-- | The same, keeping the namespace each governs.
+declaresIn :: Text -> [((Namespace, OpName), Fixity)]
+declaresIn =
+  maybe [] (Map.toList . interfaceDeclares) . parseInterface "M" . (header "M" <>)
 
 passesOn :: Text -> [(Text, OpName)]
 passesOn = maybe [] interfacePassedOn . parseInterface "M" . (header "M" <>)

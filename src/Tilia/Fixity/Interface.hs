@@ -25,8 +25,9 @@ import Tilia.Utils (quietly)
 
 -- | What an interface says about the operators a module offers.
 data Interface = Interface
-  { -- | The fixities the module declares itself.
-    interfaceDeclares :: Map OpName Fixity,
+  { -- | The fixities the module declares itself, by the namespace each
+    -- governs.
+    interfaceDeclares :: Fixities,
     -- | The names it exports that some other module declared, each with the
     -- module that did. Not only the operators: a plain function can be
     -- given a fixity and used in backticks, and one of these is where the
@@ -64,7 +65,10 @@ parseInterface modName out
   | otherwise =
       Just
         Interface
-          { interfaceDeclares = Map.fromList (concatMap declared (sectionsNamed "fixities")),
+          { interfaceDeclares =
+              namespaced
+                (typeNamesIn out)
+                (Map.fromList (concatMap declared (sectionsNamed "fixities"))),
             interfacePassedOn = concatMap passedOn (sectionsNamed "exports:"),
             interfaceChildren =
               Map.unionsWith Set.union (map childrenIn (sectionsNamed "exports:"))
@@ -82,6 +86,38 @@ parseInterface modName out
         [ (nameOnly parent, Set.fromList (map nameOnly kids))
         | (parent, kids@(_ : _)) <- exportEntries section
         ]
+
+-- | The names an interface declares as types.
+--
+-- The compiler writes each declaration out, and a type is written as one:
+-- @data (:~:) a b where@, @type (==) :: …@, @class Eq a where@. A name
+-- that turns up in none of those is a value, which is the other namespace.
+typeNamesIn :: Text -> Set OpName
+typeNamesIn out =
+  Set.fromList
+    [ nameOnly (T.dropWhileEnd (== ')') (T.dropWhile (== '(') name))
+    | l <- T.lines out,
+      indented l,
+      (keyword : rest) <- [T.words l],
+      keyword `elem` (["data", "type", "newtype", "class"] :: [Text]),
+      name <- take 1 (dropWhile (`elem` (["family", "role", "instance"] :: [Text])) rest)
+    ]
+  where
+    indented l = maybe False (== ' ') (fst <$> T.uncons l)
+
+-- | Sort declared fixities into the namespaces they govern.
+--
+-- A fixity for a name the interface declares as a type governs types; one
+-- for any other name governs terms. A name that is both—rare, and legal—
+-- gets the fixity in both, which is what the interface says: it records
+-- one fixity for the name and no namespace of its own.
+namespaced :: Set OpName -> Map OpName Fixity -> Fixities
+namespaced types declared =
+  Map.fromList
+    [ ((namespace, op), fixity)
+    | (op, fixity) <- Map.toList declared,
+      namespace <- if Set.member op types then [InTypes] else [InTerms]
+    ]
 
 -- | Split the output into sections.
 sections :: Text -> [(Text, Text)]

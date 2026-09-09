@@ -16,7 +16,6 @@ import Control.Monad (filterM)
 import Data.ByteString qualified as BS
 import Data.Foldable (for_)
 import Data.List (isSuffixOf, sort)
-import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (listToMaybe)
 import Data.Set qualified as Set
@@ -243,7 +242,7 @@ contradicts (modName, interfaceFile) =
 -- package's source did not produce.
 undeclared ::
   -- | What a module declares, read from the package's source
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  (Text -> IO (Maybe (Fixities))) ->
   -- | The module, and the interface the compiler wrote for it
   (Text, FilePath) ->
   IO [String]
@@ -283,9 +282,9 @@ undeclared fromSource (modName, interfaceFile) =
 -- have to arrive at the same place.
 conflicting ::
   -- | The answer read out of the package's source
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  (Text -> IO (Maybe (Fixities))) ->
   -- | The answer read out of the compiler's interfaces
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  (Text -> IO (Maybe (Fixities))) ->
   Text ->
   IO [String]
 conflicting fromSource fromInterface modName = do

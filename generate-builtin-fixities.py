@@ -247,13 +247,89 @@ def read_fixities(
                 table[module].setdefault(name, ("l", 9))
     return table
 
+# What GHCi writes a declaration of each kind with. A line opening with one
+# of these names the thing it declares, which is how an operator is placed
+# in the type namespace.
+DECLARES_TYPE = re.compile(
+    rf"^(?:type family|type role|type instance|type|data instance|data|newtype|class)\s+(?:\({SYMBOL}\)|{IDENT})"
+)
+# `type role (:~:) nominal` and `type instance …` are about a type without
+# declaring one, but they only ever mention a name that is one.
+SUBJECT = re.compile(rf"^(?:[a-z ]+?\s+)?(\({SYMBOL}\)|{IDENT})")
+# `(<+>) :: …`, `pattern (:>) :: …` and the method signatures inside a
+# class: a name with a type is a term.
+SIGNATURE = re.compile(rf"^(?:pattern\s+)?(\({SYMBOL}\)|{IDENT})\s+::")
+
+def declared_names(line: str) -> tuple[str | None, str | None]:
+    """What a line of `:info` output declares: a type name, a term name."""
+    stripped = line.strip()
+    if DECLARES_TYPE.match(stripped):
+        keywords = ("type", "family", "role", "instance", "data", "newtype", "class")
+        words = stripped.split()
+        for word in words[1:]:
+            if word not in keywords:
+                return word.strip("()"), None
+        return None, None
+    signature = SIGNATURE.match(stripped)
+    if signature:
+        return None, signature.group(1).strip("()")
+    return None, None
+
+def constructors_in(line: str) -> list[str]:
+    """The constructors a data declaration writes out, infix ones included."""
+    stripped = line.strip()
+    if not (stripped.startswith("data ") or stripped.startswith("newtype ")):
+        return []
+    _, _, rhs = stripped.partition("=")
+    return [word.strip("()") for alternative in rhs.split("|") for word in alternative.split()]
+
+def read_namespaces(
+    ghc: Path, table: dict[str, dict[str, tuple[str, int]]]
+) -> dict[str, dict[str, str]]:
+    """Which namespace each operator in the table belongs to.
+
+    A fixity governs the namespaces the name is declared in, and `:info`
+    says which those are: a type operator comes back as a `data` or `type`
+    declaration, a value or a pattern synonym as a signature. One that
+    cannot be placed governs both, which is what every fixity did before
+    any of them were told apart.
+    """
+    wanted = [(module, op) for module in sorted(table) for op in sorted(table[module])]
+    found: dict[str, dict[str, str]] = {m: {} for m in table}
+    for chunk in chunked(wanted, CHUNK):
+        script = PREAMBLE
+        for i, (module, op) in enumerate(chunk):
+            name = op if re.fullmatch(IDENT, op) else f"({op})"
+            script += marker(i) + scope(module) + f":info {name}\n"
+        out, _ = run_ghci(ghc, script)
+        for (module, op), block in zip(chunk, split_blocks(out, len(chunk))):
+            types = False
+            terms = False
+            for line in block:
+                declared_type, declared_term = declared_names(line)
+                if declared_type == op:
+                    types = True
+                if declared_term == op:
+                    terms = True
+                if op in constructors_in(line):
+                    terms = True
+            found[module][op] = (
+                "b" if types == terms else "t" if types else "v"
+            )
+    return found
+
 ASSOC = {"l": "LeftAssoc", "r": "RightAssoc", "": "NoAssoc"}
+NAMESPACE = {"t": "[InTypes]", "v": "[InTerms]", "b": "[InTypes, InTerms]"}
 
 def escape(op: str) -> str:
     """Spell an operator as a Haskell string literal."""
     return op.replace("\\", "\\\\").replace('"', '\\"')
 
-def render(table: dict[str, dict[str, tuple[str, int]]], version: str) -> str:
+def render(
+    table: dict[str, dict[str, tuple[str, int]]],
+    namespaces: dict[str, dict[str, str]],
+    version: str,
+) -> str:
     """Write the table out as Tilia formats it.
     """
     entries = []
@@ -263,7 +339,7 @@ def render(table: dict[str, dict[str, tuple[str, int]]], version: str) -> str:
             entries.append(f'entry "{module}" []')
             continue
         rendered = ", ".join(
-            f'("{escape(op)}", {ASSOC[d]}, {p})'
+            f'("{escape(op)}", {NAMESPACE[namespaces[module].get(op, "b")]}, {ASSOC[d]}, {p})'
             for op, (d, p) in sorted(ops.items())
         )
         entries.append(f'entry\n        "{module}"\n        [{rendered}]')
@@ -291,14 +367,20 @@ import Data.Text (Text)
 import Tilia.Fixity
 
 -- | Every module the boot packages expose, with the operators it exports.
-builtinFixities :: Map Text (Map OpName Fixity)
+builtinFixities :: Map Text Fixities
 builtinFixities =
   Map.fromList
 {body}
     ]
   where
     entry name ops =
-      (name, Map.fromList [(OpName o, Fixity d p) | (o, d, p) <- ops])
+      ( name,
+        Map.fromList
+          [ ((namespace, OpName o), Fixity d p)
+          | (o, governs, d, p) <- ops,
+            namespace <- governs
+          ]
+      )
 '''
 
 def main() -> None:
@@ -336,7 +418,14 @@ def main() -> None:
     table = read_fixities(ghc, exports)
     print(f"{sum(len(v) for v in table.values())} fixities", file=sys.stderr)
 
-    output.write_text(render(table, version))
+    namespaces = read_namespaces(ghc, table)
+    placed = sum(1 for m in namespaces.values() for n in m.values() if n != "b")
+    print(
+        f"{placed} of them placed in one namespace or the other",
+        file=sys.stderr,
+    )
+
+    output.write_text(render(table, namespaces, version))
     print(f"wrote {output}", file=sys.stderr)
 
 if __name__ == "__main__":

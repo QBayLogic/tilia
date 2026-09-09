@@ -108,7 +108,7 @@ cachedFixities ::
 cachedFixities cache@(Cache _ (PlanToken token)) package modName =
   fmap join . readIfPresent (fixitiesPath cache package modName) $ \contents ->
     case T.lines contents of
-      ("read" : entries) -> Just (Declares (Map.fromList (mapMaybe parseEntry entries)))
+      ("read" : entries) -> Declares . Map.fromList <$> traverse parseEntry entries
       [unread] | unread == "unread\t" <> token -> Just Unreadable
       _ -> Nothing
 
@@ -282,23 +282,33 @@ storeInstalled cache@(Cache _ (PlanToken token)) found
 ----------------------------------------------------------------------------
 -- Entries
 
-renderEntry :: (OpName, Fixity) -> Text
-renderEntry (OpName op, Fixity direction precedence) =
-  T.intercalate "\t" [op, renderDirection direction, T.pack (show precedence)]
+renderEntry :: ((Namespace, OpName), Fixity) -> Text
+renderEntry ((namespace, OpName op), Fixity direction precedence) =
+  T.intercalate
+    "\t"
+    [op, renderNamespace namespace, renderDirection direction, T.pack (show precedence)]
   where
+    renderNamespace = \case
+      InTypes -> "t"
+      InTerms -> "v"
     renderDirection = \case
       LeftAssoc -> "l"
       RightAssoc -> "r"
       NoAssoc -> "n"
 
-parseEntry :: Text -> Maybe (OpName, Fixity)
+parseEntry :: Text -> Maybe ((Namespace, OpName), Fixity)
 parseEntry line = case T.splitOn "\t" line of
-  [op, direction, precedence] -> do
+  [op, namespace, direction, precedence] -> do
+    n <- parseNamespace namespace
     d <- parseDirection direction
     p <- readPrecedence precedence
-    pure (OpName op, Fixity d p)
+    pure ((n, OpName op), Fixity d p)
   _ -> Nothing
   where
+    parseNamespace = \case
+      "t" -> Just InTypes
+      "v" -> Just InTerms
+      _ -> Nothing
     parseDirection = \case
       "l" -> Just LeftAssoc
       "r" -> Just RightAssoc

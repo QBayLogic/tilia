@@ -15,20 +15,20 @@ import Data.Text (Text)
 import Tilia.Fixity
 
 -- | Every module the boot packages expose, with the operators it exports.
-builtinFixities :: Map Text (Map OpName Fixity)
+builtinFixities :: Map Text Fixities
 builtinFixities =
   Map.fromList
     [ entry
         "Control.Applicative"
-        [("*>", LeftAssoc, 4), ("<$", LeftAssoc, 4), ("<$>", LeftAssoc, 4), ("<*", LeftAssoc, 4), ("<**>", LeftAssoc, 4), ("<*>", LeftAssoc, 4), ("<|>", LeftAssoc, 3)],
+        [("*>", [InTerms], LeftAssoc, 4), ("<$", [InTerms], LeftAssoc, 4), ("<$>", [InTerms], LeftAssoc, 4), ("<*", [InTerms], LeftAssoc, 4), ("<**>", [InTerms], LeftAssoc, 4), ("<*>", [InTerms], LeftAssoc, 4), ("<|>", [InTerms], LeftAssoc, 3)],
       entry "Control.Applicative.Backwards" [],
       entry "Control.Applicative.Lift" [],
       entry
         "Control.Arrow"
-        [("&&&", RightAssoc, 3), ("***", RightAssoc, 3), ("+++", RightAssoc, 2), ("<+>", RightAssoc, 5), ("<<<", RightAssoc, 1), ("<<^", RightAssoc, 1), (">>>", RightAssoc, 1), (">>^", RightAssoc, 1), ("^<<", RightAssoc, 1), ("^>>", RightAssoc, 1), ("|||", RightAssoc, 2)],
+        [("&&&", [InTerms], RightAssoc, 3), ("***", [InTerms], RightAssoc, 3), ("+++", [InTerms], RightAssoc, 2), ("<+>", [InTerms], RightAssoc, 5), ("<<<", [InTerms], RightAssoc, 1), ("<<^", [InTerms], RightAssoc, 1), (">>>", [InTerms], RightAssoc, 1), (">>^", [InTerms], RightAssoc, 1), ("^<<", [InTerms], RightAssoc, 1), ("^>>", [InTerms], RightAssoc, 1), ("|||", [InTerms], RightAssoc, 2)],
       entry
         "Control.Category"
-        [(".", RightAssoc, 9), ("<<<", RightAssoc, 1), (">>>", RightAssoc, 1)],
+        [(".", [InTerms], RightAssoc, 9), ("<<<", [InTerms], RightAssoc, 1), (">>>", [InTerms], RightAssoc, 1)],
       entry "Control.Concurrent" [],
       entry "Control.Concurrent.Chan" [],
       entry "Control.Concurrent.MVar" [],
@@ -44,7 +44,7 @@ builtinFixities =
       entry "Control.Concurrent.STM.TVar" [],
       entry
         "Control.DeepSeq"
-        [("$!!", RightAssoc, 0), ("<$!!>", LeftAssoc, 4), ("deepseq", RightAssoc, 0)],
+        [("$!!", [InTerms], RightAssoc, 0), ("<$!!>", [InTerms], LeftAssoc, 4), ("deepseq", [InTerms], RightAssoc, 0)],
       entry "Control.Exception" [],
       entry "Control.Exception.Annotation" [],
       entry "Control.Exception.Backtrace" [],
@@ -52,7 +52,7 @@ builtinFixities =
       entry "Control.Exception.Context" [],
       entry
         "Control.Monad"
-        [("<$", LeftAssoc, 4), ("<$!>", LeftAssoc, 4), ("<=<", RightAssoc, 1), ("=<<", RightAssoc, 1), (">=>", RightAssoc, 1), (">>", LeftAssoc, 1), (">>=", LeftAssoc, 1)],
+        [("<$", [InTerms], LeftAssoc, 4), ("<$!>", [InTerms], LeftAssoc, 4), ("<=<", [InTerms], RightAssoc, 1), ("=<<", [InTerms], RightAssoc, 1), (">=>", [InTerms], RightAssoc, 1), (">>", [InTerms], LeftAssoc, 1), (">>=", [InTerms], LeftAssoc, 1)],
       entry "Control.Monad.Accum" [],
       entry "Control.Monad.Catch" [],
       entry "Control.Monad.Catch.Pure" [],
@@ -66,7 +66,7 @@ builtinFixities =
       entry "Control.Monad.Identity" [],
       entry
         "Control.Monad.Instances"
-        [("<$", LeftAssoc, 4), (">>", LeftAssoc, 1), (">>=", LeftAssoc, 1)],
+        [("<$", [InTerms], LeftAssoc, 4), (">>", [InTerms], LeftAssoc, 1), (">>=", [InTerms], LeftAssoc, 1)],
       entry "Control.Monad.RWS" [],
       entry "Control.Monad.RWS.CPS" [],
       entry "Control.Monad.RWS.Class" [],
@@ -116,14 +116,14 @@ builtinFixities =
       entry "Control.Monad.Zip" [],
       entry
         "Data.Array"
-        [("!", LeftAssoc, 9), ("//", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("//", [InTerms], LeftAssoc, 9)],
       entry
         "Data.Array.Base"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("//", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("//", [InTerms], LeftAssoc, 9)],
       entry "Data.Array.Byte" [],
       entry
         "Data.Array.IArray"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("//", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("//", [InTerms], LeftAssoc, 9)],
       entry "Data.Array.IO" [],
       entry "Data.Array.IO.Internals" [],
       entry "Data.Array.IO.Safe" [],
@@ -136,7 +136,7 @@ builtinFixities =
       entry "Data.Array.Storable.Safe" [],
       entry
         "Data.Array.Unboxed"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("//", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("//", [InTerms], LeftAssoc, 9)],
       entry "Data.Array.Unsafe" [],
       entry "Data.Bifoldable" [],
       entry "Data.Bifoldable1" [],
@@ -149,77 +149,77 @@ builtinFixities =
       entry "Data.Bitraversable" [],
       entry
         "Data.Bits"
-        [("!<<.", LeftAssoc, 8), ("!>>.", LeftAssoc, 8), (".&.", LeftAssoc, 7), (".<<.", LeftAssoc, 8), (".>>.", LeftAssoc, 8), (".^.", LeftAssoc, 6), (".|.", LeftAssoc, 5), ("rotate", LeftAssoc, 8), ("rotateL", LeftAssoc, 8), ("rotateR", LeftAssoc, 8), ("shift", LeftAssoc, 8), ("shiftL", LeftAssoc, 8), ("shiftR", LeftAssoc, 8), ("xor", LeftAssoc, 6)],
+        [("!<<.", [InTerms], LeftAssoc, 8), ("!>>.", [InTerms], LeftAssoc, 8), (".&.", [InTerms], LeftAssoc, 7), (".<<.", [InTerms], LeftAssoc, 8), (".>>.", [InTerms], LeftAssoc, 8), (".^.", [InTerms], LeftAssoc, 6), (".|.", [InTerms], LeftAssoc, 5), ("rotate", [InTerms], LeftAssoc, 8), ("rotateL", [InTerms], LeftAssoc, 8), ("rotateR", [InTerms], LeftAssoc, 8), ("shift", [InTerms], LeftAssoc, 8), ("shiftL", [InTerms], LeftAssoc, 8), ("shiftR", [InTerms], LeftAssoc, 8), ("xor", [InTerms], LeftAssoc, 6)],
       entry
         "Data.Bool"
-        [("&&", RightAssoc, 3), ("||", RightAssoc, 2)],
+        [("&&", [InTerms], RightAssoc, 3), ("||", [InTerms], RightAssoc, 2)],
       entry "Data.Bounded" [],
       entry
         "Data.ByteString"
-        [("!?", LeftAssoc, 9), ("cons", RightAssoc, 5), ("snoc", LeftAssoc, 5)],
+        [("!?", [InTerms], LeftAssoc, 9), ("cons", [InTerms], RightAssoc, 5), ("snoc", [InTerms], LeftAssoc, 5)],
       entry "Data.ByteString.Builder" [],
       entry "Data.ByteString.Builder.Extra" [],
       entry "Data.ByteString.Builder.Internal" [],
       entry
         "Data.ByteString.Builder.Prim"
-        [(">$<", LeftAssoc, 4), (">*<", RightAssoc, 5)],
+        [(">$<", [InTerms], LeftAssoc, 4), (">*<", [InTerms], RightAssoc, 5)],
       entry
         "Data.ByteString.Builder.Prim.Internal"
-        [(">$<", LeftAssoc, 4), (">*<", RightAssoc, 5)],
+        [(">$<", [InTerms], LeftAssoc, 4), (">*<", [InTerms], RightAssoc, 5)],
       entry "Data.ByteString.Builder.RealFloat" [],
       entry
         "Data.ByteString.Char8"
-        [("!?", LeftAssoc, 9), ("cons", RightAssoc, 5), ("snoc", LeftAssoc, 5)],
+        [("!?", [InTerms], LeftAssoc, 9), ("cons", [InTerms], RightAssoc, 5), ("snoc", [InTerms], LeftAssoc, 5)],
       entry "Data.ByteString.Internal" [],
       entry
         "Data.ByteString.Lazy"
-        [("!?", LeftAssoc, 9), ("cons", RightAssoc, 5), ("cons'", RightAssoc, 5), ("snoc", LeftAssoc, 5)],
+        [("!?", [InTerms], LeftAssoc, 9), ("cons", [InTerms], RightAssoc, 5), ("cons'", [InTerms], RightAssoc, 5), ("snoc", [InTerms], LeftAssoc, 5)],
       entry
         "Data.ByteString.Lazy.Char8"
-        [("!?", LeftAssoc, 9), ("cons", RightAssoc, 5), ("cons'", RightAssoc, 5), ("snoc", LeftAssoc, 5)],
+        [("!?", [InTerms], LeftAssoc, 9), ("cons", [InTerms], RightAssoc, 5), ("cons'", [InTerms], RightAssoc, 5), ("snoc", [InTerms], LeftAssoc, 5)],
       entry "Data.ByteString.Lazy.Internal" [],
       entry
         "Data.ByteString.Short"
-        [("!?", LeftAssoc, 9), ("cons", RightAssoc, 5), ("snoc", LeftAssoc, 5)],
+        [("!?", [InTerms], LeftAssoc, 9), ("cons", [InTerms], RightAssoc, 5), ("snoc", [InTerms], LeftAssoc, 5)],
       entry
         "Data.ByteString.Short.Internal"
-        [("!?", LeftAssoc, 9), ("cons", RightAssoc, 5), ("snoc", LeftAssoc, 5)],
+        [("!?", [InTerms], LeftAssoc, 9), ("cons", [InTerms], RightAssoc, 5), ("snoc", [InTerms], LeftAssoc, 5)],
       entry "Data.ByteString.Unsafe" [],
       entry "Data.Char" [],
       entry "Data.Coerce" [],
       entry
         "Data.Complex"
-        [(":+", NoAssoc, 6)],
+        [(":+", [InTerms], NoAssoc, 6)],
       entry "Data.Containers.ListUtils" [],
       entry
         "Data.Data"
-        [(":~:", NoAssoc, 4), (":~~:", NoAssoc, 4)],
+        [(":~:", [InTypes], NoAssoc, 4), (":~~:", [InTypes], NoAssoc, 4)],
       entry "Data.Dynamic" [],
       entry "Data.Either" [],
       entry "Data.Enum" [],
       entry
         "Data.Eq"
-        [("/=", NoAssoc, 4), ("==", NoAssoc, 4)],
+        [("/=", [InTerms], NoAssoc, 4), ("==", [InTerms], NoAssoc, 4)],
       entry "Data.Fixed" [],
       entry
         "Data.Foldable"
-        [("elem", NoAssoc, 4), ("notElem", NoAssoc, 4)],
+        [("elem", [InTerms], NoAssoc, 4), ("notElem", [InTerms], NoAssoc, 4)],
       entry "Data.Foldable1" [],
       entry
         "Data.Function"
-        [("$", RightAssoc, 0), ("&", LeftAssoc, 1), (".", RightAssoc, 9), ("on", LeftAssoc, 0)],
+        [("$", [InTerms], RightAssoc, 0), ("&", [InTerms], LeftAssoc, 1), (".", [InTerms], RightAssoc, 9), ("on", [InTerms], LeftAssoc, 0)],
       entry
         "Data.Functor"
-        [("$>", LeftAssoc, 4), ("<$", LeftAssoc, 4), ("<$>", LeftAssoc, 4), ("<&>", LeftAssoc, 1)],
+        [("$>", [InTerms], LeftAssoc, 4), ("<$", [InTerms], LeftAssoc, 4), ("<$>", [InTerms], LeftAssoc, 4), ("<&>", [InTerms], LeftAssoc, 1)],
       entry "Data.Functor.Classes" [],
       entry
         "Data.Functor.Compose"
-        [("Compose", RightAssoc, 9)],
+        [("Compose", [InTypes, InTerms], RightAssoc, 9)],
       entry "Data.Functor.Const" [],
       entry "Data.Functor.Constant" [],
       entry
         "Data.Functor.Contravariant"
-        [("$<", LeftAssoc, 4), (">$", LeftAssoc, 4), (">$$<", LeftAssoc, 4), (">$<", LeftAssoc, 4)],
+        [("$<", [InTerms], LeftAssoc, 4), (">$", [InTerms], LeftAssoc, 4), (">$$<", [InTerms], LeftAssoc, 4), (">$<", [InTerms], LeftAssoc, 4)],
       entry "Data.Functor.Identity" [],
       entry "Data.Functor.Product" [],
       entry "Data.Functor.Reverse" [],
@@ -229,91 +229,91 @@ builtinFixities =
       entry "Data.Int" [],
       entry
         "Data.IntMap"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("\\\\", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("\\\\", [InTerms], LeftAssoc, 9)],
       entry
         "Data.IntMap.Internal"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("\\\\", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("\\\\", [InTerms], LeftAssoc, 9)],
       entry "Data.IntMap.Internal.Debug" [],
       entry
         "Data.IntMap.Lazy"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("\\\\", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("\\\\", [InTerms], LeftAssoc, 9)],
       entry "Data.IntMap.Merge.Lazy" [],
       entry "Data.IntMap.Merge.Strict" [],
       entry
         "Data.IntMap.Strict"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("\\\\", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("\\\\", [InTerms], LeftAssoc, 9)],
       entry
         "Data.IntMap.Strict.Internal"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("\\\\", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("\\\\", [InTerms], LeftAssoc, 9)],
       entry
         "Data.IntSet"
-        [("\\\\", LeftAssoc, 9)],
+        [("\\\\", [InTerms], LeftAssoc, 9)],
       entry
         "Data.IntSet.Internal"
-        [("\\\\", LeftAssoc, 9)],
+        [("\\\\", [InTerms], LeftAssoc, 9)],
       entry "Data.IntSet.Internal.IntTreeCommons" [],
       entry "Data.Ix" [],
       entry "Data.Kind" [],
       entry
         "Data.List"
-        [("!!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("++", RightAssoc, 5), ("\\\\", NoAssoc, 5), ("elem", NoAssoc, 4), ("notElem", NoAssoc, 4)],
+        [("!!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("++", [InTerms], RightAssoc, 5), ("\\\\", [InTerms], NoAssoc, 5), ("elem", [InTerms], NoAssoc, 4), ("notElem", [InTerms], NoAssoc, 4)],
       entry
         "Data.List.NonEmpty"
-        [("!!", LeftAssoc, 9), (":|", RightAssoc, 5), ("<|", RightAssoc, 5)],
+        [("!!", [InTerms], LeftAssoc, 9), (":|", [InTypes, InTerms], RightAssoc, 5), ("<|", [InTerms], RightAssoc, 5)],
       entry
         "Data.Map"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("\\\\", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("\\\\", [InTerms], LeftAssoc, 9)],
       entry
         "Data.Map.Internal"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("\\\\", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("\\\\", [InTerms], LeftAssoc, 9)],
       entry "Data.Map.Internal.Debug" [],
       entry
         "Data.Map.Lazy"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("\\\\", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("\\\\", [InTerms], LeftAssoc, 9)],
       entry "Data.Map.Merge.Lazy" [],
       entry "Data.Map.Merge.Strict" [],
       entry
         "Data.Map.Strict"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("\\\\", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("\\\\", [InTerms], LeftAssoc, 9)],
       entry
         "Data.Map.Strict.Internal"
-        [("!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("\\\\", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("\\\\", [InTerms], LeftAssoc, 9)],
       entry "Data.Maybe" [],
       entry
         "Data.Monoid"
-        [("<>", RightAssoc, 6)],
+        [("<>", [InTerms], RightAssoc, 6)],
       entry
         "Data.Ord"
-        [("<", NoAssoc, 4), ("<=", NoAssoc, 4), (">", NoAssoc, 4), (">=", NoAssoc, 4)],
+        [("<", [InTerms], NoAssoc, 4), ("<=", [InTerms], NoAssoc, 4), (">", [InTerms], NoAssoc, 4), (">=", [InTerms], NoAssoc, 4)],
       entry "Data.Proxy" [],
       entry
         "Data.Ratio"
-        [("%", LeftAssoc, 7)],
+        [("%", [InTerms], LeftAssoc, 7)],
       entry "Data.STRef" [],
       entry "Data.STRef.Lazy" [],
       entry "Data.STRef.Strict" [],
       entry
         "Data.Semigroup"
-        [("<>", RightAssoc, 6)],
+        [("<>", [InTerms], RightAssoc, 6)],
       entry
         "Data.Sequence"
-        [("!?", LeftAssoc, 9), (":<", RightAssoc, 5), (":<|", RightAssoc, 5), (":>", LeftAssoc, 5), (":|>", LeftAssoc, 5), ("<|", RightAssoc, 5), ("><", RightAssoc, 5), ("|>", LeftAssoc, 5)],
+        [("!?", [InTerms], LeftAssoc, 9), (":<", [InTerms], RightAssoc, 5), (":<|", [InTerms], RightAssoc, 5), (":>", [InTerms], LeftAssoc, 5), (":|>", [InTerms], LeftAssoc, 5), ("<|", [InTerms], RightAssoc, 5), ("><", [InTerms], RightAssoc, 5), ("|>", [InTerms], LeftAssoc, 5)],
       entry
         "Data.Sequence.Internal"
-        [("!?", LeftAssoc, 9), (":<", RightAssoc, 5), (":<|", RightAssoc, 5), (":>", LeftAssoc, 5), (":|>", LeftAssoc, 5), ("<|", RightAssoc, 5), ("><", RightAssoc, 5), ("|>", LeftAssoc, 5)],
+        [("!?", [InTerms], LeftAssoc, 9), (":<", [InTerms], RightAssoc, 5), (":<|", [InTerms], RightAssoc, 5), (":>", [InTerms], LeftAssoc, 5), (":|>", [InTerms], LeftAssoc, 5), ("<|", [InTerms], RightAssoc, 5), ("><", [InTerms], RightAssoc, 5), ("|>", [InTerms], LeftAssoc, 5)],
       entry
         "Data.Sequence.Internal.Sorting"
-        [("IQCons", RightAssoc, 8), ("ITQCons", RightAssoc, 8), ("QCons", RightAssoc, 8), ("TQCons", RightAssoc, 8)],
+        [("IQCons", [InTypes, InTerms], RightAssoc, 8), ("ITQCons", [InTypes, InTerms], RightAssoc, 8), ("QCons", [InTerms], RightAssoc, 8), ("TQCons", [InTypes, InTerms], RightAssoc, 8)],
       entry
         "Data.Set"
-        [("\\\\", LeftAssoc, 9)],
+        [("\\\\", [InTerms], LeftAssoc, 9)],
       entry
         "Data.Set.Internal"
-        [("\\\\", LeftAssoc, 9)],
+        [("\\\\", [InTerms], LeftAssoc, 9)],
       entry "Data.String" [],
       entry
         "Data.Text"
-        [(":<", RightAssoc, 5), (":>", LeftAssoc, 5), ("cons", RightAssoc, 5)],
+        [(":<", [InTerms], RightAssoc, 5), (":>", [InTerms], LeftAssoc, 5), ("cons", [InTerms], RightAssoc, 5)],
       entry "Data.Text.Array" [],
       entry "Data.Text.Encoding" [],
       entry "Data.Text.Encoding.Error" [],
@@ -322,12 +322,12 @@ builtinFixities =
       entry "Data.Text.IO.Utf8" [],
       entry
         "Data.Text.Internal"
-        [("mul", LeftAssoc, 7), ("mul32", LeftAssoc, 7), ("mul64", LeftAssoc, 7)],
+        [("mul", [InTerms], LeftAssoc, 7), ("mul32", [InTerms], LeftAssoc, 7), ("mul64", [InTerms], LeftAssoc, 7)],
       entry "Data.Text.Internal.ArrayUtils" [],
       entry "Data.Text.Internal.Builder" [],
       entry
         "Data.Text.Internal.Builder.Functions"
-        [("<>", RightAssoc, 4)],
+        [("<>", [InTerms], RightAssoc, 4)],
       entry "Data.Text.Internal.Builder.Int.Digits" [],
       entry "Data.Text.Internal.Builder.RealFloat.Functions" [],
       entry "Data.Text.Internal.ByteStringCompat" [],
@@ -343,7 +343,7 @@ builtinFixities =
       entry "Data.Text.Internal.Fusion.Size" [],
       entry
         "Data.Text.Internal.Fusion.Types"
-        [(":*:", LeftAssoc, 2)],
+        [(":*:", [InTerms], LeftAssoc, 2)],
       entry "Data.Text.Internal.IO" [],
       entry "Data.Text.Internal.Lazy" [],
       entry "Data.Text.Internal.Lazy.Encoding.Fusion" [],
@@ -360,7 +360,7 @@ builtinFixities =
       entry "Data.Text.Internal.Validate.Native" [],
       entry
         "Data.Text.Lazy"
-        [(":<", RightAssoc, 5), (":>", LeftAssoc, 5), ("cons", RightAssoc, 5)],
+        [(":<", [InTerms], RightAssoc, 5), (":>", [InTerms], LeftAssoc, 5), ("cons", [InTerms], RightAssoc, 5)],
       entry "Data.Text.Lazy.Builder" [],
       entry "Data.Text.Lazy.Builder.Int" [],
       entry "Data.Text.Lazy.Builder.RealFloat" [],
@@ -391,17 +391,17 @@ builtinFixities =
       entry "Data.Tuple" [],
       entry
         "Data.Type.Bool"
-        [("&&", RightAssoc, 3), ("||", RightAssoc, 2)],
+        [("&&", [InTypes], RightAssoc, 3), ("||", [InTypes], RightAssoc, 2)],
       entry "Data.Type.Coercion" [],
       entry
         "Data.Type.Equality"
-        [(":~:", NoAssoc, 4), (":~~:", NoAssoc, 4), ("==", NoAssoc, 4), ("~~", NoAssoc, 4)],
+        [(":~:", [InTypes], NoAssoc, 4), (":~~:", [InTypes], NoAssoc, 4), ("==", [InTypes], NoAssoc, 4), ("~~", [InTypes], NoAssoc, 4)],
       entry
         "Data.Type.Ord"
-        [("<", NoAssoc, 4), ("<=", NoAssoc, 4), ("<=?", NoAssoc, 4), ("<?", NoAssoc, 4), (">", NoAssoc, 4), (">=", NoAssoc, 4), (">=?", NoAssoc, 4), (">?", NoAssoc, 4)],
+        [("<", [InTypes], NoAssoc, 4), ("<=", [InTypes], NoAssoc, 4), ("<=?", [InTypes], NoAssoc, 4), ("<?", [InTypes], NoAssoc, 4), (">", [InTypes], NoAssoc, 4), (">=", [InTypes], NoAssoc, 4), (">=?", [InTypes], NoAssoc, 4), (">?", [InTypes], NoAssoc, 4)],
       entry
         "Data.Typeable"
-        [(":~:", NoAssoc, 4), (":~~:", NoAssoc, 4)],
+        [(":~:", [InTypes], NoAssoc, 4), (":~~:", [InTypes], NoAssoc, 4)],
       entry "Data.Unique" [],
       entry "Data.Version" [],
       entry "Data.Void" [],
@@ -409,7 +409,7 @@ builtinFixities =
       entry "Debug.Trace" [],
       entry
         "Foreign"
-        [("!<<.", LeftAssoc, 8), ("!>>.", LeftAssoc, 8), (".&.", LeftAssoc, 7), (".<<.", LeftAssoc, 8), (".>>.", LeftAssoc, 8), (".^.", LeftAssoc, 6), (".|.", LeftAssoc, 5), ("rotate", LeftAssoc, 8), ("rotateL", LeftAssoc, 8), ("rotateR", LeftAssoc, 8), ("shift", LeftAssoc, 8), ("shiftL", LeftAssoc, 8), ("shiftR", LeftAssoc, 8), ("xor", LeftAssoc, 6)],
+        [("!<<.", [InTerms], LeftAssoc, 8), ("!>>.", [InTerms], LeftAssoc, 8), (".&.", [InTerms], LeftAssoc, 7), (".<<.", [InTerms], LeftAssoc, 8), (".>>.", [InTerms], LeftAssoc, 8), (".^.", [InTerms], LeftAssoc, 6), (".|.", [InTerms], LeftAssoc, 5), ("rotate", [InTerms], LeftAssoc, 8), ("rotateL", [InTerms], LeftAssoc, 8), ("rotateR", [InTerms], LeftAssoc, 8), ("shift", [InTerms], LeftAssoc, 8), ("shiftL", [InTerms], LeftAssoc, 8), ("shiftR", [InTerms], LeftAssoc, 8), ("xor", [InTerms], LeftAssoc, 6)],
       entry "Foreign.C" [],
       entry "Foreign.C.ConstPtr" [],
       entry "Foreign.C.Error" [],
@@ -430,26 +430,26 @@ builtinFixities =
       entry "Foreign.Ptr" [],
       entry
         "Foreign.Safe"
-        [("!<<.", LeftAssoc, 8), ("!>>.", LeftAssoc, 8), (".&.", LeftAssoc, 7), (".<<.", LeftAssoc, 8), (".>>.", LeftAssoc, 8), (".^.", LeftAssoc, 6), (".|.", LeftAssoc, 5), ("rotate", LeftAssoc, 8), ("rotateL", LeftAssoc, 8), ("rotateR", LeftAssoc, 8), ("shift", LeftAssoc, 8), ("shiftL", LeftAssoc, 8), ("shiftR", LeftAssoc, 8), ("xor", LeftAssoc, 6)],
+        [("!<<.", [InTerms], LeftAssoc, 8), ("!>>.", [InTerms], LeftAssoc, 8), (".&.", [InTerms], LeftAssoc, 7), (".<<.", [InTerms], LeftAssoc, 8), (".>>.", [InTerms], LeftAssoc, 8), (".^.", [InTerms], LeftAssoc, 6), (".|.", [InTerms], LeftAssoc, 5), ("rotate", [InTerms], LeftAssoc, 8), ("rotateL", [InTerms], LeftAssoc, 8), ("rotateR", [InTerms], LeftAssoc, 8), ("shift", [InTerms], LeftAssoc, 8), ("shiftL", [InTerms], LeftAssoc, 8), ("shiftR", [InTerms], LeftAssoc, 8), ("xor", [InTerms], LeftAssoc, 6)],
       entry "Foreign.StablePtr" [],
       entry "Foreign.Storable" [],
       entry
         "GHC.Arr"
-        [("!", LeftAssoc, 9), ("//", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("//", [InTerms], LeftAssoc, 9)],
       entry "GHC.ArrayArray" [],
       entry
         "GHC.Base"
-        [("$", RightAssoc, 0), ("$!", RightAssoc, 0), ("&&", RightAssoc, 3), ("*#", LeftAssoc, 7), ("*##", LeftAssoc, 7), ("**##", LeftAssoc, 9), ("*>", LeftAssoc, 4), ("+#", LeftAssoc, 6), ("+##", LeftAssoc, 6), ("++", RightAssoc, 5), ("-#", LeftAssoc, 6), ("-##", LeftAssoc, 6), (".", RightAssoc, 9), ("/##", LeftAssoc, 7), ("/=", NoAssoc, 4), ("/=#", NoAssoc, 4), ("/=##", NoAssoc, 4), (":|", RightAssoc, 5), ("<", NoAssoc, 4), ("<#", NoAssoc, 4), ("<##", NoAssoc, 4), ("<$", LeftAssoc, 4), ("<*", LeftAssoc, 4), ("<**>", LeftAssoc, 4), ("<*>", LeftAssoc, 4), ("<=", NoAssoc, 4), ("<=#", NoAssoc, 4), ("<=##", NoAssoc, 4), ("<>", RightAssoc, 6), ("<|>", LeftAssoc, 3), ("=<<", RightAssoc, 1), ("==", NoAssoc, 4), ("==#", NoAssoc, 4), ("==##", NoAssoc, 4), (">", NoAssoc, 4), (">#", NoAssoc, 4), (">##", NoAssoc, 4), (">=", NoAssoc, 4), (">=#", NoAssoc, 4), (">=##", NoAssoc, 4), (">>", LeftAssoc, 1), (">>=", LeftAssoc, 1), ("seq", RightAssoc, 0), ("||", RightAssoc, 2), ("~~", NoAssoc, 4)],
+        [("$", [InTerms], RightAssoc, 0), ("$!", [InTerms], RightAssoc, 0), ("&&", [InTerms], RightAssoc, 3), ("*#", [InTerms], LeftAssoc, 7), ("*##", [InTerms], LeftAssoc, 7), ("**##", [InTerms], LeftAssoc, 9), ("*>", [InTerms], LeftAssoc, 4), ("+#", [InTerms], LeftAssoc, 6), ("+##", [InTerms], LeftAssoc, 6), ("++", [InTerms], RightAssoc, 5), ("-#", [InTerms], LeftAssoc, 6), ("-##", [InTerms], LeftAssoc, 6), (".", [InTerms], RightAssoc, 9), ("/##", [InTerms], LeftAssoc, 7), ("/=", [InTerms], NoAssoc, 4), ("/=#", [InTerms], NoAssoc, 4), ("/=##", [InTerms], NoAssoc, 4), (":|", [InTypes, InTerms], RightAssoc, 5), ("<", [InTerms], NoAssoc, 4), ("<#", [InTerms], NoAssoc, 4), ("<##", [InTerms], NoAssoc, 4), ("<$", [InTerms], LeftAssoc, 4), ("<*", [InTerms], LeftAssoc, 4), ("<**>", [InTerms], LeftAssoc, 4), ("<*>", [InTerms], LeftAssoc, 4), ("<=", [InTerms], NoAssoc, 4), ("<=#", [InTerms], NoAssoc, 4), ("<=##", [InTerms], NoAssoc, 4), ("<>", [InTerms], RightAssoc, 6), ("<|>", [InTerms], LeftAssoc, 3), ("=<<", [InTerms], RightAssoc, 1), ("==", [InTerms], NoAssoc, 4), ("==#", [InTerms], NoAssoc, 4), ("==##", [InTerms], NoAssoc, 4), (">", [InTerms], NoAssoc, 4), (">#", [InTerms], NoAssoc, 4), (">##", [InTerms], NoAssoc, 4), (">=", [InTerms], NoAssoc, 4), (">=#", [InTerms], NoAssoc, 4), (">=##", [InTerms], NoAssoc, 4), (">>", [InTerms], LeftAssoc, 1), (">>=", [InTerms], LeftAssoc, 1), ("seq", [InTerms], RightAssoc, 0), ("||", [InTerms], RightAssoc, 2), ("~~", [InTypes], NoAssoc, 4)],
       entry
         "GHC.Bits"
-        [(".&.", LeftAssoc, 7), (".|.", LeftAssoc, 5), ("rotate", LeftAssoc, 8), ("rotateL", LeftAssoc, 8), ("rotateR", LeftAssoc, 8), ("shift", LeftAssoc, 8), ("shiftL", LeftAssoc, 8), ("shiftR", LeftAssoc, 8), ("xor", LeftAssoc, 6)],
+        [(".&.", [InTerms], LeftAssoc, 7), (".|.", [InTerms], LeftAssoc, 5), ("rotate", [InTerms], LeftAssoc, 8), ("rotateL", [InTerms], LeftAssoc, 8), ("rotateR", [InTerms], LeftAssoc, 8), ("shift", [InTerms], LeftAssoc, 8), ("shiftL", [InTerms], LeftAssoc, 8), ("shiftR", [InTerms], LeftAssoc, 8), ("xor", [InTerms], LeftAssoc, 6)],
       entry "GHC.Boot.TH.Lib" [],
       entry "GHC.Boot.TH.Lib.Map" [],
       entry "GHC.Boot.TH.Lift" [],
       entry "GHC.Boot.TH.Ppr" [],
       entry
         "GHC.Boot.TH.PprLib"
-        [("$$", LeftAssoc, 5), ("$+$", LeftAssoc, 5), ("<+>", LeftAssoc, 6), ("<>", LeftAssoc, 6)],
+        [("$$", [InTerms], LeftAssoc, 5), ("$+$", [InTerms], LeftAssoc, 5), ("<+>", [InTerms], LeftAssoc, 6), ("<>", [InTerms], LeftAssoc, 6)],
       entry "GHC.Boot.TH.Quote" [],
       entry "GHC.Boot.TH.Syntax" [],
       entry "GHC.ByteOrder" [],
@@ -457,22 +457,22 @@ builtinFixities =
       entry "GHC.Char" [],
       entry
         "GHC.Classes"
-        [("&&", RightAssoc, 3), ("/=", NoAssoc, 4), ("<", NoAssoc, 4), ("<=", NoAssoc, 4), ("==", NoAssoc, 4), (">", NoAssoc, 4), (">=", NoAssoc, 4), ("||", RightAssoc, 2)],
+        [("&&", [InTerms], RightAssoc, 3), ("/=", [InTerms], NoAssoc, 4), ("<", [InTerms], NoAssoc, 4), ("<=", [InTerms], NoAssoc, 4), ("==", [InTerms], NoAssoc, 4), (">", [InTerms], NoAssoc, 4), (">=", [InTerms], NoAssoc, 4), ("||", [InTerms], RightAssoc, 2)],
       entry "GHC.Clock" [],
       entry
         "GHC.Conc"
-        [("par", RightAssoc, 0), ("pseq", RightAssoc, 0)],
+        [("par", [InTerms], RightAssoc, 0), ("pseq", [InTerms], RightAssoc, 0)],
       entry "GHC.Conc.IO" [],
       entry "GHC.Conc.Signal" [],
       entry
         "GHC.Conc.Sync"
-        [("par", RightAssoc, 0), ("pseq", RightAssoc, 0)],
+        [("par", [InTerms], RightAssoc, 0), ("pseq", [InTerms], RightAssoc, 0)],
       entry "GHC.ConsoleHandler" [],
       entry "GHC.Constants" [],
       entry "GHC.Debug" [],
       entry
         "GHC.Desugar"
-        [(">>>", LeftAssoc, 9)],
+        [(">>>", [InTerms], LeftAssoc, 9)],
       entry "GHC.Encoding.UTF8" [],
       entry "GHC.Enum" [],
       entry "GHC.Environment" [],
@@ -484,12 +484,12 @@ builtinFixities =
       entry "GHC.ExecutionStack" [],
       entry
         "GHC.Exts"
-        [("*#", LeftAssoc, 7), ("*##", LeftAssoc, 7), ("**##", LeftAssoc, 9), ("+#", LeftAssoc, 6), ("+##", LeftAssoc, 6), ("-#", LeftAssoc, 6), ("-##", LeftAssoc, 6), ("/##", LeftAssoc, 7), ("/=#", NoAssoc, 4), ("/=##", NoAssoc, 4), ("<#", NoAssoc, 4), ("<##", NoAssoc, 4), ("<=#", NoAssoc, 4), ("<=##", NoAssoc, 4), ("==#", NoAssoc, 4), ("==##", NoAssoc, 4), (">#", NoAssoc, 4), (">##", NoAssoc, 4), (">=#", NoAssoc, 4), (">=##", NoAssoc, 4), ("seq", RightAssoc, 0), ("~~", NoAssoc, 4)],
+        [("*#", [InTerms], LeftAssoc, 7), ("*##", [InTerms], LeftAssoc, 7), ("**##", [InTerms], LeftAssoc, 9), ("+#", [InTerms], LeftAssoc, 6), ("+##", [InTerms], LeftAssoc, 6), ("-#", [InTerms], LeftAssoc, 6), ("-##", [InTerms], LeftAssoc, 6), ("/##", [InTerms], LeftAssoc, 7), ("/=#", [InTerms], NoAssoc, 4), ("/=##", [InTerms], NoAssoc, 4), ("<#", [InTerms], NoAssoc, 4), ("<##", [InTerms], NoAssoc, 4), ("<=#", [InTerms], NoAssoc, 4), ("<=##", [InTerms], NoAssoc, 4), ("==#", [InTerms], NoAssoc, 4), ("==##", [InTerms], NoAssoc, 4), (">#", [InTerms], NoAssoc, 4), (">##", [InTerms], NoAssoc, 4), (">=#", [InTerms], NoAssoc, 4), (">=##", [InTerms], NoAssoc, 4), ("seq", [InTerms], RightAssoc, 0), ("~~", [InTypes], NoAssoc, 4)],
       entry "GHC.Fingerprint" [],
       entry "GHC.Fingerprint.Type" [],
       entry
         "GHC.Float"
-        [("**", RightAssoc, 8)],
+        [("**", [InTerms], RightAssoc, 8)],
       entry "GHC.Float.ConversionUtils" [],
       entry "GHC.Float.RealFracMethods" [],
       entry "GHC.Foreign" [],
@@ -499,7 +499,7 @@ builtinFixities =
       entry "GHC.GHCi.Helpers" [],
       entry
         "GHC.Generics"
-        [(":*:", RightAssoc, 6), (":+:", RightAssoc, 5), (":.:", RightAssoc, 7)],
+        [(":*:", [InTypes, InTerms], RightAssoc, 6), (":+:", [InTypes], RightAssoc, 5), (":.:", [InTypes], RightAssoc, 7)],
       entry "GHC.IO" [],
       entry "GHC.IO.Buffer" [],
       entry "GHC.IO.BufferedIO" [],
@@ -525,7 +525,7 @@ builtinFixities =
       entry "GHC.IO.StdHandles" [],
       entry
         "GHC.IO.SubSystem"
-        [("<!>", LeftAssoc, 7)],
+        [("<!>", [InTerms], LeftAssoc, 7)],
       entry "GHC.IO.Unsafe" [],
       entry "GHC.IOArray" [],
       entry "GHC.IORef" [],
@@ -536,11 +536,11 @@ builtinFixities =
       entry "GHC.Internal.AllocationLimitHandler" [],
       entry
         "GHC.Internal.Arr"
-        [("!", LeftAssoc, 9), ("//", LeftAssoc, 9)],
+        [("!", [InTerms], LeftAssoc, 9), ("//", [InTerms], LeftAssoc, 9)],
       entry "GHC.Internal.ArrayArray" [],
       entry
         "GHC.Internal.Base"
-        [("$", RightAssoc, 0), ("$!", RightAssoc, 0), ("&&", RightAssoc, 3), ("*#", LeftAssoc, 7), ("*##", LeftAssoc, 7), ("**##", LeftAssoc, 9), ("*>", LeftAssoc, 4), ("+#", LeftAssoc, 6), ("+##", LeftAssoc, 6), ("++", RightAssoc, 5), ("-#", LeftAssoc, 6), ("-##", LeftAssoc, 6), (".", RightAssoc, 9), ("/##", LeftAssoc, 7), ("/=", NoAssoc, 4), ("/=#", NoAssoc, 4), ("/=##", NoAssoc, 4), (":|", RightAssoc, 5), ("<", NoAssoc, 4), ("<#", NoAssoc, 4), ("<##", NoAssoc, 4), ("<$", LeftAssoc, 4), ("<*", LeftAssoc, 4), ("<**>", LeftAssoc, 4), ("<*>", LeftAssoc, 4), ("<=", NoAssoc, 4), ("<=#", NoAssoc, 4), ("<=##", NoAssoc, 4), ("<>", RightAssoc, 6), ("<|>", LeftAssoc, 3), ("=<<", RightAssoc, 1), ("==", NoAssoc, 4), ("==#", NoAssoc, 4), ("==##", NoAssoc, 4), (">", NoAssoc, 4), (">#", NoAssoc, 4), (">##", NoAssoc, 4), (">=", NoAssoc, 4), (">=#", NoAssoc, 4), (">=##", NoAssoc, 4), (">>", LeftAssoc, 1), (">>=", LeftAssoc, 1), ("seq", RightAssoc, 0), ("||", RightAssoc, 2), ("~~", NoAssoc, 4)],
+        [("$", [InTerms], RightAssoc, 0), ("$!", [InTerms], RightAssoc, 0), ("&&", [InTerms], RightAssoc, 3), ("*#", [InTerms], LeftAssoc, 7), ("*##", [InTerms], LeftAssoc, 7), ("**##", [InTerms], LeftAssoc, 9), ("*>", [InTerms], LeftAssoc, 4), ("+#", [InTerms], LeftAssoc, 6), ("+##", [InTerms], LeftAssoc, 6), ("++", [InTerms], RightAssoc, 5), ("-#", [InTerms], LeftAssoc, 6), ("-##", [InTerms], LeftAssoc, 6), (".", [InTerms], RightAssoc, 9), ("/##", [InTerms], LeftAssoc, 7), ("/=", [InTerms], NoAssoc, 4), ("/=#", [InTerms], NoAssoc, 4), ("/=##", [InTerms], NoAssoc, 4), (":|", [InTypes, InTerms], RightAssoc, 5), ("<", [InTerms], NoAssoc, 4), ("<#", [InTerms], NoAssoc, 4), ("<##", [InTerms], NoAssoc, 4), ("<$", [InTerms], LeftAssoc, 4), ("<*", [InTerms], LeftAssoc, 4), ("<**>", [InTerms], LeftAssoc, 4), ("<*>", [InTerms], LeftAssoc, 4), ("<=", [InTerms], NoAssoc, 4), ("<=#", [InTerms], NoAssoc, 4), ("<=##", [InTerms], NoAssoc, 4), ("<>", [InTerms], RightAssoc, 6), ("<|>", [InTerms], LeftAssoc, 3), ("=<<", [InTerms], RightAssoc, 1), ("==", [InTerms], NoAssoc, 4), ("==#", [InTerms], NoAssoc, 4), ("==##", [InTerms], NoAssoc, 4), (">", [InTerms], NoAssoc, 4), (">#", [InTerms], NoAssoc, 4), (">##", [InTerms], NoAssoc, 4), (">=", [InTerms], NoAssoc, 4), (">=#", [InTerms], NoAssoc, 4), (">=##", [InTerms], NoAssoc, 4), (">>", [InTerms], LeftAssoc, 1), (">>=", [InTerms], LeftAssoc, 1), ("seq", [InTerms], RightAssoc, 0), ("||", [InTerms], RightAssoc, 2), ("~~", [InTypes], NoAssoc, 4)],
       entry "GHC.Internal.Bignum.Backend" [],
       entry "GHC.Internal.Bignum.Backend.Native" [],
       entry "GHC.Internal.Bignum.Backend.Selected" [],
@@ -549,17 +549,17 @@ builtinFixities =
       entry "GHC.Internal.Bignum.Natural" [],
       entry
         "GHC.Internal.Bignum.Primitives"
-        [("&&#", RightAssoc, 3), ("||#", RightAssoc, 2)],
+        [("&&#", [InTerms], RightAssoc, 3), ("||#", [InTerms], RightAssoc, 2)],
       entry "GHC.Internal.Bignum.WordArray" [],
       entry
         "GHC.Internal.Bits"
-        [(".&.", LeftAssoc, 7), (".|.", LeftAssoc, 5), ("rotate", LeftAssoc, 8), ("rotateL", LeftAssoc, 8), ("rotateR", LeftAssoc, 8), ("shift", LeftAssoc, 8), ("shiftL", LeftAssoc, 8), ("shiftR", LeftAssoc, 8), ("xor", LeftAssoc, 6)],
+        [(".&.", [InTerms], LeftAssoc, 7), (".|.", [InTerms], LeftAssoc, 5), ("rotate", [InTerms], LeftAssoc, 8), ("rotateL", [InTerms], LeftAssoc, 8), ("rotateR", [InTerms], LeftAssoc, 8), ("shift", [InTerms], LeftAssoc, 8), ("shiftL", [InTerms], LeftAssoc, 8), ("shiftR", [InTerms], LeftAssoc, 8), ("xor", [InTerms], LeftAssoc, 6)],
       entry "GHC.Internal.ByteOrder" [],
       entry "GHC.Internal.CString" [],
       entry "GHC.Internal.Char" [],
       entry
         "GHC.Internal.Classes"
-        [("&&", RightAssoc, 3), ("/=", NoAssoc, 4), ("<", NoAssoc, 4), ("<=", NoAssoc, 4), ("==", NoAssoc, 4), (">", NoAssoc, 4), (">=", NoAssoc, 4), ("||", RightAssoc, 2)],
+        [("&&", [InTerms], RightAssoc, 3), ("/=", [InTerms], NoAssoc, 4), ("<", [InTerms], NoAssoc, 4), ("<=", [InTerms], NoAssoc, 4), ("==", [InTerms], NoAssoc, 4), (">", [InTerms], NoAssoc, 4), (">=", [InTerms], NoAssoc, 4), ("||", [InTerms], RightAssoc, 2)],
       entry "GHC.Internal.Clock" [],
       entry "GHC.Internal.ClosureTypes" [],
       entry "GHC.Internal.Conc.Bound" [],
@@ -567,20 +567,20 @@ builtinFixities =
       entry "GHC.Internal.Conc.Signal" [],
       entry
         "GHC.Internal.Conc.Sync"
-        [("par", RightAssoc, 0), ("pseq", RightAssoc, 0)],
+        [("par", [InTerms], RightAssoc, 0), ("pseq", [InTerms], RightAssoc, 0)],
       entry "GHC.Internal.ConsoleHandler" [],
       entry
         "GHC.Internal.Control.Arrow"
-        [("&&&", RightAssoc, 3), ("***", RightAssoc, 3), ("+++", RightAssoc, 2), ("<+>", RightAssoc, 5), ("<<<", RightAssoc, 1), ("<<^", RightAssoc, 1), (">>>", RightAssoc, 1), (">>^", RightAssoc, 1), ("^<<", RightAssoc, 1), ("^>>", RightAssoc, 1), ("|||", RightAssoc, 2)],
+        [("&&&", [InTerms], RightAssoc, 3), ("***", [InTerms], RightAssoc, 3), ("+++", [InTerms], RightAssoc, 2), ("<+>", [InTerms], RightAssoc, 5), ("<<<", [InTerms], RightAssoc, 1), ("<<^", [InTerms], RightAssoc, 1), (">>>", [InTerms], RightAssoc, 1), (">>^", [InTerms], RightAssoc, 1), ("^<<", [InTerms], RightAssoc, 1), ("^>>", [InTerms], RightAssoc, 1), ("|||", [InTerms], RightAssoc, 2)],
       entry
         "GHC.Internal.Control.Category"
-        [(".", RightAssoc, 9), ("<<<", RightAssoc, 1), (">>>", RightAssoc, 1)],
+        [(".", [InTerms], RightAssoc, 9), ("<<<", [InTerms], RightAssoc, 1), (">>>", [InTerms], RightAssoc, 1)],
       entry "GHC.Internal.Control.Concurrent.MVar" [],
       entry "GHC.Internal.Control.Exception" [],
       entry "GHC.Internal.Control.Exception.Base" [],
       entry
         "GHC.Internal.Control.Monad"
-        [("<$", LeftAssoc, 4), ("<$!>", LeftAssoc, 4), ("<=<", RightAssoc, 1), ("=<<", RightAssoc, 1), (">=>", RightAssoc, 1), (">>", LeftAssoc, 1), (">>=", LeftAssoc, 1)],
+        [("<$", [InTerms], LeftAssoc, 4), ("<$!>", [InTerms], LeftAssoc, 4), ("<=<", [InTerms], RightAssoc, 1), ("=<<", [InTerms], RightAssoc, 1), (">=>", [InTerms], RightAssoc, 1), (">>", [InTerms], LeftAssoc, 1), (">>=", [InTerms], LeftAssoc, 1)],
       entry "GHC.Internal.Control.Monad.Fail" [],
       entry "GHC.Internal.Control.Monad.Fix" [],
       entry "GHC.Internal.Control.Monad.IO.Class" [],
@@ -591,52 +591,52 @@ builtinFixities =
       entry "GHC.Internal.Control.Monad.Zip" [],
       entry
         "GHC.Internal.Data.Bits"
-        [("!<<.", LeftAssoc, 8), ("!>>.", LeftAssoc, 8), (".&.", LeftAssoc, 7), (".<<.", LeftAssoc, 8), (".>>.", LeftAssoc, 8), (".^.", LeftAssoc, 6), (".|.", LeftAssoc, 5), ("rotate", LeftAssoc, 8), ("rotateL", LeftAssoc, 8), ("rotateR", LeftAssoc, 8), ("shift", LeftAssoc, 8), ("shiftL", LeftAssoc, 8), ("shiftR", LeftAssoc, 8), ("xor", LeftAssoc, 6)],
+        [("!<<.", [InTerms], LeftAssoc, 8), ("!>>.", [InTerms], LeftAssoc, 8), (".&.", [InTerms], LeftAssoc, 7), (".<<.", [InTerms], LeftAssoc, 8), (".>>.", [InTerms], LeftAssoc, 8), (".^.", [InTerms], LeftAssoc, 6), (".|.", [InTerms], LeftAssoc, 5), ("rotate", [InTerms], LeftAssoc, 8), ("rotateL", [InTerms], LeftAssoc, 8), ("rotateR", [InTerms], LeftAssoc, 8), ("shift", [InTerms], LeftAssoc, 8), ("shiftL", [InTerms], LeftAssoc, 8), ("shiftR", [InTerms], LeftAssoc, 8), ("xor", [InTerms], LeftAssoc, 6)],
       entry
         "GHC.Internal.Data.Bool"
-        [("&&", RightAssoc, 3), ("||", RightAssoc, 2)],
+        [("&&", [InTerms], RightAssoc, 3), ("||", [InTerms], RightAssoc, 2)],
       entry "GHC.Internal.Data.Coerce" [],
       entry "GHC.Internal.Data.Data" [],
       entry "GHC.Internal.Data.Dynamic" [],
       entry "GHC.Internal.Data.Either" [],
       entry
         "GHC.Internal.Data.Eq"
-        [("/=", NoAssoc, 4), ("==", NoAssoc, 4)],
+        [("/=", [InTerms], NoAssoc, 4), ("==", [InTerms], NoAssoc, 4)],
       entry
         "GHC.Internal.Data.Foldable"
-        [("elem", NoAssoc, 4), ("notElem", NoAssoc, 4)],
+        [("elem", [InTerms], NoAssoc, 4), ("notElem", [InTerms], NoAssoc, 4)],
       entry
         "GHC.Internal.Data.Function"
-        [("$", RightAssoc, 0), ("&", LeftAssoc, 1), (".", RightAssoc, 9), ("on", LeftAssoc, 0)],
+        [("$", [InTerms], RightAssoc, 0), ("&", [InTerms], LeftAssoc, 1), (".", [InTerms], RightAssoc, 9), ("on", [InTerms], LeftAssoc, 0)],
       entry
         "GHC.Internal.Data.Functor"
-        [("$>", LeftAssoc, 4), ("<$", LeftAssoc, 4), ("<$>", LeftAssoc, 4), ("<&>", LeftAssoc, 1)],
+        [("$>", [InTerms], LeftAssoc, 4), ("<$", [InTerms], LeftAssoc, 4), ("<$>", [InTerms], LeftAssoc, 4), ("<&>", [InTerms], LeftAssoc, 1)],
       entry "GHC.Internal.Data.Functor.Const" [],
       entry "GHC.Internal.Data.Functor.Identity" [],
       entry
         "GHC.Internal.Data.Functor.Utils"
-        [("#.", LeftAssoc, 9)],
+        [("#.", [InTypes, InTerms], LeftAssoc, 9)],
       entry "GHC.Internal.Data.IORef" [],
       entry "GHC.Internal.Data.Ix" [],
       entry
         "GHC.Internal.Data.List"
-        [("!!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("++", RightAssoc, 5), ("\\\\", NoAssoc, 5), ("elem", NoAssoc, 4), ("notElem", NoAssoc, 4)],
+        [("!!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("++", [InTerms], RightAssoc, 5), ("\\\\", [InTerms], NoAssoc, 5), ("elem", [InTerms], NoAssoc, 4), ("notElem", [InTerms], NoAssoc, 4)],
       entry
         "GHC.Internal.Data.List.NonEmpty"
-        [(":|", RightAssoc, 5)],
+        [(":|", [InTypes, InTerms], RightAssoc, 5)],
       entry "GHC.Internal.Data.Maybe" [],
       entry
         "GHC.Internal.Data.Monoid"
-        [("<>", RightAssoc, 6)],
+        [("<>", [InTerms], RightAssoc, 6)],
       entry
         "GHC.Internal.Data.NonEmpty"
-        [(":|", RightAssoc, 5)],
+        [(":|", [InTypes, InTerms], RightAssoc, 5)],
       entry
         "GHC.Internal.Data.OldList"
-        [("!!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("++", RightAssoc, 5), ("\\\\", NoAssoc, 5), ("elem", NoAssoc, 4), ("notElem", NoAssoc, 4)],
+        [("!!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("++", [InTerms], RightAssoc, 5), ("\\\\", [InTerms], NoAssoc, 5), ("elem", [InTerms], NoAssoc, 4), ("notElem", [InTerms], NoAssoc, 4)],
       entry
         "GHC.Internal.Data.Ord"
-        [("<", NoAssoc, 4), ("<=", NoAssoc, 4), (">", NoAssoc, 4), (">=", NoAssoc, 4)],
+        [("<", [InTerms], NoAssoc, 4), ("<=", [InTerms], NoAssoc, 4), (">", [InTerms], NoAssoc, 4), (">=", [InTerms], NoAssoc, 4)],
       entry "GHC.Internal.Data.Proxy" [],
       entry "GHC.Internal.Data.STRef" [],
       entry "GHC.Internal.Data.STRef.Strict" [],
@@ -646,17 +646,17 @@ builtinFixities =
       entry "GHC.Internal.Data.Tuple" [],
       entry
         "GHC.Internal.Data.Type.Bool"
-        [("&&", RightAssoc, 3), ("||", RightAssoc, 2)],
+        [("&&", [InTypes], RightAssoc, 3), ("||", [InTypes], RightAssoc, 2)],
       entry "GHC.Internal.Data.Type.Coercion" [],
       entry
         "GHC.Internal.Data.Type.Equality"
-        [(":~:", NoAssoc, 4), (":~~:", NoAssoc, 4), ("==", NoAssoc, 4), ("~~", NoAssoc, 4)],
+        [(":~:", [InTypes], NoAssoc, 4), (":~~:", [InTypes], NoAssoc, 4), ("==", [InTypes], NoAssoc, 4), ("~~", [InTypes], NoAssoc, 4)],
       entry
         "GHC.Internal.Data.Type.Ord"
-        [("<", NoAssoc, 4), ("<=", NoAssoc, 4), ("<=?", NoAssoc, 4), ("<?", NoAssoc, 4), (">", NoAssoc, 4), (">=", NoAssoc, 4), (">=?", NoAssoc, 4), (">?", NoAssoc, 4)],
+        [("<", [InTypes], NoAssoc, 4), ("<=", [InTypes], NoAssoc, 4), ("<=?", [InTypes], NoAssoc, 4), ("<?", [InTypes], NoAssoc, 4), (">", [InTypes], NoAssoc, 4), (">=", [InTypes], NoAssoc, 4), (">=?", [InTypes], NoAssoc, 4), (">?", [InTypes], NoAssoc, 4)],
       entry
         "GHC.Internal.Data.Typeable"
-        [(":~:", NoAssoc, 4), (":~~:", NoAssoc, 4)],
+        [(":~:", [InTypes], NoAssoc, 4), (":~~:", [InTypes], NoAssoc, 4)],
       entry "GHC.Internal.Data.Unique" [],
       entry "GHC.Internal.Data.Version" [],
       entry "GHC.Internal.Data.Void" [],
@@ -664,7 +664,7 @@ builtinFixities =
       entry "GHC.Internal.Debug.Trace" [],
       entry
         "GHC.Internal.Desugar"
-        [(">>>", LeftAssoc, 9)],
+        [(">>>", [InTerms], LeftAssoc, 9)],
       entry "GHC.Internal.Encoding.UTF8" [],
       entry "GHC.Internal.Enum" [],
       entry "GHC.Internal.Environment" [],
@@ -679,12 +679,12 @@ builtinFixities =
       entry "GHC.Internal.ExecutionStack.Internal" [],
       entry
         "GHC.Internal.Exts"
-        [("*#", LeftAssoc, 7), ("*##", LeftAssoc, 7), ("**##", LeftAssoc, 9), ("+#", LeftAssoc, 6), ("+##", LeftAssoc, 6), ("-#", LeftAssoc, 6), ("-##", LeftAssoc, 6), ("/##", LeftAssoc, 7), ("/=#", NoAssoc, 4), ("/=##", NoAssoc, 4), ("<#", NoAssoc, 4), ("<##", NoAssoc, 4), ("<=#", NoAssoc, 4), ("<=##", NoAssoc, 4), ("==#", NoAssoc, 4), ("==##", NoAssoc, 4), (">#", NoAssoc, 4), (">##", NoAssoc, 4), (">=#", NoAssoc, 4), (">=##", NoAssoc, 4), ("seq", RightAssoc, 0), ("~~", NoAssoc, 4)],
+        [("*#", [InTerms], LeftAssoc, 7), ("*##", [InTerms], LeftAssoc, 7), ("**##", [InTerms], LeftAssoc, 9), ("+#", [InTerms], LeftAssoc, 6), ("+##", [InTerms], LeftAssoc, 6), ("-#", [InTerms], LeftAssoc, 6), ("-##", [InTerms], LeftAssoc, 6), ("/##", [InTerms], LeftAssoc, 7), ("/=#", [InTerms], NoAssoc, 4), ("/=##", [InTerms], NoAssoc, 4), ("<#", [InTerms], NoAssoc, 4), ("<##", [InTerms], NoAssoc, 4), ("<=#", [InTerms], NoAssoc, 4), ("<=##", [InTerms], NoAssoc, 4), ("==#", [InTerms], NoAssoc, 4), ("==##", [InTerms], NoAssoc, 4), (">#", [InTerms], NoAssoc, 4), (">##", [InTerms], NoAssoc, 4), (">=#", [InTerms], NoAssoc, 4), (">=##", [InTerms], NoAssoc, 4), ("seq", [InTerms], RightAssoc, 0), ("~~", [InTypes], NoAssoc, 4)],
       entry "GHC.Internal.Fingerprint" [],
       entry "GHC.Internal.Fingerprint.Type" [],
       entry
         "GHC.Internal.Float"
-        [("**", RightAssoc, 8)],
+        [("**", [InTerms], RightAssoc, 8)],
       entry "GHC.Internal.Float.ConversionUtils" [],
       entry "GHC.Internal.Float.RealFracMethods" [],
       entry "GHC.Internal.Foreign.C.ConstPtr" [],
@@ -713,7 +713,7 @@ builtinFixities =
       entry "GHC.Internal.GHCi.Helpers" [],
       entry
         "GHC.Internal.Generics"
-        [(":*:", RightAssoc, 6), (":+:", RightAssoc, 5), (":.:", RightAssoc, 7)],
+        [(":*:", [InTypes, InTerms], RightAssoc, 6), (":+:", [InTypes], RightAssoc, 5), (":.:", [InTypes], RightAssoc, 7)],
       entry "GHC.Internal.Heap.Closures" [],
       entry "GHC.Internal.Heap.Constants" [],
       entry "GHC.Internal.Heap.InfoTable" [],
@@ -745,7 +745,7 @@ builtinFixities =
       entry "GHC.Internal.IO.StdHandles" [],
       entry
         "GHC.Internal.IO.SubSystem"
-        [("<!>", LeftAssoc, 7)],
+        [("<!>", [InTerms], LeftAssoc, 7)],
       entry "GHC.Internal.IO.Unsafe" [],
       entry "GHC.Internal.IOArray" [],
       entry "GHC.Internal.IORef" [],
@@ -760,7 +760,7 @@ builtinFixities =
       entry "GHC.Internal.Lexeme" [],
       entry
         "GHC.Internal.List"
-        [("!!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("++", RightAssoc, 5), ("elem", NoAssoc, 4), ("notElem", NoAssoc, 4)],
+        [("!!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("++", [InTerms], RightAssoc, 5), ("elem", [InTerms], NoAssoc, 4), ("notElem", [InTerms], NoAssoc, 4)],
       entry "GHC.Internal.MVar" [],
       entry "GHC.Internal.Magic" [],
       entry "GHC.Internal.Magic.Dict" [],
@@ -768,23 +768,23 @@ builtinFixities =
       entry "GHC.Internal.Natural" [],
       entry
         "GHC.Internal.Num"
-        [("*", LeftAssoc, 7), ("+", LeftAssoc, 6), ("-", LeftAssoc, 6)],
+        [("*", [InTerms], LeftAssoc, 7), ("+", [InTerms], LeftAssoc, 6), ("-", [InTerms], LeftAssoc, 6)],
       entry
         "GHC.Internal.Numeric"
-        [("**", RightAssoc, 8)],
+        [("**", [InTerms], RightAssoc, 8)],
       entry "GHC.Internal.Numeric.Natural" [],
       entry "GHC.Internal.OverloadedLabels" [],
       entry "GHC.Internal.Pack" [],
       entry
         "GHC.Internal.Prim"
-        [("*#", LeftAssoc, 7), ("*##", LeftAssoc, 7), ("**##", LeftAssoc, 9), ("+#", LeftAssoc, 6), ("+##", LeftAssoc, 6), ("-#", LeftAssoc, 6), ("-##", LeftAssoc, 6), ("/##", LeftAssoc, 7), ("/=#", NoAssoc, 4), ("/=##", NoAssoc, 4), ("<#", NoAssoc, 4), ("<##", NoAssoc, 4), ("<=#", NoAssoc, 4), ("<=##", NoAssoc, 4), ("==#", NoAssoc, 4), ("==##", NoAssoc, 4), (">#", NoAssoc, 4), (">##", NoAssoc, 4), (">=#", NoAssoc, 4), (">=##", NoAssoc, 4), ("seq", RightAssoc, 0)],
+        [("*#", [InTerms], LeftAssoc, 7), ("*##", [InTerms], LeftAssoc, 7), ("**##", [InTerms], LeftAssoc, 9), ("+#", [InTerms], LeftAssoc, 6), ("+##", [InTerms], LeftAssoc, 6), ("-#", [InTerms], LeftAssoc, 6), ("-##", [InTerms], LeftAssoc, 6), ("/##", [InTerms], LeftAssoc, 7), ("/=#", [InTerms], NoAssoc, 4), ("/=##", [InTerms], NoAssoc, 4), ("<#", [InTerms], NoAssoc, 4), ("<##", [InTerms], NoAssoc, 4), ("<=#", [InTerms], NoAssoc, 4), ("<=##", [InTerms], NoAssoc, 4), ("==#", [InTerms], NoAssoc, 4), ("==##", [InTerms], NoAssoc, 4), (">#", [InTerms], NoAssoc, 4), (">##", [InTerms], NoAssoc, 4), (">=#", [InTerms], NoAssoc, 4), (">=##", [InTerms], NoAssoc, 4), ("seq", [InTerms], RightAssoc, 0)],
       entry "GHC.Internal.Prim.Exception" [],
       entry "GHC.Internal.Prim.Ext" [],
       entry "GHC.Internal.Prim.Panic" [],
       entry "GHC.Internal.Prim.PtrEq" [],
       entry
         "GHC.Internal.PrimopWrappers"
-        [("*#", LeftAssoc, 9), ("*##", LeftAssoc, 9), ("**##", LeftAssoc, 9), ("+#", LeftAssoc, 9), ("+##", LeftAssoc, 9), ("-#", LeftAssoc, 9), ("-##", LeftAssoc, 9), ("/##", LeftAssoc, 9), ("/=#", LeftAssoc, 9), ("/=##", LeftAssoc, 9), ("<#", LeftAssoc, 9), ("<##", LeftAssoc, 9), ("<=#", LeftAssoc, 9), ("<=##", LeftAssoc, 9), ("==#", LeftAssoc, 9), ("==##", LeftAssoc, 9), (">#", LeftAssoc, 9), (">##", LeftAssoc, 9), (">=#", LeftAssoc, 9), (">=##", LeftAssoc, 9)],
+        [("*#", [InTerms], LeftAssoc, 9), ("*##", [InTerms], LeftAssoc, 9), ("**##", [InTerms], LeftAssoc, 9), ("+#", [InTerms], LeftAssoc, 9), ("+##", [InTerms], LeftAssoc, 9), ("-#", [InTerms], LeftAssoc, 9), ("-##", [InTerms], LeftAssoc, 9), ("/##", [InTerms], LeftAssoc, 9), ("/=#", [InTerms], LeftAssoc, 9), ("/=##", [InTerms], LeftAssoc, 9), ("<#", [InTerms], LeftAssoc, 9), ("<##", [InTerms], LeftAssoc, 9), ("<=#", [InTerms], LeftAssoc, 9), ("<=##", [InTerms], LeftAssoc, 9), ("==#", [InTerms], LeftAssoc, 9), ("==##", [InTerms], LeftAssoc, 9), (">#", [InTerms], LeftAssoc, 9), (">##", [InTerms], LeftAssoc, 9), (">=#", [InTerms], LeftAssoc, 9), (">=##", [InTerms], LeftAssoc, 9)],
       entry "GHC.Internal.Profiling" [],
       entry "GHC.Internal.Ptr" [],
       entry "GHC.Internal.RTS.Flags" [],
@@ -792,7 +792,7 @@ builtinFixities =
       entry "GHC.Internal.Read" [],
       entry
         "GHC.Internal.Real"
-        [("%", LeftAssoc, 7), ("/", LeftAssoc, 7), (":%", LeftAssoc, 9), ("^", RightAssoc, 8), ("^%^", LeftAssoc, 9), ("^^", RightAssoc, 8), ("^^%^^", LeftAssoc, 9), ("div", LeftAssoc, 7), ("mod", LeftAssoc, 7), ("quot", LeftAssoc, 7), ("rem", LeftAssoc, 7)],
+        [("%", [InTerms], LeftAssoc, 7), ("/", [InTerms], LeftAssoc, 7), (":%", [InTerms], LeftAssoc, 9), ("^", [InTerms], RightAssoc, 8), ("^%^", [InTerms], LeftAssoc, 9), ("^^", [InTerms], RightAssoc, 8), ("^^%^^", [InTerms], LeftAssoc, 9), ("div", [InTerms], LeftAssoc, 7), ("mod", [InTerms], LeftAssoc, 7), ("quot", [InTerms], LeftAssoc, 7), ("rem", [InTerms], LeftAssoc, 7)],
       entry "GHC.Internal.Records" [],
       entry "GHC.Internal.ResponseFile" [],
       entry "GHC.Internal.ST" [],
@@ -826,37 +826,37 @@ builtinFixities =
       entry "GHC.Internal.TH.Syntax" [],
       entry
         "GHC.Internal.Text.ParserCombinators.ReadP"
-        [("+++", RightAssoc, 5), ("<++", RightAssoc, 5)],
+        [("+++", [InTerms], RightAssoc, 5), ("<++", [InTerms], RightAssoc, 5)],
       entry
         "GHC.Internal.Text.ParserCombinators.ReadPrec"
-        [("+++", LeftAssoc, 9), ("<++", LeftAssoc, 9)],
+        [("+++", [InTerms], LeftAssoc, 9), ("<++", [InTerms], LeftAssoc, 9)],
       entry
         "GHC.Internal.Text.Read"
-        [("+++", LeftAssoc, 9), ("<++", LeftAssoc, 9)],
+        [("+++", [InTerms], LeftAssoc, 9), ("<++", [InTerms], LeftAssoc, 9)],
       entry "GHC.Internal.Text.Read.Lex" [],
       entry "GHC.Internal.Text.Show" [],
       entry "GHC.Internal.TopHandler" [],
       entry
         "GHC.Internal.Tuple"
-        [("()", LeftAssoc, 9), ("(,)", LeftAssoc, 9), ("(,,)", LeftAssoc, 9), ("(,,,)", LeftAssoc, 9), ("(,,,,)", LeftAssoc, 9), ("(,,,,,)", LeftAssoc, 9), ("(,,,,,,)", LeftAssoc, 9), ("(,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9)],
+        [("()", [InTypes, InTerms], LeftAssoc, 9), ("(,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9)],
       entry
         "GHC.Internal.Type.Reflection"
-        [(":~:", NoAssoc, 4), (":~~:", NoAssoc, 4)],
+        [(":~:", [InTypes], NoAssoc, 4), (":~~:", [InTypes], NoAssoc, 4)],
       entry "GHC.Internal.Type.Reflection.Unsafe" [],
       entry
         "GHC.Internal.TypeError"
-        [(":$$:", LeftAssoc, 5), (":<>:", LeftAssoc, 6)],
+        [(":$$:", [InTerms], LeftAssoc, 5), (":<>:", [InTerms], LeftAssoc, 6)],
       entry
         "GHC.Internal.TypeLits"
-        [("*", LeftAssoc, 7), ("+", LeftAssoc, 6), ("-", LeftAssoc, 6), (":$$:", LeftAssoc, 5), (":<>:", LeftAssoc, 6), ("<=", NoAssoc, 4), ("<=?", NoAssoc, 4), ("Div", LeftAssoc, 7), ("Mod", LeftAssoc, 7), ("^", RightAssoc, 8)],
+        [("*", [InTypes], LeftAssoc, 7), ("+", [InTypes], LeftAssoc, 6), ("-", [InTypes], LeftAssoc, 6), (":$$:", [InTerms], LeftAssoc, 5), (":<>:", [InTerms], LeftAssoc, 6), ("<=", [InTypes], NoAssoc, 4), ("<=?", [InTypes], NoAssoc, 4), ("Div", [InTypes], LeftAssoc, 7), ("Mod", [InTypes], LeftAssoc, 7), ("^", [InTypes], RightAssoc, 8)],
       entry "GHC.Internal.TypeLits.Internal" [],
       entry
         "GHC.Internal.TypeNats"
-        [("*", LeftAssoc, 7), ("+", LeftAssoc, 6), ("-", LeftAssoc, 6), ("<=", NoAssoc, 4), ("<=?", NoAssoc, 4), ("Div", LeftAssoc, 7), ("Mod", LeftAssoc, 7), ("^", RightAssoc, 8)],
+        [("*", [InTypes], LeftAssoc, 7), ("+", [InTypes], LeftAssoc, 6), ("-", [InTypes], LeftAssoc, 6), ("<=", [InTypes], NoAssoc, 4), ("<=?", [InTypes], NoAssoc, 4), ("Div", [InTypes], LeftAssoc, 7), ("Mod", [InTypes], LeftAssoc, 7), ("^", [InTypes], RightAssoc, 8)],
       entry "GHC.Internal.TypeNats.Internal" [],
       entry
         "GHC.Internal.Types"
-        [("~~", NoAssoc, 4)],
+        [("~~", [InTypes], NoAssoc, 4)],
       entry "GHC.Internal.Unicode" [],
       entry "GHC.Internal.Unsafe.Coerce" [],
       entry "GHC.Internal.Weak" [],
@@ -868,7 +868,7 @@ builtinFixities =
       entry "GHC.Lexeme" [],
       entry
         "GHC.List"
-        [("!!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("++", RightAssoc, 5), ("elem", NoAssoc, 4), ("notElem", NoAssoc, 4)],
+        [("!!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("++", [InTerms], RightAssoc, 5), ("elem", [InTerms], NoAssoc, 4), ("notElem", [InTerms], NoAssoc, 4)],
       entry "GHC.MVar" [],
       entry "GHC.Magic" [],
       entry "GHC.Magic.Dict" [],
@@ -876,7 +876,7 @@ builtinFixities =
       entry "GHC.Natural" [],
       entry
         "GHC.Num"
-        [("*", LeftAssoc, 7), ("+", LeftAssoc, 6), ("-", LeftAssoc, 6)],
+        [("*", [InTerms], LeftAssoc, 7), ("+", [InTerms], LeftAssoc, 6), ("-", [InTerms], LeftAssoc, 6)],
       entry "GHC.Num.Backend" [],
       entry "GHC.Num.Backend.Native" [],
       entry "GHC.Num.Backend.Selected" [],
@@ -885,29 +885,29 @@ builtinFixities =
       entry "GHC.Num.Natural" [],
       entry
         "GHC.Num.Primitives"
-        [("&&#", RightAssoc, 3), ("||#", RightAssoc, 2)],
+        [("&&#", [InTerms], RightAssoc, 3), ("||#", [InTerms], RightAssoc, 2)],
       entry "GHC.Num.WordArray" [],
       entry
         "GHC.OldList"
-        [("!!", LeftAssoc, 9), ("!?", LeftAssoc, 9), ("++", RightAssoc, 5), ("\\\\", NoAssoc, 5), ("elem", NoAssoc, 4), ("notElem", NoAssoc, 4)],
+        [("!!", [InTerms], LeftAssoc, 9), ("!?", [InTerms], LeftAssoc, 9), ("++", [InTerms], RightAssoc, 5), ("\\\\", [InTerms], NoAssoc, 5), ("elem", [InTerms], NoAssoc, 4), ("notElem", [InTerms], NoAssoc, 4)],
       entry "GHC.OverloadedLabels" [],
       entry
         "GHC.Prim"
-        [("*#", LeftAssoc, 7), ("*##", LeftAssoc, 7), ("**##", LeftAssoc, 9), ("+#", LeftAssoc, 6), ("+##", LeftAssoc, 6), ("-#", LeftAssoc, 6), ("-##", LeftAssoc, 6), ("/##", LeftAssoc, 7), ("/=#", NoAssoc, 4), ("/=##", NoAssoc, 4), ("<#", NoAssoc, 4), ("<##", NoAssoc, 4), ("<=#", NoAssoc, 4), ("<=##", NoAssoc, 4), ("==#", NoAssoc, 4), ("==##", NoAssoc, 4), (">#", NoAssoc, 4), (">##", NoAssoc, 4), (">=#", NoAssoc, 4), (">=##", NoAssoc, 4), ("seq", RightAssoc, 0)],
+        [("*#", [InTerms], LeftAssoc, 7), ("*##", [InTerms], LeftAssoc, 7), ("**##", [InTerms], LeftAssoc, 9), ("+#", [InTerms], LeftAssoc, 6), ("+##", [InTerms], LeftAssoc, 6), ("-#", [InTerms], LeftAssoc, 6), ("-##", [InTerms], LeftAssoc, 6), ("/##", [InTerms], LeftAssoc, 7), ("/=#", [InTerms], NoAssoc, 4), ("/=##", [InTerms], NoAssoc, 4), ("<#", [InTerms], NoAssoc, 4), ("<##", [InTerms], NoAssoc, 4), ("<=#", [InTerms], NoAssoc, 4), ("<=##", [InTerms], NoAssoc, 4), ("==#", [InTerms], NoAssoc, 4), ("==##", [InTerms], NoAssoc, 4), (">#", [InTerms], NoAssoc, 4), (">##", [InTerms], NoAssoc, 4), (">=#", [InTerms], NoAssoc, 4), (">=##", [InTerms], NoAssoc, 4), ("seq", [InTerms], RightAssoc, 0)],
       entry "GHC.Prim.Exception" [],
       entry "GHC.Prim.Ext" [],
       entry "GHC.Prim.Panic" [],
       entry "GHC.Prim.PtrEq" [],
       entry
         "GHC.PrimopWrappers"
-        [("*#", LeftAssoc, 9), ("*##", LeftAssoc, 9), ("**##", LeftAssoc, 9), ("+#", LeftAssoc, 9), ("+##", LeftAssoc, 9), ("-#", LeftAssoc, 9), ("-##", LeftAssoc, 9), ("/##", LeftAssoc, 9), ("/=#", LeftAssoc, 9), ("/=##", LeftAssoc, 9), ("<#", LeftAssoc, 9), ("<##", LeftAssoc, 9), ("<=#", LeftAssoc, 9), ("<=##", LeftAssoc, 9), ("==#", LeftAssoc, 9), ("==##", LeftAssoc, 9), (">#", LeftAssoc, 9), (">##", LeftAssoc, 9), (">=#", LeftAssoc, 9), (">=##", LeftAssoc, 9)],
+        [("*#", [InTerms], LeftAssoc, 9), ("*##", [InTerms], LeftAssoc, 9), ("**##", [InTerms], LeftAssoc, 9), ("+#", [InTerms], LeftAssoc, 9), ("+##", [InTerms], LeftAssoc, 9), ("-#", [InTerms], LeftAssoc, 9), ("-##", [InTerms], LeftAssoc, 9), ("/##", [InTerms], LeftAssoc, 9), ("/=#", [InTerms], LeftAssoc, 9), ("/=##", [InTerms], LeftAssoc, 9), ("<#", [InTerms], LeftAssoc, 9), ("<##", [InTerms], LeftAssoc, 9), ("<=#", [InTerms], LeftAssoc, 9), ("<=##", [InTerms], LeftAssoc, 9), ("==#", [InTerms], LeftAssoc, 9), ("==##", [InTerms], LeftAssoc, 9), (">#", [InTerms], LeftAssoc, 9), (">##", [InTerms], LeftAssoc, 9), (">=#", [InTerms], LeftAssoc, 9), (">=##", [InTerms], LeftAssoc, 9)],
       entry "GHC.Profiling" [],
       entry "GHC.Ptr" [],
       entry "GHC.RTS.Flags" [],
       entry "GHC.Read" [],
       entry
         "GHC.Real"
-        [("%", LeftAssoc, 7), ("/", LeftAssoc, 7), (":%", LeftAssoc, 9), ("^", RightAssoc, 8), ("^%^", LeftAssoc, 9), ("^^", RightAssoc, 8), ("^^%^^", LeftAssoc, 9), ("div", LeftAssoc, 7), ("mod", LeftAssoc, 7), ("quot", LeftAssoc, 7), ("rem", LeftAssoc, 7)],
+        [("%", [InTerms], LeftAssoc, 7), ("/", [InTerms], LeftAssoc, 7), (":%", [InTerms], LeftAssoc, 9), ("^", [InTerms], RightAssoc, 8), ("^%^", [InTerms], LeftAssoc, 9), ("^^", [InTerms], RightAssoc, 8), ("^^%^^", [InTerms], LeftAssoc, 9), ("div", [InTerms], LeftAssoc, 7), ("mod", [InTerms], LeftAssoc, 7), ("quot", [InTerms], LeftAssoc, 7), ("rem", [InTerms], LeftAssoc, 7)],
       entry "GHC.Records" [],
       entry "GHC.ResponseFile" [],
       entry "GHC.ST" [],
@@ -925,19 +925,19 @@ builtinFixities =
       entry "GHC.TopHandler" [],
       entry
         "GHC.Tuple"
-        [("()", LeftAssoc, 9), ("(,)", LeftAssoc, 9), ("(,,)", LeftAssoc, 9), ("(,,,)", LeftAssoc, 9), ("(,,,,)", LeftAssoc, 9), ("(,,,,,)", LeftAssoc, 9), ("(,,,,,,)", LeftAssoc, 9), ("(,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", LeftAssoc, 9)],
+        [("()", [InTypes, InTerms], LeftAssoc, 9), ("(,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9), ("(,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,)", [InTypes, InTerms], LeftAssoc, 9)],
       entry
         "GHC.TypeError"
-        [(":$$:", LeftAssoc, 5), (":<>:", LeftAssoc, 6)],
+        [(":$$:", [InTerms], LeftAssoc, 5), (":<>:", [InTerms], LeftAssoc, 6)],
       entry
         "GHC.TypeLits"
-        [("*", LeftAssoc, 7), ("+", LeftAssoc, 6), ("-", LeftAssoc, 6), (":$$:", LeftAssoc, 5), (":<>:", LeftAssoc, 6), ("<=", NoAssoc, 4), ("<=?", NoAssoc, 4), ("Div", LeftAssoc, 7), ("Mod", LeftAssoc, 7), ("^", RightAssoc, 8)],
+        [("*", [InTypes], LeftAssoc, 7), ("+", [InTypes], LeftAssoc, 6), ("-", [InTypes], LeftAssoc, 6), (":$$:", [InTerms], LeftAssoc, 5), (":<>:", [InTerms], LeftAssoc, 6), ("<=", [InTypes], NoAssoc, 4), ("<=?", [InTypes], NoAssoc, 4), ("Div", [InTypes], LeftAssoc, 7), ("Mod", [InTypes], LeftAssoc, 7), ("^", [InTypes], RightAssoc, 8)],
       entry
         "GHC.TypeNats"
-        [("*", LeftAssoc, 7), ("+", LeftAssoc, 6), ("-", LeftAssoc, 6), ("<=", NoAssoc, 4), ("<=?", NoAssoc, 4), ("Div", LeftAssoc, 7), ("Mod", LeftAssoc, 7), ("^", RightAssoc, 8)],
+        [("*", [InTypes], LeftAssoc, 7), ("+", [InTypes], LeftAssoc, 6), ("-", [InTypes], LeftAssoc, 6), ("<=", [InTypes], NoAssoc, 4), ("<=?", [InTypes], NoAssoc, 4), ("Div", [InTypes], LeftAssoc, 7), ("Mod", [InTypes], LeftAssoc, 7), ("^", [InTypes], RightAssoc, 8)],
       entry
         "GHC.Types"
-        [("~~", NoAssoc, 4)],
+        [("~~", [InTypes], NoAssoc, 4)],
       entry "GHC.Unicode" [],
       entry "GHC.Weak" [],
       entry "GHC.Weak.Finalize" [],
@@ -945,22 +945,22 @@ builtinFixities =
       entry "Language.Haskell.TH" [],
       entry
         "Language.Haskell.TH.CodeDo"
-        [(">>", LeftAssoc, 9), (">>=", LeftAssoc, 9)],
+        [(">>", [InTerms], LeftAssoc, 9), (">>=", [InTerms], LeftAssoc, 9)],
       entry "Language.Haskell.TH.LanguageExtensions" [],
       entry "Language.Haskell.TH.Lib" [],
       entry "Language.Haskell.TH.Ppr" [],
       entry
         "Language.Haskell.TH.PprLib"
-        [("$$", LeftAssoc, 5), ("$+$", LeftAssoc, 5), ("<+>", LeftAssoc, 6), ("<>", LeftAssoc, 6)],
+        [("$$", [InTerms], LeftAssoc, 5), ("$+$", [InTerms], LeftAssoc, 5), ("<+>", [InTerms], LeftAssoc, 6), ("<>", [InTerms], LeftAssoc, 6)],
       entry "Language.Haskell.TH.Quote" [],
       entry "Language.Haskell.TH.Syntax" [],
       entry
         "Numeric"
-        [("**", RightAssoc, 8)],
+        [("**", [InTerms], RightAssoc, 8)],
       entry "Numeric.Natural" [],
       entry
         "Prelude"
-        [("!!", LeftAssoc, 9), ("$", RightAssoc, 0), ("$!", RightAssoc, 0), ("&&", RightAssoc, 3), ("*", LeftAssoc, 7), ("**", RightAssoc, 8), ("*>", LeftAssoc, 4), ("+", LeftAssoc, 6), ("++", RightAssoc, 5), ("-", LeftAssoc, 6), (".", RightAssoc, 9), ("/", LeftAssoc, 7), ("/=", NoAssoc, 4), (":", RightAssoc, 5), ("<", NoAssoc, 4), ("<$", LeftAssoc, 4), ("<$>", LeftAssoc, 4), ("<*", LeftAssoc, 4), ("<*>", LeftAssoc, 4), ("<=", NoAssoc, 4), ("<>", RightAssoc, 6), ("=<<", RightAssoc, 1), ("==", NoAssoc, 4), (">", NoAssoc, 4), (">=", NoAssoc, 4), (">>", LeftAssoc, 1), (">>=", LeftAssoc, 1), ("^", RightAssoc, 8), ("^^", RightAssoc, 8), ("div", LeftAssoc, 7), ("elem", NoAssoc, 4), ("mod", LeftAssoc, 7), ("notElem", NoAssoc, 4), ("quot", LeftAssoc, 7), ("rem", LeftAssoc, 7), ("seq", RightAssoc, 0), ("||", RightAssoc, 2)],
+        [("!!", [InTerms], LeftAssoc, 9), ("$", [InTerms], RightAssoc, 0), ("$!", [InTerms], RightAssoc, 0), ("&&", [InTerms], RightAssoc, 3), ("*", [InTerms], LeftAssoc, 7), ("**", [InTerms], RightAssoc, 8), ("*>", [InTerms], LeftAssoc, 4), ("+", [InTerms], LeftAssoc, 6), ("++", [InTerms], RightAssoc, 5), ("-", [InTerms], LeftAssoc, 6), (".", [InTerms], RightAssoc, 9), ("/", [InTerms], LeftAssoc, 7), ("/=", [InTerms], NoAssoc, 4), (":", [InTerms], RightAssoc, 5), ("<", [InTerms], NoAssoc, 4), ("<$", [InTerms], LeftAssoc, 4), ("<$>", [InTerms], LeftAssoc, 4), ("<*", [InTerms], LeftAssoc, 4), ("<*>", [InTerms], LeftAssoc, 4), ("<=", [InTerms], NoAssoc, 4), ("<>", [InTerms], RightAssoc, 6), ("=<<", [InTerms], RightAssoc, 1), ("==", [InTerms], NoAssoc, 4), (">", [InTerms], NoAssoc, 4), (">=", [InTerms], NoAssoc, 4), (">>", [InTerms], LeftAssoc, 1), (">>=", [InTerms], LeftAssoc, 1), ("^", [InTerms], RightAssoc, 8), ("^^", [InTerms], RightAssoc, 8), ("div", [InTerms], LeftAssoc, 7), ("elem", [InTerms], NoAssoc, 4), ("mod", [InTerms], LeftAssoc, 7), ("notElem", [InTerms], NoAssoc, 4), ("quot", [InTerms], LeftAssoc, 7), ("rem", [InTerms], LeftAssoc, 7), ("seq", [InTerms], RightAssoc, 0), ("||", [InTerms], RightAssoc, 2)],
       entry "System.CPUTime" [],
       entry "System.Cmd" [],
       entry "System.Console.GetOpt" [],
@@ -968,20 +968,20 @@ builtinFixities =
       entry "System.Directory.Internal" [],
       entry
         "System.Directory.Internal.Prelude"
-        [("!!", LeftAssoc, 9), ("$", RightAssoc, 0), ("$!", RightAssoc, 0), ("&&", RightAssoc, 3), ("*", LeftAssoc, 7), ("**", RightAssoc, 8), ("*>", LeftAssoc, 4), ("+", LeftAssoc, 6), ("++", RightAssoc, 5), ("-", LeftAssoc, 6), (".", RightAssoc, 9), (".&.", LeftAssoc, 7), (".|.", LeftAssoc, 5), ("/", LeftAssoc, 7), ("/=", NoAssoc, 4), ("<", NoAssoc, 4), ("<$", LeftAssoc, 4), ("<$>", LeftAssoc, 4), ("<*", LeftAssoc, 4), ("<*>", LeftAssoc, 4), ("<=", NoAssoc, 4), ("<=<", RightAssoc, 1), ("<>", RightAssoc, 6), ("=<<", RightAssoc, 1), ("==", NoAssoc, 4), (">", NoAssoc, 4), (">=", NoAssoc, 4), (">=>", RightAssoc, 1), (">>", LeftAssoc, 1), (">>=", LeftAssoc, 1), ("^", RightAssoc, 8), ("^^", RightAssoc, 8), ("div", LeftAssoc, 7), ("elem", NoAssoc, 4), ("mod", LeftAssoc, 7), ("notElem", NoAssoc, 4), ("on", LeftAssoc, 0), ("quot", LeftAssoc, 7), ("rem", LeftAssoc, 7), ("seq", RightAssoc, 0), ("||", RightAssoc, 2)],
+        [("!!", [InTerms], LeftAssoc, 9), ("$", [InTerms], RightAssoc, 0), ("$!", [InTerms], RightAssoc, 0), ("&&", [InTerms], RightAssoc, 3), ("*", [InTerms], LeftAssoc, 7), ("**", [InTerms], RightAssoc, 8), ("*>", [InTerms], LeftAssoc, 4), ("+", [InTerms], LeftAssoc, 6), ("++", [InTerms], RightAssoc, 5), ("-", [InTerms], LeftAssoc, 6), (".", [InTerms], RightAssoc, 9), (".&.", [InTerms], LeftAssoc, 7), (".|.", [InTerms], LeftAssoc, 5), ("/", [InTerms], LeftAssoc, 7), ("/=", [InTerms], NoAssoc, 4), ("<", [InTerms], NoAssoc, 4), ("<$", [InTerms], LeftAssoc, 4), ("<$>", [InTerms], LeftAssoc, 4), ("<*", [InTerms], LeftAssoc, 4), ("<*>", [InTerms], LeftAssoc, 4), ("<=", [InTerms], NoAssoc, 4), ("<=<", [InTerms], RightAssoc, 1), ("<>", [InTerms], RightAssoc, 6), ("=<<", [InTerms], RightAssoc, 1), ("==", [InTerms], NoAssoc, 4), (">", [InTerms], NoAssoc, 4), (">=", [InTerms], NoAssoc, 4), (">=>", [InTerms], RightAssoc, 1), (">>", [InTerms], LeftAssoc, 1), (">>=", [InTerms], LeftAssoc, 1), ("^", [InTerms], RightAssoc, 8), ("^^", [InTerms], RightAssoc, 8), ("div", [InTerms], LeftAssoc, 7), ("elem", [InTerms], NoAssoc, 4), ("mod", [InTerms], LeftAssoc, 7), ("notElem", [InTerms], NoAssoc, 4), ("on", [InTerms], LeftAssoc, 0), ("quot", [InTerms], LeftAssoc, 7), ("rem", [InTerms], LeftAssoc, 7), ("seq", [InTerms], RightAssoc, 0), ("||", [InTerms], RightAssoc, 2)],
       entry "System.Directory.OsPath" [],
       entry "System.Environment" [],
       entry "System.Environment.Blank" [],
       entry "System.Exit" [],
       entry
         "System.FilePath"
-        [("-<.>", RightAssoc, 7), ("<.>", RightAssoc, 7), ("</>", RightAssoc, 5)],
+        [("-<.>", [InTerms], RightAssoc, 7), ("<.>", [InTerms], RightAssoc, 7), ("</>", [InTerms], RightAssoc, 5)],
       entry
         "System.FilePath.Posix"
-        [("-<.>", RightAssoc, 7), ("<.>", RightAssoc, 7), ("</>", RightAssoc, 5)],
+        [("-<.>", [InTerms], RightAssoc, 7), ("<.>", [InTerms], RightAssoc, 7), ("</>", [InTerms], RightAssoc, 5)],
       entry
         "System.FilePath.Windows"
-        [("-<.>", RightAssoc, 7), ("<.>", RightAssoc, 7), ("</>", RightAssoc, 5)],
+        [("-<.>", [InTerms], RightAssoc, 7), ("<.>", [InTerms], RightAssoc, 7), ("</>", [InTerms], RightAssoc, 5)],
       entry "System.IO" [],
       entry "System.IO.Error" [],
       entry "System.IO.Unsafe" [],
@@ -991,51 +991,51 @@ builtinFixities =
       entry "System.Mem.Weak" [],
       entry
         "System.OsPath"
-        [("-<.>", LeftAssoc, 9), ("<.>", LeftAssoc, 9), ("</>", LeftAssoc, 9)],
+        [("-<.>", [InTerms], LeftAssoc, 9), ("<.>", [InTerms], LeftAssoc, 9), ("</>", [InTerms], LeftAssoc, 9)],
       entry "System.OsPath.Encoding" [],
       entry "System.OsPath.Internal" [],
       entry
         "System.OsPath.Posix"
-        [("-<.>", LeftAssoc, 9), ("<.>", LeftAssoc, 9), ("</>", LeftAssoc, 9)],
+        [("-<.>", [InTerms], LeftAssoc, 9), ("<.>", [InTerms], LeftAssoc, 9), ("</>", [InTerms], LeftAssoc, 9)],
       entry
         "System.OsPath.Posix.Internal"
-        [("-<.>", RightAssoc, 7), ("<.>", RightAssoc, 7), ("</>", RightAssoc, 5)],
+        [("-<.>", [InTerms], RightAssoc, 7), ("<.>", [InTerms], RightAssoc, 7), ("</>", [InTerms], RightAssoc, 5)],
       entry "System.OsPath.Types" [],
       entry
         "System.OsPath.Windows"
-        [("-<.>", LeftAssoc, 9), ("<.>", LeftAssoc, 9), ("</>", LeftAssoc, 9)],
+        [("-<.>", [InTerms], LeftAssoc, 9), ("<.>", [InTerms], LeftAssoc, 9), ("</>", [InTerms], LeftAssoc, 9)],
       entry
         "System.OsPath.Windows.Internal"
-        [("-<.>", RightAssoc, 7), ("<.>", RightAssoc, 7), ("</>", RightAssoc, 5)],
+        [("-<.>", [InTerms], RightAssoc, 7), ("<.>", [InTerms], RightAssoc, 7), ("</>", [InTerms], RightAssoc, 5)],
       entry
         "System.OsString"
-        [("!?", LeftAssoc, 9)],
+        [("!?", [InTerms], LeftAssoc, 9)],
       entry
         "System.OsString.Data.ByteString.Short"
-        [("!?", LeftAssoc, 9), ("cons", RightAssoc, 5), ("snoc", LeftAssoc, 5)],
+        [("!?", [InTerms], LeftAssoc, 9), ("cons", [InTerms], RightAssoc, 5), ("snoc", [InTerms], LeftAssoc, 5)],
       entry "System.OsString.Data.ByteString.Short.Internal" [],
       entry
         "System.OsString.Data.ByteString.Short.Word16"
-        [("!?", LeftAssoc, 9), ("cons", RightAssoc, 5), ("snoc", LeftAssoc, 5)],
+        [("!?", [InTerms], LeftAssoc, 9), ("cons", [InTerms], RightAssoc, 5), ("snoc", [InTerms], LeftAssoc, 5)],
       entry "System.OsString.Encoding" [],
       entry "System.OsString.Encoding.Internal" [],
       entry
         "System.OsString.Internal"
-        [("!?", LeftAssoc, 9)],
+        [("!?", [InTerms], LeftAssoc, 9)],
       entry "System.OsString.Internal.Exception" [],
       entry "System.OsString.Internal.Types" [],
       entry
         "System.OsString.Posix"
-        [("!?", LeftAssoc, 9)],
+        [("!?", [InTerms], LeftAssoc, 9)],
       entry
         "System.OsString.Windows"
-        [("!?", LeftAssoc, 9)],
+        [("!?", [InTerms], LeftAssoc, 9)],
       entry
         "System.Posix"
-        [("addSignal", RightAssoc, 9), ("deleteSignal", RightAssoc, 9)],
+        [("addSignal", [InTerms], RightAssoc, 9), ("deleteSignal", [InTerms], RightAssoc, 9)],
       entry
         "System.Posix.ByteString"
-        [("addSignal", RightAssoc, 9), ("deleteSignal", RightAssoc, 9)],
+        [("addSignal", [InTerms], RightAssoc, 9), ("deleteSignal", [InTerms], RightAssoc, 9)],
       entry "System.Posix.ByteString.FilePath" [],
       entry "System.Posix.Directory" [],
       entry "System.Posix.Directory.ByteString" [],
@@ -1062,7 +1062,7 @@ builtinFixities =
       entry "System.Posix.PosixPath.FilePath" [],
       entry
         "System.Posix.PosixString"
-        [("addSignal", RightAssoc, 9), ("deleteSignal", RightAssoc, 9)],
+        [("addSignal", [InTerms], RightAssoc, 9), ("deleteSignal", [InTerms], RightAssoc, 9)],
       entry "System.Posix.Process" [],
       entry "System.Posix.Process.ByteString" [],
       entry "System.Posix.Process.Internals" [],
@@ -1072,10 +1072,10 @@ builtinFixities =
       entry "System.Posix.SharedMem" [],
       entry
         "System.Posix.Signals"
-        [("addSignal", RightAssoc, 9), ("deleteSignal", RightAssoc, 9)],
+        [("addSignal", [InTerms], RightAssoc, 9), ("deleteSignal", [InTerms], RightAssoc, 9)],
       entry
         "System.Posix.Signals.Exts"
-        [("addSignal", RightAssoc, 9), ("deleteSignal", RightAssoc, 9)],
+        [("addSignal", [InTerms], RightAssoc, 9), ("deleteSignal", [InTerms], RightAssoc, 9)],
       entry "System.Posix.Temp" [],
       entry "System.Posix.Temp.ByteString" [],
       entry "System.Posix.Temp.PosixString" [],
@@ -1095,7 +1095,7 @@ builtinFixities =
       entry "System.Timeout" [],
       entry
         "Text.Parsec"
-        [("<?>", NoAssoc, 0), ("<|>", RightAssoc, 1)],
+        [("<?>", [InTerms], NoAssoc, 0), ("<|>", [InTerms], RightAssoc, 1)],
       entry "Text.Parsec.ByteString" [],
       entry "Text.Parsec.ByteString.Lazy" [],
       entry "Text.Parsec.Char" [],
@@ -1105,18 +1105,18 @@ builtinFixities =
       entry "Text.Parsec.Language" [],
       entry
         "Text.Parsec.Perm"
-        [("<$$>", LeftAssoc, 2), ("<$?>", LeftAssoc, 2), ("<|?>", LeftAssoc, 1), ("<||>", LeftAssoc, 1)],
+        [("<$$>", [InTerms], LeftAssoc, 2), ("<$?>", [InTerms], LeftAssoc, 2), ("<|?>", [InTerms], LeftAssoc, 1), ("<||>", [InTerms], LeftAssoc, 1)],
       entry "Text.Parsec.Pos" [],
       entry
         "Text.Parsec.Prim"
-        [("<?>", NoAssoc, 0), ("<|>", RightAssoc, 1)],
+        [("<?>", [InTerms], NoAssoc, 0), ("<|>", [InTerms], RightAssoc, 1)],
       entry "Text.Parsec.String" [],
       entry "Text.Parsec.Text" [],
       entry "Text.Parsec.Text.Lazy" [],
       entry "Text.Parsec.Token" [],
       entry
         "Text.ParserCombinators.Parsec"
-        [("<?>", NoAssoc, 0), ("<|>", RightAssoc, 1)],
+        [("<?>", [InTerms], NoAssoc, 0), ("<|>", [InTerms], RightAssoc, 1)],
       entry "Text.ParserCombinators.Parsec.Char" [],
       entry "Text.ParserCombinators.Parsec.Combinator" [],
       entry "Text.ParserCombinators.Parsec.Error" [],
@@ -1124,40 +1124,40 @@ builtinFixities =
       entry "Text.ParserCombinators.Parsec.Language" [],
       entry
         "Text.ParserCombinators.Parsec.Perm"
-        [("<$$>", LeftAssoc, 2), ("<$?>", LeftAssoc, 2), ("<|?>", LeftAssoc, 1), ("<||>", LeftAssoc, 1)],
+        [("<$$>", [InTerms], LeftAssoc, 2), ("<$?>", [InTerms], LeftAssoc, 2), ("<|?>", [InTerms], LeftAssoc, 1), ("<||>", [InTerms], LeftAssoc, 1)],
       entry "Text.ParserCombinators.Parsec.Pos" [],
       entry
         "Text.ParserCombinators.Parsec.Prim"
-        [("<?>", NoAssoc, 0), ("<|>", RightAssoc, 1)],
+        [("<?>", [InTerms], NoAssoc, 0), ("<|>", [InTerms], RightAssoc, 1)],
       entry "Text.ParserCombinators.Parsec.Token" [],
       entry
         "Text.ParserCombinators.ReadP"
-        [("+++", RightAssoc, 5), ("<++", RightAssoc, 5)],
+        [("+++", [InTerms], RightAssoc, 5), ("<++", [InTerms], RightAssoc, 5)],
       entry
         "Text.ParserCombinators.ReadPrec"
-        [("+++", LeftAssoc, 9), ("<++", LeftAssoc, 9)],
+        [("+++", [InTerms], LeftAssoc, 9), ("<++", [InTerms], LeftAssoc, 9)],
       entry
         "Text.PrettyPrint"
-        [("$$", LeftAssoc, 5), ("$+$", LeftAssoc, 5), ("<+>", LeftAssoc, 6), ("<>", LeftAssoc, 6)],
+        [("$$", [InTerms], LeftAssoc, 5), ("$+$", [InTerms], LeftAssoc, 5), ("<+>", [InTerms], LeftAssoc, 6), ("<>", [InTerms], LeftAssoc, 6)],
       entry
         "Text.PrettyPrint.Annotated"
-        [("$$", LeftAssoc, 5), ("$+$", LeftAssoc, 5), ("<+>", LeftAssoc, 6), ("<>", LeftAssoc, 6)],
+        [("$$", [InTerms], LeftAssoc, 5), ("$+$", [InTerms], LeftAssoc, 5), ("<+>", [InTerms], LeftAssoc, 6), ("<>", [InTerms], LeftAssoc, 6)],
       entry
         "Text.PrettyPrint.Annotated.HughesPJ"
-        [("$$", LeftAssoc, 5), ("$+$", LeftAssoc, 5), ("<+>", LeftAssoc, 6), ("<>", LeftAssoc, 6)],
+        [("$$", [InTerms], LeftAssoc, 5), ("$+$", [InTerms], LeftAssoc, 5), ("<+>", [InTerms], LeftAssoc, 6), ("<>", [InTerms], LeftAssoc, 6)],
       entry
         "Text.PrettyPrint.Annotated.HughesPJClass"
-        [("$$", LeftAssoc, 5), ("$+$", LeftAssoc, 5), ("<+>", LeftAssoc, 6), ("<>", LeftAssoc, 6)],
+        [("$$", [InTerms], LeftAssoc, 5), ("$+$", [InTerms], LeftAssoc, 5), ("<+>", [InTerms], LeftAssoc, 6), ("<>", [InTerms], LeftAssoc, 6)],
       entry
         "Text.PrettyPrint.HughesPJ"
-        [("$$", LeftAssoc, 5), ("$+$", LeftAssoc, 5), ("<+>", LeftAssoc, 6), ("<>", LeftAssoc, 6)],
+        [("$$", [InTerms], LeftAssoc, 5), ("$+$", [InTerms], LeftAssoc, 5), ("<+>", [InTerms], LeftAssoc, 6), ("<>", [InTerms], LeftAssoc, 6)],
       entry
         "Text.PrettyPrint.HughesPJClass"
-        [("$$", LeftAssoc, 5), ("$+$", LeftAssoc, 5), ("<+>", LeftAssoc, 6), ("<>", LeftAssoc, 6)],
+        [("$$", [InTerms], LeftAssoc, 5), ("$+$", [InTerms], LeftAssoc, 5), ("<+>", [InTerms], LeftAssoc, 6), ("<>", [InTerms], LeftAssoc, 6)],
       entry "Text.Printf" [],
       entry
         "Text.Read"
-        [("+++", LeftAssoc, 9), ("<++", LeftAssoc, 9)],
+        [("+++", [InTerms], LeftAssoc, 9), ("<++", [InTerms], LeftAssoc, 9)],
       entry "Text.Read.Lex" [],
       entry "Text.Show" [],
       entry "Text.Show.Functions" [],
@@ -1167,10 +1167,16 @@ builtinFixities =
       entry "Trace.Hpc.Util" [],
       entry
         "Type.Reflection"
-        [(":~:", NoAssoc, 4), (":~~:", NoAssoc, 4)],
+        [(":~:", [InTypes], NoAssoc, 4), (":~~:", [InTypes], NoAssoc, 4)],
       entry "Type.Reflection.Unsafe" [],
       entry "Unsafe.Coerce" []
     ]
   where
     entry name ops =
-      (name, Map.fromList [(OpName o, Fixity d p) | (o, d, p) <- ops])
+      ( name,
+        Map.fromList
+          [ ((namespace, OpName o), Fixity d p)
+          | (o, governs, d, p) <- ops,
+            namespace <- governs
+          ]
+      )

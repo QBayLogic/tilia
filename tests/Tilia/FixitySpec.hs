@@ -54,6 +54,85 @@ spec = do
       declaredIn "module M where\nf = g\n  where\n    infixr 3 ###\n    g = 1\n"
         `shouldBe` []
 
+  describe "which namespace a declaration governs" $ do
+    it "gives a type operator's fixity to types" $
+      declaredWithNamespaces "module M where\ninfixr 4 :>\ndata a :> b = Sub a b\n"
+        `shouldBe` [((InTypes, OpName ":>"), Fixity RightAssoc 4)]
+
+    it "gives a value operator's fixity to terms" $
+      declaredWithNamespaces "module M where\ninfixl 6 <+>\na <+> b = a\n"
+        `shouldBe` [((InTerms, OpName "<+>"), Fixity LeftAssoc 6)]
+
+    it "gives a pattern synonym's fixity to terms" $
+      declaredWithNamespaces
+        "{-# LANGUAGE PatternSynonyms #-}\nmodule M where\ninfixl 5 :>\npattern x :> y = (x, y)\n"
+        `shouldBe` [((InTerms, OpName ":>"), Fixity LeftAssoc 5)]
+
+    it "honours a declaration that names the type namespace itself" $
+      declaredWithNamespaces "module M where\ninfixr 4 type :>\n"
+        `shouldBe` [((InTypes, OpName ":>"), Fixity RightAssoc 4)]
+
+    it "honours one that names the data namespace" $
+      declaredWithNamespaces "module M where\ninfixr 4 data :>\n"
+        `shouldBe` [((InTerms, OpName ":>"), Fixity RightAssoc 4)]
+
+    it "gives both to a name the module declares in neither" $
+      declaredWithNamespaces "module M where\ninfixr 4 <?>\n"
+        `shouldBe` [ ((InTypes, OpName "<?>"), Fixity RightAssoc 4),
+                     ((InTerms, OpName "<?>"), Fixity RightAssoc 4)
+                   ]
+
+    it "gives both to a name the module declares in both" $
+      declaredWithNamespaces "module M where\ninfixr 4 :>\ndata a :> b = a :> b\n"
+        `shouldBe` [ ((InTypes, OpName ":>"), Fixity RightAssoc 4),
+                     ((InTerms, OpName ":>"), Fixity RightAssoc 4)
+                   ]
+
+    it "gives a class's fixity to types and its method's to terms" $
+      declaredWithNamespaces
+        "module M where\ninfixl 3 <%>\nclass a <%> b where\n  infixl 7 .=\n  (.=) :: a -> b -> Int\n"
+        `shouldBe` [ ((InTypes, OpName "<%>"), Fixity LeftAssoc 3),
+                     ((InTerms, OpName ".="), Fixity LeftAssoc 7)
+                   ]
+
+  describe "one spelling in two namespaces" $ do
+    it "settles a type use against the type declaration" $
+      lookupFixity (scopeOfBoth "import Types\nimport Terms\n") InTypes Nothing (OpName ":>")
+        `shouldBe` Resolved (Fixity RightAssoc 4) (DeclaredIn "Types")
+
+    it "settles a term use against the term declaration" $
+      lookupFixity (scopeOfBoth "import Types\nimport Terms\n") InTerms Nothing (OpName ":>")
+        `shouldBe` Resolved (Fixity LeftAssoc 5) (DeclaredIn "Terms")
+
+    it "reports no ambiguity between them" $ do
+      let scope = scopeOfBoth "import Types\nimport Terms\n"
+      reachAmbiguous (scopeInTypes scope) `shouldBe` []
+      reachAmbiguous (scopeInTerms scope) `shouldBe` []
+
+    it "still reports one where both are in the same namespace" $
+      reachAmbiguous (scopeInTerms (scopeOfBoth "import Terms\nimport Other.Terms\n"))
+        `shouldBe` [(Nothing, OpName ":>")]
+
+    it "takes a promoted constructor's fixity from the terms" $
+      lookupFixity (scopeOfBoth "import Terms\n") InTypes Nothing (OpName ":>")
+        `shouldBe` Resolved (Fixity LeftAssoc 5) (DeclaredIn "Terms")
+
+    it "does not take a type's fixity for a term" $
+      lookupFixity (scopeOfBoth "import Types\n") InTerms Nothing (OpName ":>")
+        `shouldBe` Resolved defaultFixity ReportDefault
+
+    it "prefers the type it finds to the term it could fall back on" $
+      lookupFixity (scopeOfBoth "import Types\nimport Terms\n") InTypes Nothing (OpName ":>")
+        `shouldBe` Resolved (Fixity RightAssoc 4) (DeclaredIn "Types")
+
+    it "lets a module that writes the type be formatted" $
+      unsettledIn "module M where\nimport Types\nimport Terms\ntype T = Int :> Int\n"
+        `shouldBe` []
+
+    it "declines one that writes an operator both agree to disagree about" $
+      map snd (unsettledIn "module M where\nimport Terms\nimport Other.Terms\nf a b = a :> b\n")
+        `shouldBe` [Ambiguous]
+
   describe "what a module says it exports" $ do
     it "has nothing to say about a module with no export list" $
       exportsOfSource "module M where\nf = 1\n" `shouldBe` Nothing
@@ -99,20 +178,21 @@ spec = do
 
   describe "which unread module an unsettled operator is blamed on" $ do
     it "passes over one whose export list has no such operator" $
-      lookupFixity (scopeKnowing [("Opaque", ["<+>"])] usesUnknown) Nothing (OpName "<??>")
+      lookupFixity (scopeKnowing [("Opaque", ["<+>"])] usesUnknown) InTerms Nothing (OpName "<??>")
         `shouldBe` Resolved defaultFixity ReportDefault
 
     it "blames one whose export list names it" $
-      lookupFixity (scopeKnowing [("Opaque", ["<??>"])] usesUnknown) Nothing (OpName "<??>")
+      lookupFixity (scopeKnowing [("Opaque", ["<??>"])] usesUnknown) InTerms Nothing (OpName "<??>")
         `shouldBe` Unresolved ("Opaque" :| [])
 
     it "blames one that will not say what it exports" $
-      lookupFixity (scopeKnowing [] usesUnknown) Nothing (OpName "<??>")
+      lookupFixity (scopeKnowing [] usesUnknown) InTerms Nothing (OpName "<??>")
         `shouldBe` Unresolved ("Opaque" :| [])
 
     it "still passes over an import list that does not name it" $
       lookupFixity
         (scopeKnowing [("Opaque", ["<??>"])] "module M where\nimport Opaque ((<+>))\n")
+        InTerms
         Nothing
         (OpName "<??>")
         `shouldBe` Resolved defaultFixity ReportDefault
@@ -120,17 +200,19 @@ spec = do
     it "blames only the ones that could supply it, of several unread" $
       lookupFixity
         (scopeKnowing [("Opaque", ["<+>"]), ("Other.Opaque", ["<??>"])] twoUnread)
+        InTerms
         Nothing
         (OpName "<??>")
         `shouldBe` Unresolved ("Other.Opaque" :| [])
 
     it "settles nothing on its own account when told nothing" $
-      lookupFixity (fullScope usesUnknown) Nothing (OpName "<??>")
+      lookupFixity (fullScope usesUnknown) InTerms Nothing (OpName "<??>")
         `shouldBe` Unresolved ("Opaque" :| [])
 
     it "passes over one whose import list carries no such operator" $
       lookupFixity
         (scopeSuspecting [("Opaque", [("T", ["<+>"])])] "import Opaque (T (..))\n")
+        InTerms
         Nothing
         (OpName "<??>")
         `shouldBe` Resolved defaultFixity ReportDefault
@@ -138,6 +220,7 @@ spec = do
     it "blames one whose import list carries it" $
       lookupFixity
         (scopeSuspecting [("Opaque", [("T", ["<??>"])])] "import Opaque (T (..))\n")
+        InTerms
         Nothing
         (OpName "<??>")
         `shouldBe` Unresolved ("Opaque" :| [])
@@ -145,6 +228,7 @@ spec = do
     it "blames one whose (..) nothing is known about" $
       lookupFixity
         (scopeSuspecting [] "import Opaque (T (..))\n")
+        InTerms
         Nothing
         (OpName "<??>")
         `shouldBe` Unresolved ("Opaque" :| [])
@@ -152,6 +236,7 @@ spec = do
     it "passes over one that hides the operator along with its type" $
       lookupFixity
         (scopeSuspecting [("Opaque", [("T", ["<??>"])])] "import Opaque hiding (T (..))\n")
+        InTerms
         Nothing
         (OpName "<??>")
         `shouldBe` Resolved defaultFixity ReportDefault
@@ -217,24 +302,25 @@ spec = do
 
   describe "layer 2: imports" $ do
     it "brings in an operator a type carries" $
-      lookupFixity (scopeCarrying "import Carrier (T (..))\n") Nothing (OpName ":|")
+      lookupFixity (scopeCarrying "import Carrier (T (..))\n") InTerms Nothing (OpName ":|")
         `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Carrier")
 
     it "leaves out an operator the type does not carry" $
-      lookupFixity (scopeCarrying "import Carrier (T (..))\n") Nothing (OpName "<+>")
+      lookupFixity (scopeCarrying "import Carrier (T (..))\n") InTerms Nothing (OpName "<+>")
         `shouldBe` Resolved defaultFixity ReportDefault
 
     it "hides an operator hidden along with its type" $
-      lookupFixity (scopeCarrying "import Carrier hiding (T (..))\n") Nothing (OpName ":|")
+      lookupFixity (scopeCarrying "import Carrier hiding (T (..))\n") InTerms Nothing (OpName ":|")
         `shouldBe` Resolved defaultFixity ReportDefault
 
     it "keeps what a hiding list leaves alone" $
-      lookupFixity (scopeCarrying "import Carrier hiding (T (..))\n") Nothing (OpName "<+>")
+      lookupFixity (scopeCarrying "import Carrier hiding (T (..))\n") InTerms Nothing (OpName "<+>")
         `shouldBe` Resolved (Fixity LeftAssoc 6) (DeclaredIn "Carrier")
 
     it "brings it in under a qualifier too" $
       lookupFixity
         (scopeCarrying "import qualified Carrier as C (T (..))\n")
+        InTerms
         (Just "C")
         (OpName ":|")
         `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Carrier")
@@ -320,73 +406,73 @@ spec = do
   describe "lookupFixity" $ do
     it "finds an unqualified operator" $
       let s = fullScope "module M where\nimport Data.Map\n"
-       in lookupFixity s Nothing (OpName "!")
+       in lookupFixity s InTerms Nothing (OpName "!")
             `shouldBe` Resolved (Fixity LeftAssoc 9) (DeclaredIn "Data.Map")
 
     it "finds a qualified operator through its alias" $
       let s = fullScope "module M where\nimport qualified Data.Map as M\n"
-       in lookupFixity s (Just "M") (OpName "!")
+       in lookupFixity s InTerms (Just "M") (OpName "!")
             `shouldBe` Resolved (Fixity LeftAssoc 9) (DeclaredIn "Data.Map")
 
     it "concludes infixl 9 when every module in scope was read" $
       let s = fullScope "module M where\nimport Data.Map\n"
-       in lookupFixity s Nothing (OpName "<??>")
+       in lookupFixity s InTerms Nothing (OpName "<??>")
             `shouldBe` Resolved defaultFixity ReportDefault
 
     it "refuses to conclude anything when a module could not be read" $
       let s = fullScope "module M where\nimport Data.Map\nimport Opaque\n"
-       in lookupFixity s Nothing (OpName "<??>")
+       in lookupFixity s InTerms Nothing (OpName "<??>")
             `shouldBe` Unresolved ("Opaque" :| [])
 
     it "still answers for an operator it did find, despite an unread module" $
       let s = fullScope "module M where\nimport Data.Map\nimport Opaque\n"
-       in lookupFixity s Nothing (OpName "!")
+       in lookupFixity s InTerms Nothing (OpName "!")
             `shouldBe` Resolved (Fixity LeftAssoc 9) (DeclaredIn "Data.Map")
 
     it "attributes the module\'s own declaration to itself" $
       let s = fullScope "module M where\ninfixr 3 <+>\n"
-       in lookupFixity s Nothing (OpName "<+>")
+       in lookupFixity s InTerms Nothing (OpName "<+>")
             `shouldBe` Resolved (Fixity RightAssoc 3) DeclaredHere
 
     it "does not find a qualified-only operator unqualified" $
       let s = fullScope "module M where\nimport qualified Data.Map\n"
-       in lookupFixity s Nothing (OpName "!")
+       in lookupFixity s InTerms Nothing (OpName "!")
             `shouldBe` Resolved defaultFixity ReportDefault
 
   describe "a qualified use is answered from qualified scope alone" $ do
     it "does not answer a qualifier that brought nothing in from what did" $
       let s = fullScope "module M where\nimport Data.Map\n"
-       in lookupFixity s (Just "Q") (OpName "!")
+       in lookupFixity s InTerms (Just "Q") (OpName "!")
             `shouldBe` Resolved defaultFixity ReportDefault
 
     it "does not lend the module's own declaration to a foreign qualifier" $
       let s = fullScope "module M where\ninfixr 3 <+>\n"
-       in lookupFixity s (Just "Q") (OpName "<+>")
+       in lookupFixity s InTerms (Just "Q") (OpName "<+>")
             `shouldBe` Resolved defaultFixity ReportDefault
 
     it "does not answer through an alias the import does not go under" $
       let s = fullScope "module M where\nimport qualified Data.Map as M\n"
-       in lookupFixity s (Just "Data.Map") (OpName "!")
+       in lookupFixity s InTerms (Just "Data.Map") (OpName "!")
             `shouldBe` Resolved defaultFixity ReportDefault
 
     it "answers a use qualified by the module's own name" $
       let s = fullScope "module M where\ninfixr 3 <+>\n"
-       in lookupFixity s (Just "M") (OpName "<+>")
+       in lookupFixity s InTerms (Just "M") (OpName "<+>")
             `shouldBe` Resolved (Fixity RightAssoc 3) DeclaredHere
 
     it "answers a plain import under the module's own name" $
       let s = fullScope "module M where\nimport Data.Map\n"
-       in lookupFixity s (Just "Data.Map") (OpName "!")
+       in lookupFixity s InTerms (Just "Data.Map") (OpName "!")
             `shouldBe` Resolved (Fixity LeftAssoc 9) (DeclaredIn "Data.Map")
 
     it "weighs only the unread imports the qualifier reaches" $
       let s = fullScope "module M where\nimport qualified Data.Map as M\nimport Opaque\n"
-       in lookupFixity s (Just "M") (OpName "<??>")
+       in lookupFixity s InTerms (Just "M") (OpName "<??>")
             `shouldBe` Resolved defaultFixity ReportDefault
 
     it "refuses to conclude when the qualifier reaches an unread import" $
       let s = fullScope "module M where\nimport qualified Opaque as O\n"
-       in lookupFixity s (Just "O") (OpName "<??>")
+       in lookupFixity s InTerms (Just "O") (OpName "<??>")
             `shouldBe` Unresolved ("Opaque" :| [])
 
   describe "what could not be settled" $ do
@@ -435,36 +521,47 @@ spec = do
 -- | Stand-in for layer 3. The real one reads a build plan, maps modules to
 -- packages and parses their sources; what it returns is exactly this shape,
 -- so everything above it can be exercised without any of that.
-exportsOf :: Text -> Maybe (Map.Map OpName Fixity)
+exportsOf :: Text -> Maybe Fixities
 exportsOf = \case
-  "Data.Map" -> Just (Map.fromList [(OpName "!", Fixity LeftAssoc 9)])
+  "Data.Map" -> whichever [(OpName "!", Fixity LeftAssoc 9)]
   "Data.Sequence" ->
-    Just
-      ( Map.fromList
-          [ (OpName "|>", Fixity LeftAssoc 5),
-            (OpName "<|", Fixity RightAssoc 5)
-          ]
-      )
-  "Other" -> Just (Map.fromList [(OpName "!", Fixity RightAssoc 4)])
-  "Agreeing" -> Just (Map.fromList [(OpName "!", Fixity LeftAssoc 9)])
+    whichever
+      [ (OpName "|>", Fixity LeftAssoc 5),
+        (OpName "<|", Fixity RightAssoc 5)
+      ]
+  "Other" -> whichever [(OpName "!", Fixity RightAssoc 4)]
+  "Agreeing" -> whichever [(OpName "!", Fixity LeftAssoc 9)]
   "Carrier" ->
-    Just
-      ( Map.fromList
-          [ (OpName ":|", Fixity RightAssoc 5),
-            (OpName "<+>", Fixity LeftAssoc 6)
-          ]
-      )
+    whichever
+      [ (OpName ":|", Fixity RightAssoc 5),
+        (OpName "<+>", Fixity LeftAssoc 6)
+      ]
+  -- Spell @:>@ in different namespaces, as servant and text do.
+  "Types" -> Just (Map.fromList [((InTypes, OpName ":>"), Fixity RightAssoc 4)])
+  "Terms" -> Just (Map.fromList [((InTerms, OpName ":>"), Fixity LeftAssoc 5)])
+  "Other.Terms" -> Just (Map.fromList [((InTerms, OpName ":>"), Fixity RightAssoc 9)])
   "Opaque" -> Nothing
   "Other.Opaque" -> Nothing
   _ -> Just Map.empty
+  where
+    whichever = Just . inBothNamespaces . Map.fromList
 
 parsed :: Text -> ParsedModule
 parsed src = case parseModule defaultParserConfig "test.hs" src of
   Left _ -> error "the test input did not parse"
   Right pm -> pm
 
+-- | The fixities a module declares, by name alone.
+--
+-- One entry per operator: a fixity that governs both namespaces is one
+-- declaration, however many places it lands in.
 declaredIn :: Text -> [(OpName, Fixity)]
-declaredIn = Map.toList . declaredFixities . pmModule . parsed
+declaredIn =
+  Map.toList . Map.fromList . map (\((_, op), fixity) -> (op, fixity)) . declaredWithNamespaces
+
+-- | The same, keeping the namespace each governs.
+declaredWithNamespaces :: Text -> [((Namespace, OpName), Fixity)]
+declaredWithNamespaces = Map.toList . declaredFixities . pmModule . parsed
 
 exportsOfSource :: Text -> Maybe [ExportItem]
 exportsOfSource = moduleExports . pmModule . parsed
@@ -533,6 +630,11 @@ scopeCarrying source =
       "Carrier" -> Map.fromList [(OpName "T", Set.fromList [OpName ":|"])]
       _ -> Map.empty
 
+-- | A scope over the two modules that spell @:>@ in different namespaces.
+scopeOfBoth :: Text -> Scope
+scopeOfBoth source =
+  resolveScope knowingExports (pmModule (parsed ("module M where\n" <> source)))
+
 -- | A scope over an unread module, told what it keeps under its names.
 --
 -- Opaque cannot be read for fixities and says nothing about what it
@@ -566,8 +668,8 @@ scopeOf ::
     [(Maybe Text, OpName)]
   )
 scopeOf src =
-  let s = fullScope src
-   in ( Map.toList (Map.map fst (scopeUnqualified s)),
-        Map.toList (Map.map fst (scopeQualified s)),
-        scopeAmbiguous s
+  let reach = scopeInTerms (fullScope src)
+   in ( Map.toList (Map.map fst (reachUnqualified reach)),
+        Map.toList (Map.map fst (reachQualified reach)),
+        reachAmbiguous reach
       )

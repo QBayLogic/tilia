@@ -15,11 +15,15 @@ import GHC.Hs.Extension (GhcPs)
 import GHC.LanguageExtensions.Type (Extension)
 import Tilia.Fixity
   ( Direction (..),
+    Fixities,
     Fixity (..),
     Known (..),
+    Namespace (..),
     OpName (..),
     Provenance (..),
+    Reach (..),
     Scope (..),
+    inBothNamespaces,
     nothingKnown,
     operatorsUsed,
     resolveScope,
@@ -45,28 +49,33 @@ exampleRenderConfig package source hsModule =
     known = nothingKnown {knownFixities = exportsOf}
     underEveryQualifier scope =
       scope
-        { scopeQualified =
+        { scopeInTypes = alsoQualified (scopeInTypes scope),
+          scopeInTerms = alsoQualified (scopeInTerms scope)
+        }
+    alsoQualified reach =
+      reach
+        { reachQualified =
             Map.union
-              (scopeQualified scope)
+              (reachQualified reach)
               ( Map.fromList
                   [ ((qualifier, op), (fixity, DeclaredIn qualifier))
-                  | (Just qualifier, op) <- operatorsUsed hsModule,
+                  | (_, (Just qualifier, op)) <- operatorsUsed hsModule,
                     Just exported <- [exportsOf qualifier],
-                    Just fixity <- [Map.lookup op exported]
+                    Just fixity <- [Map.lookup (InTerms, op) exported]
                   ]
               )
         }
 
 -- | What a module in scope exports, as far as the corpus is concerned.
-exportsOf :: Text -> Maybe (Map OpName Fixity)
-exportsOf name = Just (Map.union ours elsewhere)
+exportsOf :: Text -> Maybe Fixities
+exportsOf name = Just (Map.union ours (inBothNamespaces elsewhere))
   where
     ours = case Map.lookup name builtinFixities of
       Just exact -> exact
       Nothing -> everythingKnown
 
 -- | Every operator any boot module exports.
-everythingKnown :: Map OpName Fixity
+everythingKnown :: Fixities
 everythingKnown = Map.unions (Map.elems builtinFixities)
 
 -- | Operators the examples use that no boot package exports.

@@ -73,6 +73,7 @@ import Tilia.Comments (Comment (..), CommentStyle (..), commentTrailing)
 import Tilia.Doc.Combinators
 import Tilia.Fixity
   ( Fixity,
+    Namespace (..),
     OpName (..),
     Resolution (..),
     Scope,
@@ -158,10 +159,14 @@ extensionOn ctx e = Set.member e (ctxExtensions ctx)
 --
 -- 'Nothing' means the question was not answered, and the caller must not
 -- rearrange anything on the strength of it.
-operatorFixity :: Ctx -> RdrName -> Maybe Fixity
-operatorFixity ctx name = do
+--
+-- The namespace is the caller's to say, and it matters: @:>@ written among
+-- types is servant's, written among terms it is text's, and they do not
+-- agree about how it binds.
+operatorFixity :: Ctx -> Namespace -> RdrName -> Maybe Fixity
+operatorFixity ctx namespace name = do
   scope <- ctxScope ctx
-  case lookupFixity scope qualifier op of
+  case lookupFixity scope namespace qualifier op of
     Resolved fixity _ -> Just fixity
     Unresolved _ -> Nothing
   where

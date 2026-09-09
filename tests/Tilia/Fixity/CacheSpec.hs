@@ -35,9 +35,9 @@ spec = do
       it "round-trips every direction" $ \cache -> do
         let fixities =
               Map.fromList
-                [ (OpName "<+>", Fixity LeftAssoc 6),
-                  (OpName ">>=", Fixity RightAssoc 1),
-                  (OpName "===", Fixity NoAssoc 4)
+                [ ((InTerms, OpName "<+>"), Fixity LeftAssoc 6),
+                  ((InTerms, OpName ">>="), Fixity RightAssoc 1),
+                  ((InTerms, OpName "==="), Fixity NoAssoc 4)
                 ]
         storeFixities cache "thing-1.0" "A.B" (Declares fixities)
         cachedFixities cache "thing-1.0" "A.B" `shouldReturn` Just (Declares fixities)
@@ -45,9 +45,9 @@ spec = do
       it "round-trips the extremes of precedence" $ \cache -> do
         let fixities =
               Map.fromList
-                [ (OpName "!", Fixity LeftAssoc 0),
-                  (OpName "?", Fixity LeftAssoc 9),
-                  (OpName "->", Fixity RightAssoc (-1))
+                [ ((InTerms, OpName "!"), Fixity LeftAssoc 0),
+                  ((InTerms, OpName "?"), Fixity LeftAssoc 9),
+                  ((InTerms, OpName "->"), Fixity RightAssoc (-1))
                 ]
         storeFixities cache "thing-1.0" "Edges" (Declares fixities)
         cachedFixities cache "thing-1.0" "Edges" `shouldReturn` Just (Declares fixities)
@@ -75,15 +75,15 @@ spec = do
 
       it "replaces an unread answer once the module can be read" $ \cache -> do
         storeFixities cache "thing-1.0" "M" Unreadable
-        storeFixities cache "thing-1.0" "M" (Declares (Map.fromList [(OpName "!", Fixity LeftAssoc 9)]))
+        storeFixities cache "thing-1.0" "M" (Declares (Map.fromList [((InTerms, OpName "!"), Fixity LeftAssoc 9)]))
         cachedFixities cache "thing-1.0" "M"
-          `shouldReturn` Just (Declares (Map.fromList [(OpName "!", Fixity LeftAssoc 9)]))
+          `shouldReturn` Just (Declares (Map.fromList [((InTerms, OpName "!"), Fixity LeftAssoc 9)]))
 
       it "knows nothing about a module it was never told about" $ \cache ->
         cachedFixities cache "thing-1.0" "Absent" `shouldReturn` Nothing
 
       it "keeps packages apart" $ \cache -> do
-        let ops = Map.fromList [(OpName "<>", Fixity RightAssoc 6)]
+        let ops = Map.fromList [((InTerms, OpName "<>"), Fixity RightAssoc 6)]
         storeFixities cache "a-1.0" "M" (Declares ops)
         storeFixities cache "b-1.0" "M" (Declares Map.empty)
         a <- cachedFixities cache "a-1.0" "M"
@@ -91,14 +91,14 @@ spec = do
         (a, b) `shouldBe` (Just (Declares ops), Just (Declares Map.empty))
 
       it "treats a different hash in the key as a different package" $ \cache -> do
-        storeFixities cache "thing-1.0-aaaa" "M" (Declares (Map.fromList [(OpName "!", Fixity LeftAssoc 9)]))
+        storeFixities cache "thing-1.0-aaaa" "M" (Declares (Map.fromList [((InTerms, OpName "!"), Fixity LeftAssoc 9)]))
         cachedFixities cache "thing-1.0-bbbb" "M" `shouldReturn` Nothing
 
       it "overwrites a previous answer for the same key" $ \cache -> do
-        storeFixities cache "thing-1.0" "M" (Declares (Map.fromList [(OpName "!", Fixity LeftAssoc 9)]))
-        storeFixities cache "thing-1.0" "M" (Declares (Map.fromList [(OpName "!", Fixity RightAssoc 3)]))
+        storeFixities cache "thing-1.0" "M" (Declares (Map.fromList [((InTerms, OpName "!"), Fixity LeftAssoc 9)]))
+        storeFixities cache "thing-1.0" "M" (Declares (Map.fromList [((InTerms, OpName "!"), Fixity RightAssoc 3)]))
         cachedFixities cache "thing-1.0" "M"
-          `shouldReturn` Just (Declares (Map.fromList [(OpName "!", Fixity RightAssoc 3)]))
+          `shouldReturn` Just (Declares (Map.fromList [((InTerms, OpName "!"), Fixity RightAssoc 3)]))
 
     describe "export names" $ do
       it "round-trips the names an export list gave" $ \cache -> do
@@ -174,9 +174,9 @@ spec = do
 
     describe "module names with dots" $
       it "files a deeply qualified module without confusion" $ \cache -> do
-        storeFixities cache "thing-1.0" "A.B.C.D" (Declares (Map.fromList [(OpName "%", Fixity NoAssoc 5)]))
+        storeFixities cache "thing-1.0" "A.B.C.D" (Declares (Map.fromList [((InTerms, OpName "%"), Fixity NoAssoc 5)]))
         cachedFixities cache "thing-1.0" "A.B.C.D"
-          `shouldReturn` Just (Declares (Map.fromList [(OpName "%", Fixity NoAssoc 5)]))
+          `shouldReturn` Just (Declares (Map.fromList [((InTerms, OpName "%"), Fixity NoAssoc 5)]))
 
 -- | What the compiler can see, and what it takes to stop believing it.
 --
@@ -262,7 +262,7 @@ tokens = around withIsolatedDirectory $ do
     cachedFixities again "thing-1.0" "M" `shouldReturn` Just Unreadable
 
   it "keeps an answer that was read, whatever the token" $ \dir -> do
-    let fixities = Map.fromList [(OpName "<+>", Fixity RightAssoc 6)]
+    let fixities = Map.fromList [((InTerms, OpName "<+>"), Fixity RightAssoc 6)]
     before' <- open dir (PlanToken "one")
     storeFixities before' "thing-1.0" "M" (Declares fixities)
     after' <- open dir (PlanToken "two")

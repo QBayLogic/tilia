@@ -31,7 +31,14 @@ module Tilia.Fixity
     surelyNames,
     Known (..),
     nothingKnown,
+    Namespace (..),
+    Fixities,
+    inBothNamespaces,
+    fixitiesIn,
     Scope (..),
+    Reach (..),
+    reachIn,
+    settledFor,
     Unread (..),
     resolveScope,
 
@@ -99,18 +106,78 @@ defaultFixity = Fixity LeftAssoc 9
 ----------------------------------------------------------------------------
 -- What a module declares
 
+-- | Which of Haskell's two namespaces an operator is written in.
+data Namespace = InTypes | InTerms
+  deriving (Eq, Ord, Show)
+
+-- | The fixities a module offers, by the namespace each is written in.
+type Fixities = Map (Namespace, OpName) Fixity
+
+-- | Take fixities that say nothing about namespaces to govern both.
+inBothNamespaces :: Map OpName Fixity -> Fixities
+inBothNamespaces declared =
+  Map.fromList
+    [ ((namespace, op), fixity)
+    | (op, fixity) <- Map.toList declared,
+      namespace <- [InTypes, InTerms]
+    ]
+
+-- | The fixities in one namespace, by the operator alone.
+fixitiesIn :: Namespace -> Fixities -> Map OpName Fixity
+fixitiesIn namespace declared =
+  Map.fromList [(op, fixity) | ((n, op), fixity) <- Map.toList declared, n == namespace]
+
 -- | The fixities a module declares for its own operators.
-declaredFixities :: HsModule GhcPs -> Map OpName Fixity
-declaredFixities =
-  Map.fromList . concatMap (fromDecl . unLoc) . hsmodDecls
+declaredFixities :: HsModule GhcPs -> Fixities
+declaredFixities hsModule =
+  Map.fromList
+    [ ((namespace, op), fixity)
+    | (specifier, op, fixity) <- concatMap (fromDecl . unLoc) (hsmodDecls hsModule),
+      namespace <- namespacesOf specifier op
+    ]
   where
+    (types, terms) = declaredNamespaces hsModule
+    namespacesOf specifier op = case specifier of
+      TypeNamespaceSpecifier _ -> [InTypes]
+      DataNamespaceSpecifier _ -> [InTerms]
+      NoNamespaceSpecifier ->
+        case ([InTypes | Set.member op types] <> [InTerms | Set.member op terms]) of
+          [] -> [InTypes, InTerms]
+          found -> found
+
     fromDecl = \case
       SigD _ sig -> fromSig sig
       TyClD _ ClassDecl {tcdSigs} -> concatMap (fromSig . unLoc) tcdSigs
       _ -> []
     fromSig = \case
-      FixSig _ (FixitySig _ names fixity) ->
-        [(opName (unLoc n), fromGhcFixity fixity) | n <- names]
+      FixSig _ (FixitySig specifier names fixity) ->
+        [(specifier, opName (unLoc n), fromGhcFixity fixity) | n <- names]
+      _ -> []
+
+-- | The names a module declares among types, and those it declares among
+-- terms.
+declaredNamespaces :: HsModule GhcPs -> (Set OpName, Set OpName)
+declaredNamespaces hsModule =
+  ( Set.fromList (concatMap (types . unLoc) decls),
+    Set.fromList (concatMap (terms . unLoc) decls)
+  )
+  where
+    decls = hsmodDecls hsModule
+    types = \case
+      TyClD _ d -> case d of
+        FamDecl _ FamilyDecl {fdLName} -> [opName (unLoc fdLName)]
+        SynDecl {tcdLName} -> [opName (unLoc tcdLName)]
+        DataDecl {tcdLName} -> [opName (unLoc tcdLName)]
+        ClassDecl {tcdLName, tcdATs} ->
+          opName (unLoc tcdLName)
+            : [opName (unLoc (fdLName (unLoc f))) | f <- tcdATs]
+      _ -> []
+    terms = \case
+      ValD _ b -> boundNames b
+      SigD _ sig -> signedNames sig
+      ForD _ f -> [opName (unLoc (fd_name f))]
+      TyClD _ d@DataDecl {} -> membersOf d
+      TyClD _ ClassDecl {tcdSigs} -> concatMap (classMethods . unLoc) tcdSigs
       _ -> []
 
 -- | Every name a module defines itself.
@@ -135,18 +202,11 @@ declaredNames = Set.fromList . concatMap (fromDecl . unLoc) . hsmodDecls
       ForD _ f -> [opName (unLoc (fd_name f))]
       _ -> []
 
-    fromBind = \case
-      FunBind _ n _ -> [opName (unLoc n)]
-      PatBind _ p _ _ -> boundByPattern p
-      PatSynBind _ (PSB _ n _ _ _) -> [opName (unLoc n)]
-      _ -> []
+    fromBind = boundNames
 
     fromSig = \case
-      TypeSig _ ns _ -> map (opName . unLoc) ns
-      ClassOpSig _ _ ns _ -> map (opName . unLoc) ns
-      PatSynSig _ ns _ -> map (opName . unLoc) ns
       FixSig _ (FixitySig _ ns _) -> map (opName . unLoc) ns
-      _ -> []
+      sig -> signedNames sig
 
     fromTyCl = \case
       FamDecl _ (FamilyDecl {fdLName}) -> [opName (unLoc fdLName)]
@@ -154,12 +214,33 @@ declaredNames = Set.fromList . concatMap (fromDecl . unLoc) . hsmodDecls
       d@DataDecl {tcdLName} -> opName (unLoc tcdLName) : membersOf d
       d@ClassDecl {tcdLName} -> opName (unLoc tcdLName) : membersOf d
 
-    boundByPattern p =
-      [opName n | VarPat _ (L _ n) <- listify isVarPat p]
+-- | The names a binding brings into being.
+boundNames :: HsBind GhcPs -> [OpName]
+boundNames = \case
+  FunBind _ n _ -> [opName (unLoc n)]
+  PatBind _ p _ _ -> [opName n | VarPat _ (L _ n) <- listify isVarPat p]
+  PatSynBind _ (PSB _ n _ _ _) -> [opName (unLoc n)]
+  _ -> []
+  where
     isVarPat :: Pat GhcPs -> Bool
     isVarPat = \case
       VarPat {} -> True
       _ -> False
+
+-- | The names a signature is about, leaving fixity declarations aside.
+signedNames :: Sig GhcPs -> [OpName]
+signedNames = \case
+  TypeSig _ ns _ -> map (opName . unLoc) ns
+  ClassOpSig _ _ ns _ -> map (opName . unLoc) ns
+  PatSynSig _ ns _ -> map (opName . unLoc) ns
+  _ -> []
+
+-- | The methods a class signature declares.
+classMethods :: Sig GhcPs -> [OpName]
+classMethods = \case
+  TypeSig _ ns _ -> map (opName . unLoc) ns
+  ClassOpSig _ _ ns _ -> map (opName . unLoc) ns
+  _ -> []
 
 -- | The names a declaration carries under the name it declares: a data
 -- type's constructors and record fields, a class's methods and the
@@ -171,7 +252,7 @@ membersOf :: TyClDecl GhcPs -> [OpName]
 membersOf = \case
   DataDecl {tcdDataDefn} -> concatMap (fromCon . unLoc) (consOf (dd_cons tcdDataDefn))
   ClassDecl {tcdSigs, tcdATs} ->
-    concatMap (methodsOf . unLoc) tcdSigs
+    concatMap (classMethods . unLoc) tcdSigs
       <> [opName (unLoc (fdLName (unLoc f))) | f <- tcdATs]
   _ -> []
   where
@@ -193,11 +274,6 @@ membersOf = \case
         | f <- unLoc fields,
           n <- cdrf_names (unLoc f)
         ]
-      _ -> []
-
-    methodsOf = \case
-      TypeSig _ ns _ -> map (opName . unLoc) ns
-      ClassOpSig _ _ ns _ -> map (opName . unLoc) ns
       _ -> []
 
 -- | What each type or class a module declares carries with it.
@@ -281,7 +357,7 @@ data ExportItem
 -- such name is not one of them. See 'unreadFor'.
 exportedOperators :: HsModule GhcPs -> Maybe (Set OpName)
 exportedOperators hsModule = case moduleExports hsModule of
-  Nothing -> Just (Map.keysSet (declaredFixities hsModule))
+  Nothing -> Just (Set.fromList [op | (_, op) <- Map.keys (declaredFixities hsModule)])
   Just items
     | any beyondUs items -> Nothing
     | otherwise -> Just (Set.unions (map named items))
@@ -476,11 +552,10 @@ data Unread = Unread
 
 -- | Every fixity a module can see, and how.
 data Scope = Scope
-  { -- | Reachable without qualification, with where it came from.
-    scopeUnqualified :: Map OpName (Fixity, Provenance),
-    -- | Reachable as @M.op@, keyed by the alias actually written—or by the
-    -- module's own name, under which its own declarations are reachable.
-    scopeQualified :: Map (Text, OpName) (Fixity, Provenance),
+  { -- | What is in scope for an operator written among types.
+    scopeInTypes :: Reach,
+    -- | What is in scope for one written among terms.
+    scopeInTerms :: Reach,
     -- | The imports whose modules could not be read, and what is
     -- nonetheless known about each.
     --
@@ -488,13 +563,33 @@ data Scope = Scope
     -- manage to look\". An operator that was not found is settled only if no
     -- unread import could have brought it in, and deciding that needs the
     -- whole import rather than the module's name: see 'unreadFor'.
-    scopeUnread :: [Unread],
+    --
+    -- One list for both namespaces: a module that could not be read could
+    -- not be read for either.
+    scopeUnread :: [Unread]
+  }
+  deriving (Eq, Show)
+
+-- | What one namespace of a scope holds.
+data Reach = Reach
+  { -- | Reachable without qualification, with where it came from.
+    reachUnqualified :: Map OpName (Fixity, Provenance),
+    -- | Reachable as @M.op@, keyed by the alias actually written—or by the
+    -- module's own name, under which its own declarations are reachable.
+    reachQualified :: Map (Text, OpName) (Fixity, Provenance),
     -- | Operators the imports bring in with two different fixities, as they
     -- would have to be written to run into it: without a qualifier, or under
     -- the alias the disagreeing imports share.
-    scopeAmbiguous :: [(Maybe Text, OpName)]
+    reachAmbiguous :: [(Maybe Text, OpName)]
   }
   deriving (Eq, Show)
+
+-- | The half of a scope an operator written in this namespace is settled
+-- against.
+reachIn :: Namespace -> Scope -> Reach
+reachIn = \case
+  InTypes -> scopeInTypes
+  InTerms -> scopeInTerms
 
 -- | What is known about the modules a module imports.
 --
@@ -505,7 +600,7 @@ data Known = Known
   { -- | What a module exports, or 'Nothing' if that could not be
     -- determined. 'Nothing' means the module could not be read, which is
     -- not the same as its exporting nothing; see 'resolveScope'.
-    knownFixities :: Text -> Maybe (Map OpName Fixity),
+    knownFixities :: Text -> Maybe Fixities,
     -- | What a module keeps under each of its names, so that a @T(..)@ in
     -- an import list can be told what it brings in. An empty map is
     -- ignorance as much as it is emptiness, and understates a list rather
@@ -550,18 +645,47 @@ resolveScope ::
   Scope
 resolveScope known hsModule =
   Scope
-    { scopeUnqualified = Map.union own (Map.map fst unqualified),
-      scopeQualified = qualified,
-      scopeUnread = unread,
-      scopeAmbiguous =
-        [(Nothing, op) | op <- Map.keys (Map.filter snd unqualified)]
-          <> [(Just alias, op) | (alias, op) <- Map.keys (Map.filter snd qualifiedFrom)]
+    { scopeInTypes = reachAmong InTypes,
+      scopeInTerms = reachAmong InTerms,
+      scopeUnread = unread
     }
   where
     Known {knownFixities = exportsOf, knownChildren, knownExportNames} = known
     exportNamesOf = knownExportNames
-    own = Map.map (,DeclaredHere) (declaredFixities hsModule)
     imports = moduleImports hsModule
+    declared = declaredFixities hsModule
+
+    reachAmong namespace =
+      Reach
+        { reachUnqualified = Map.union own (Map.map fst unqualified),
+          reachQualified = qualified,
+          reachAmbiguous =
+            [(Nothing, op) | op <- Map.keys (Map.filter snd unqualified)]
+              <> [(Just alias, op) | (alias, op) <- Map.keys (Map.filter snd qualifiedFrom)]
+        }
+      where
+        own = Map.map (,DeclaredHere) (fixitiesIn namespace declared)
+        offered m = fixitiesIn namespace <$> exportsOf m
+        unqualified =
+          Map.unionsWith
+            disagree
+            [ Map.map (,False) (visible offered i)
+            | i <- imports,
+              not (importQualified i)
+            ]
+        qualified = Map.union ownQualified (Map.map fst qualifiedFrom)
+        ownQualified =
+          Map.fromList
+            [ ((m, op), entry)
+            | m <- toList (moduleName hsModule),
+              (op, entry) <- Map.toList own
+            ]
+        qualifiedFrom =
+          Map.unionsWith
+            disagree
+            [ Map.mapKeys (importAlias i,) (Map.map (,False) (visible offered i))
+            | i <- imports
+            ]
 
     unread =
       [ Unread
@@ -574,35 +698,12 @@ resolveScope known hsModule =
       ]
 
     -- Paired with a flag saying whether two imports disagreed about it.
-    unqualified =
-      Map.unionsWith
-        disagree
-        [ Map.map (,False) (visible i)
-        | i <- imports,
-          not (importQualified i)
-        ]
     disagree (a, aBad) (b, bBad) = (a, aBad || bBad || fst a /= fst b)
 
-    qualified = Map.union ownQualified (Map.map fst qualifiedFrom)
-
-    ownQualified =
-      Map.fromList
-        [ ((m, op), entry)
-        | m <- toList (moduleName hsModule),
-          (op, entry) <- Map.toList own
-        ]
-
-    qualifiedFrom =
-      Map.unionsWith
-        disagree
-        [ Map.mapKeys (importAlias i,) (Map.map (,False) (visible i))
-        | i <- imports
-        ]
-
-    visible i =
+    visible offered i =
       let exported =
             Map.map (,DeclaredIn (importModule i)) $
-              fromMaybe Map.empty (exportsOf (importModule i))
+              fromMaybe Map.empty (offered (importModule i))
        in case importNames i of
             Nothing -> exported
             Just (True, hidden) -> Map.withoutKeys exported (brought i hidden)
@@ -646,22 +747,40 @@ data Resolution
 lookupFixity ::
   -- | The scope
   Scope ->
+  -- | The namespace the operator is written in
+  Namespace ->
   -- | The qualifier written at the use site, if any
   Maybe Text ->
   -- | Operator to resolve
   OpName ->
   -- | The resolution
   Resolution
-lookupFixity scope qualifier op =
-  case found of
-    Just (fixity, provenance) -> Resolved fixity provenance
+lookupFixity scope namespace qualifier op =
+  case settledFor scope namespace qualifier op of
+    Just (_, (fixity, provenance)) -> Resolved fixity provenance
     Nothing -> case nonEmpty (unreadFor scope qualifier op) of
       Nothing -> Resolved defaultFixity ReportDefault
       Just missing -> Unresolved missing
+
+-- | What settles a use, and the namespace that settled it.
+settledFor ::
+  Scope ->
+  Namespace ->
+  Maybe Text ->
+  OpName ->
+  Maybe (Namespace, (Fixity, Provenance))
+settledFor scope namespace qualifier op =
+  case mapMaybe found (namespace : promotedFrom namespace) of
+    (answer : _) -> Just answer
+    [] -> Nothing
   where
-    found = case qualifier of
-      Nothing -> Map.lookup op (scopeUnqualified scope)
-      Just q -> Map.lookup (q, op) (scopeQualified scope)
+    promotedFrom = \case
+      InTypes -> [InTerms]
+      InTerms -> []
+    found n =
+      (n,) <$> case qualifier of
+        Nothing -> Map.lookup op (reachUnqualified (reachIn n scope))
+        Just q -> Map.lookup (q, op) (reachQualified (reachIn n scope))
 
 -- | The modules of the unread imports that could have settled this use.
 --
@@ -722,8 +841,9 @@ data Unknown
 -- the code means. Everywhere else—a section, the left-hand side of a
 -- definition, an @infix@ declaration—the operator stands on its own and
 -- nothing is regrouped around it.
-operatorsUsed :: HsModule GhcPs -> [(Maybe Text, OpName)]
-operatorsUsed hsModule = map named (inExpressions <> inTypes)
+operatorsUsed :: HsModule GhcPs -> [(Namespace, (Maybe Text, OpName))]
+operatorsUsed hsModule =
+  map (named InTerms) inExpressions <> map (named InTypes) inTypes
   where
     inExpressions =
       [ n
@@ -736,7 +856,8 @@ operatorsUsed hsModule = map named (inExpressions <> inTypes)
       | t :: HsType GhcPs <- listify (const True) hsModule,
         HsOpTy _ _ _ (L _ n) _ <- [t]
       ]
-    named n = (qualifierOf n, OpName (T.pack (occNameString (rdrNameOcc n))))
+    named namespace n =
+      (namespace, (qualifierOf n, OpName (T.pack (occNameString (rdrNameOcc n)))))
 
 -- | The operators this module uses that the scope cannot settle, as the
 -- module writes them.
@@ -747,12 +868,16 @@ unknownOperators :: Scope -> HsModule GhcPs -> [((Maybe Text, OpName), Unknown)]
 unknownOperators scope hsModule =
   Map.toList (Map.fromList (mapMaybe unsettled (operatorsUsed hsModule)))
   where
-    ambiguous = Set.fromList (scopeAmbiguous scope)
-    unsettled (qualifier, op) = case lookupFixity scope qualifier op of
-      Unresolved missing -> Just ((qualifier, op), NotRead missing)
-      Resolved _ _
-        | Set.member (qualifier, op) ambiguous -> Just ((qualifier, op), Ambiguous)
-        | otherwise -> Nothing
+    ambiguous namespace = Set.fromList (reachAmbiguous (reachIn namespace scope))
+    unsettled (namespace, (qualifier, op)) =
+      case settledFor scope namespace qualifier op of
+        Just (answering, _)
+          | Set.member (qualifier, op) (ambiguous answering) ->
+              Just ((qualifier, op), Ambiguous)
+          | otherwise -> Nothing
+        Nothing -> case nonEmpty (unreadFor scope qualifier op) of
+          Just missing -> Just ((qualifier, op), NotRead missing)
+          Nothing -> Nothing
 
 -- | An operator as a use site writes it, qualifier and all.
 operatorSpelling :: Maybe Text -> OpName -> Text
@@ -786,7 +911,7 @@ spellUnreadIn palette missing =
 -- might be empty.
 data Established
   = -- | It was read, and declares these.
-    Declares (Map OpName Fixity)
+    Declares Fixities
   | -- | It could not be read. The expensive answer of the two, because
     -- reaching it means exhausting every way of reading the module.
     Unreadable

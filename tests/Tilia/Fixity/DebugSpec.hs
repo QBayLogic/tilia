@@ -12,6 +12,7 @@ import Tilia.Fixity
     Fixity (..),
     Known (..),
     OpName (..),
+    inBothNamespaces,
     nothingKnown,
     resolveScope,
   )
@@ -129,7 +130,8 @@ notesFor world source =
       Right m -> m
     exportsOf m = do
       declared <- lookup m world
-      Map.fromList . map (\(op, fixity) -> (OpName op, fixity)) <$> declared
+      inBothNamespaces . Map.fromList . map (\(op, fixity) -> (OpName op, fixity))
+        <$> declared
 
 infixl' :: Int -> Fixity
 infixl' = Fixity LeftAssoc

@@ -61,7 +61,10 @@ import GHC.Types.SrcLoc
 import Language.Haskell.Syntax.Basic (field_label)
 import Tilia.Doc.Body
 import Tilia.Doc.Combinators
-import Tilia.Fixity (Fixity)
+import Tilia.Fixity
+  ( Fixity,
+    Namespace (..),
+  )
 import Tilia.Render.Body
 import Tilia.Render.Context
 import Tilia.Render.Layout
@@ -389,7 +392,7 @@ splitOpApp e = case unLoc e of
   _ -> Nothing
 
 fixityOf :: Ctx -> LHsExpr GhcPs -> Maybe Fixity
-fixityOf ctx o = operatorName o >>= operatorFixity ctx
+fixityOf ctx o = operatorName o >>= operatorFixity ctx InTerms
 
 renderExprChain :: Ctx -> Site -> OpChain (LHsExpr GhcPs) (LHsExpr GhcPs) -> Doc
 renderExprChain ctx site = \case

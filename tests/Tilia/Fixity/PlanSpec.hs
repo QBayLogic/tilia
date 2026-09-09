@@ -19,7 +19,6 @@ import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.List (isInfixOf)
 import Data.List qualified
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -163,7 +162,7 @@ reexports = describe "an operator a module passes on" $ do
 chased :: Text -> IO (Maybe Fixity)
 chased source = do
   answer <- withReexports reach carries Set.empty "M" (pmModule parsed)
-  pure (Map.lookup (OpName "<+>") =<< answer)
+  pure (Map.lookup (InTerms, OpName "<+>") =<< answer)
   where
     carries m =
       pure $ case m of
@@ -175,8 +174,8 @@ chased source = do
       Right m -> m
     reach m =
       pure $ case m of
-        "Control.Arrow" -> Just (Map.fromList [(OpName "<+>", Fixity RightAssoc 5)])
-        "Text.PrettyPrint" -> Just (Map.fromList [(OpName "<+>", Fixity LeftAssoc 6)])
+        "Control.Arrow" -> Just (Map.fromList [((InTerms, OpName "<+>"), Fixity RightAssoc 5)])
+        "Text.PrettyPrint" -> Just (Map.fromList [((InTerms, OpName "<+>"), Fixity LeftAssoc 6)])
         "Prelude" -> Just Map.empty
         _ -> Nothing
 
@@ -214,7 +213,7 @@ withPlan plan = do
   describe "resolving a module that declares its own operators" $ do
     it "finds <+> in prettyprinter, with the right fixity" $
       needs resolve "Prettyprinter.Internal" $ \fixities ->
-        Map.lookup (OpName "<+>") fixities `shouldBe` Just (Fixity RightAssoc 6)
+        Map.lookup (InTerms, OpName "<+>") fixities `shouldBe` Just (Fixity RightAssoc 6)
 
     it "resolves the same module twice to the same answer" $
       needs resolve "Prettyprinter.Internal" $ \first' -> do
@@ -224,19 +223,19 @@ withPlan plan = do
   describe "re-exports" $
     it "finds an operator a module exports but does not declare" $
       needs resolve "Prettyprinter" $ \fixities ->
-        Map.lookup (OpName "<+>") fixities `shouldBe` Just (Fixity RightAssoc 6)
+        Map.lookup (InTerms, OpName "<+>") fixities `shouldBe` Just (Fixity RightAssoc 6)
 
   describe "boot packages" $ do
     it "answers for Prelude from the built-in table" $
       needs resolve "Prelude" $ \fixities -> do
-        Map.lookup (OpName "$") fixities `shouldBe` Just (Fixity RightAssoc 0)
-        Map.lookup (OpName ">>=") fixities `shouldBe` Just (Fixity LeftAssoc 1)
-        Map.lookup (OpName ".") fixities `shouldBe` Just (Fixity RightAssoc 9)
-        Map.lookup (OpName ":") fixities `shouldBe` Just (Fixity RightAssoc 5)
+        Map.lookup (InTerms, OpName "$") fixities `shouldBe` Just (Fixity RightAssoc 0)
+        Map.lookup (InTerms, OpName ">>=") fixities `shouldBe` Just (Fixity LeftAssoc 1)
+        Map.lookup (InTerms, OpName ".") fixities `shouldBe` Just (Fixity RightAssoc 9)
+        Map.lookup (InTerms, OpName ":") fixities `shouldBe` Just (Fixity RightAssoc 5)
 
     it "answers for Control.Applicative" $
       needs resolve "Control.Applicative" $ \fixities ->
-        Map.lookup (OpName "<|>") fixities `shouldBe` Just (Fixity LeftAssoc 3)
+        Map.lookup (InTerms, OpName "<|>") fixities `shouldBe` Just (Fixity LeftAssoc 3)
 
     it "covers the containers and text modules a project actually imports" $ do
       let expected =
@@ -257,16 +256,16 @@ withPlan plan = do
     it "carries re-exports already resolved" $ do
       p <- resolve "Prelude"
       m <- resolve "Data.Map"
-      ( Map.lookup (OpName "$") =<< p,
-        Map.lookup (OpName "!") =<< m
+      ( Map.lookup (InTerms, OpName "$") =<< p,
+        Map.lookup (InTerms, OpName "!") =<< m
         )
         `shouldBe` (Just (Fixity RightAssoc 0), Just (Fixity LeftAssoc 9))
 
     it "gives the same operator different fixities in different modules" $ do
       inList <- resolve "Data.List"
       inMap <- resolve "Data.Map"
-      ( Map.lookup (OpName "\\\\") =<< inList,
-        Map.lookup (OpName "\\\\") =<< inMap
+      ( Map.lookup (InTerms, OpName "\\\\") =<< inList,
+        Map.lookup (InTerms, OpName "\\\\") =<< inMap
         )
         `shouldBe` (Just (Fixity NoAssoc 5), Just (Fixity LeftAssoc 9))
 
@@ -286,7 +285,7 @@ withPlan plan = do
       withFakeProject [("fake.cabal", package ["LambdaCase"]), ("src/Fancy.hs", fancy)] $
         \rs ->
           askFixities rs "Fancy"
-            >>= (`shouldBe` Just (Map.singleton (OpName "<+>") (Fixity RightAssoc 5)))
+            >>= (`shouldBe` Just (Map.singleton (InTerms, OpName "<+>") (Fixity RightAssoc 5)))
 
     it "cannot read it when the .cabal puts nothing in force" $
       withFakeProject [("fake.cabal", package []), ("src/Fancy.hs", fancy)] $
@@ -302,13 +301,13 @@ withPlan plan = do
   describe "modules whose source defeats us" $ do
     it "answers for Test.QuickCheck.Property, which cannot be parsed" $
       needs resolve "Test.QuickCheck.Property" $ \fixities -> do
-        Map.lookup (OpName "===") fixities `shouldBe` Just (Fixity NoAssoc 4)
-        Map.lookup (OpName ".&&.") fixities `shouldBe` Just (Fixity RightAssoc 1)
-        Map.lookup (OpName "==>") fixities `shouldBe` Just (Fixity RightAssoc 0)
+        Map.lookup (InTerms, OpName "===") fixities `shouldBe` Just (Fixity NoAssoc 4)
+        Map.lookup (InTerms, OpName ".&&.") fixities `shouldBe` Just (Fixity RightAssoc 1)
+        Map.lookup (InTerms, OpName "==>") fixities `shouldBe` Just (Fixity RightAssoc 0)
 
     it "carries that through the re-export chain to Test.QuickCheck" $
       needs resolve "Test.QuickCheck" $ \fixities ->
-        Map.lookup (OpName "===") fixities `shouldBe` Just (Fixity NoAssoc 4)
+        Map.lookup (InTerms, OpName "===") fixities `shouldBe` Just (Fixity NoAssoc 4)
 
   describe "a module with more than one configuration" $ do
     -- Built in a temporary directory with a build plan written by hand, so
@@ -335,7 +334,7 @@ withPlan plan = do
         -- System.IO.CodePage does with System.Win32.CodePage. That branch
         -- is passed over rather than taken as a reason to say nothing.
         askFixities rs "Platform"
-          >>= (`shouldBe` Just (Map.singleton (OpName "<+>") (Fixity LeftAssoc 6)))
+          >>= (`shouldBe` Just (Map.singleton (InTerms, OpName "<+>") (Fixity LeftAssoc 6)))
 
     it "still refuses when the configurations it can read disagree"
       $ withFakeProject
@@ -421,7 +420,7 @@ withPlan plan = do
         ]
       $ \rs -> do
         fixities <- askFixities rs "Facade"
-        (Map.lookup (OpName ":|") =<< fixities)
+        (Map.lookup (InTerms, OpName ":|") =<< fixities)
           `shouldBe` Just (Fixity RightAssoc 5)
 
     it "settles an operator that arrives through a façade"
@@ -431,7 +430,7 @@ withPlan plan = do
         ]
       $ \rs -> do
         scope <- scopeFor rs (pmModule (parse "module M where\nimport Facade (T (..))\n"))
-        lookupFixity scope Nothing (OpName ":|")
+        lookupFixity scope InTerms Nothing (OpName ":|")
           `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Facade")
 
     it "follows a whole module handed on"
@@ -558,98 +557,98 @@ withPlan plan = do
       withFakeProject [("src/Opaque.hs", opaqueSource)] $
         \rs -> do
           scope <- scopeFor rs (pmModule (parse "module M where\nimport Opaque\n"))
-          lookupFixity scope Nothing (OpName "<??>")
+          lookupFixity scope InTerms Nothing (OpName "<??>")
             `shouldBe` Resolved defaultFixity ReportDefault
 
     it "leaves one alone that the unread module's list does name" $
       withFakeProject [("src/Opaque.hs", opaqueSource)] $
         \rs -> do
           scope <- scopeFor rs (pmModule (parse "module M where\nimport Opaque\n"))
-          lookupFixity scope Nothing (OpName "<+>")
+          lookupFixity scope InTerms Nothing (OpName "<+>")
             `shouldBe` Unresolved ("Opaque" :| [])
 
   describe "the whole pipeline, from source text to a fixity" $ do
     it "resolves an operator through a real import" $
       endToEnd resolver "module M where\nimport Prettyprinter\n" $ \scope ->
-        lookupFixity scope Nothing (OpName "<+>")
+        lookupFixity scope InTerms Nothing (OpName "<+>")
           `shouldBe` Resolved (Fixity RightAssoc 6) (DeclaredIn "Prettyprinter")
 
     it "prefers the module's own declaration to an imported one" $
       endToEnd resolver "module M where\nimport Prettyprinter\ninfixl 2 <+>\n" $ \scope ->
-        lookupFixity scope Nothing (OpName "<+>")
+        lookupFixity scope InTerms Nothing (OpName "<+>")
           `shouldBe` Resolved (Fixity LeftAssoc 2) DeclaredHere
 
     it "honours a qualified import" $
       endToEnd resolver "module M where\nimport qualified Prettyprinter as P\n" $ \scope -> do
-        lookupFixity scope (Just "P") (OpName "<+>")
+        lookupFixity scope InTerms (Just "P") (OpName "<+>")
           `shouldBe` Resolved (Fixity RightAssoc 6) (DeclaredIn "Prettyprinter")
         -- Qualified-only, so nothing arrives unqualified.
-        lookupFixity scope Nothing (OpName "<+>")
+        lookupFixity scope InTerms Nothing (OpName "<+>")
           `shouldBe` Resolved defaultFixity ReportDefault
 
     it "honours an explicit import list" $
       endToEnd resolver "module M where\nimport Prettyprinter ((<+>))\n" $ \scope ->
-        lookupFixity scope Nothing (OpName "<+>")
+        lookupFixity scope InTerms Nothing (OpName "<+>")
           `shouldBe` Resolved (Fixity RightAssoc 6) (DeclaredIn "Prettyprinter")
 
     it "honours a hiding list" $
       endToEnd resolver "module M where\nimport Prettyprinter hiding ((<+>))\n" $ \scope ->
-        lookupFixity scope Nothing (OpName "<+>")
+        lookupFixity scope InTerms Nothing (OpName "<+>")
           `shouldBe` Resolved defaultFixity ReportDefault
 
     it "concludes the Report default when everything in scope was read" $
       endToEnd resolver "module M where\nimport Prettyprinter\n" $ \scope ->
-        lookupFixity scope Nothing (OpName "<!@#>")
+        lookupFixity scope InTerms Nothing (OpName "<!@#>")
           `shouldBe` Resolved defaultFixity ReportDefault
 
     it "refuses to conclude anything when an import could not be read" $
       endToEnd resolver "module M where\nimport No.Such.Module\n" $ \scope ->
-        lookupFixity scope Nothing (OpName "<!@#>")
+        lookupFixity scope InTerms Nothing (OpName "<!@#>")
           `shouldBe` Unresolved ("No.Such.Module" :| [])
 
     it "still answers for what it did find, despite an unreadable import" $
       endToEnd resolver "module M where\nimport Prettyprinter\nimport No.Such.Module\n" $ \scope ->
-        lookupFixity scope Nothing (OpName "<+>")
+        lookupFixity scope InTerms Nothing (OpName "<+>")
           `shouldBe` Resolved (Fixity RightAssoc 6) (DeclaredIn "Prettyprinter")
 
     it "concludes the default through a boot import that exports no operators" $
       endToEnd resolver "module M where\nimport Data.Char\n" $ \scope ->
-        lookupFixity scope Nothing (OpName "<!@#>")
+        lookupFixity scope InTerms Nothing (OpName "<!@#>")
           `shouldBe` Resolved defaultFixity ReportDefault
 
     it "resolves an operator imported from a boot package" $
       endToEnd resolver "module M where\nimport Data.Map\n" $ \scope ->
-        lookupFixity scope Nothing (OpName "!")
+        lookupFixity scope InTerms Nothing (OpName "!")
           `shouldBe` Resolved (Fixity LeftAssoc 9) (DeclaredIn "Data.Map")
 
     it "resolves an operator that arrives under a type's own name" $
       endToEnd resolver "module M where\nimport Data.List.NonEmpty (NonEmpty (..))\n" $ \scope ->
-        lookupFixity scope Nothing (OpName ":|")
+        lookupFixity scope InTerms Nothing (OpName ":|")
           `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Data.List.NonEmpty")
 
     it "resolves one written out beside its type" $
       endToEnd resolver "module M where\nimport Data.List.NonEmpty (NonEmpty ((:|)))\n" $ \scope ->
-        lookupFixity scope Nothing (OpName ":|")
+        lookupFixity scope InTerms Nothing (OpName ":|")
           `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Data.List.NonEmpty")
 
     it "leaves out an operator no item of the list brings in" $
       endToEnd resolver "module M where\nimport Data.List.NonEmpty (toList)\n" $ \scope ->
-        lookupFixity scope Nothing (OpName ":|")
+        lookupFixity scope InTerms Nothing (OpName ":|")
           `shouldBe` Resolved defaultFixity ReportDefault
 
     it "hides one hidden along with its type" $
       endToEnd resolver "module M where\nimport Data.List.NonEmpty hiding (NonEmpty (..))\n" $ \scope ->
-        lookupFixity scope Nothing (OpName ":|")
+        lookupFixity scope InTerms Nothing (OpName ":|")
           `shouldBe` Resolved defaultFixity ReportDefault
 
     it "brings one in under the qualifier it was imported with" $
       endToEnd resolver "module M where\nimport qualified Data.List.NonEmpty as NE (NonEmpty (..))\n" $ \scope ->
-        lookupFixity scope (Just "NE") (OpName ":|")
+        lookupFixity scope InTerms (Just "NE") (OpName ":|")
           `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Data.List.NonEmpty")
 
     it "reports no ambiguity for a module that compiles" $
       endToEnd resolver "module M where\nimport Prettyprinter\n" $ \scope ->
-        scopeAmbiguous scope `shouldBe` []
+        reachAmbiguous (scopeInTerms scope) `shouldBe` []
 
   describe "readiness" $ do
     it "reports something other than a missing plan for this project" $ do
@@ -710,9 +709,9 @@ obliging steps args = record steps args >> pure (Right ())
 -- Pending rather than failing, because an unpopulated package cache is an
 -- environment problem and not a defect in the code under test.
 needs ::
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  (Text -> IO (Maybe (Fixities))) ->
   Text ->
-  (Map OpName Fixity -> Expectation) ->
+  (Fixities -> Expectation) ->
   Expectation
 needs resolve modName assertion =
   resolve modName >>= \case
@@ -734,12 +733,12 @@ endToEnd resolver source assertion =
 
 -- | Check one expected fixity, returning a description of any mismatch.
 check ::
-  (Text -> IO (Maybe (Map OpName Fixity))) ->
+  (Text -> IO (Maybe (Fixities))) ->
   (Text, Text, Fixity) ->
   IO [String]
 check resolve (modName, op, expected) = do
   got <- resolve modName
-  let actual = Map.lookup (OpName op) =<< got
+  let actual = Map.lookup (InTerms, OpName op) =<< got
   pure
     [ T.unpack modName
         <> "."
