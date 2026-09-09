@@ -45,7 +45,17 @@ byHandFixities =
       entry "Network.Socket.Internal" [],
       entry "Network.Socket.Name" [],
       entry "Network.Socket.Shutdown" [],
-      entry "Network.Socket.Syscall" []
+      entry "Network.Socket.Syscall" [],
+      -- @Data.HashMap.Internal.Array@ defines @CHECK_BOUNDS@ and calls it
+      -- where an expression goes, with the guarded @case@ on the line
+      -- below. Unexpanded it reads as a function applied to that @case@,
+      -- and both branches of the @#if@ that defines it leave the call
+      -- standing, so there is no configuration to fall back on.
+      --
+      -- It exports no operator and declares no fixity. What it costs to
+      -- refuse is @Data.HashMap.Strict@, and after that @Data.Aeson.KeyMap@
+      -- and everything that reads a JSON object.
+      entry "Data.HashMap.Internal.Array" []
     ]
   where
     entry name ops =
