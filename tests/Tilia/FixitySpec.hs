@@ -321,6 +321,30 @@ spec = do
       lookupFixity (scopeCarrying "import Carrier hiding (T (..))\n") InTerms Nothing (OpName "<+>")
         `shouldBe` Resolved (Fixity LeftAssoc 6) (DeclaredIn "Carrier")
 
+    it "brings in one a T(..) may carry, where nothing is known" $
+      lookupFixity
+        (fullScope "module M where\nimport Carrier (T (..))\n")
+        InTerms
+        Nothing
+        (OpName ":|")
+        `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Carrier")
+
+    it "leaves out one no item of that list could carry" $
+      lookupFixity
+        (fullScope "module M where\nimport Carrier (f)\n")
+        InTerms
+        Nothing
+        (OpName ":|")
+        `shouldBe` Resolved defaultFixity ReportDefault
+
+    it "keeps one a hiding T(..) cannot be shown to have hidden" $
+      lookupFixity
+        (fullScope "module M where\nimport Carrier hiding (T (..))\n")
+        InTerms
+        Nothing
+        (OpName ":|")
+        `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Carrier")
+
     it "brings it in under a qualifier too" $
       lookupFixity
         (scopeCarrying "import qualified Carrier as C (T (..))\n")

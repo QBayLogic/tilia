@@ -706,13 +706,15 @@ resolveScope implicitPrelude known hsModule =
       let exported =
             Map.map (,DeclaredIn (importModule i)) $
               fromMaybe Map.empty (offered (importModule i))
+          carries = knownChildren (importModule i)
        in case importNames i of
             Nothing -> exported
-            Just (True, hidden) -> Map.withoutKeys exported (brought i hidden)
-            Just (False, shown) -> Map.restrictKeys exported (brought i shown)
-    -- What the list amounts to for this import, once the module it names
-    -- has said what it keeps under each of its names.
-    brought i = namesImported (knownChildren (importModule i))
+            Just (True, hidden) ->
+              Map.filterWithKey
+                (\op _ -> not (surelyNames carries op hidden))
+                exported
+            Just (False, shown) ->
+              Map.filterWithKey (\op _ -> mightBring carries op shown) exported
 
 ----------------------------------------------------------------------------
 -- Answers
