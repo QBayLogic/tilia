@@ -5,6 +5,7 @@ module Tilia.Fixity.CabalSpec (spec) where
 
 import Data.Text (Text)
 import Data.Text qualified as T
+import GHC.LanguageExtensions.Type (Extension (..))
 import Test.Hspec
 import Tilia.Fixity.Cabal
 
@@ -108,6 +109,38 @@ spec = do
     it "offers it when nothing names anything" $
       sourceDirs "library\n  build-depends: base\n" `shouldBe` ["."]
 
+  describe "what the package puts in force" $ do
+    it "reads an extension the .cabal turns on" $
+      extensions "library\n  default-extensions: LambdaCase\n"
+        `shouldSatisfy` elem LambdaCase
+
+    it "reads several, however they are written" $ do
+      let found = extensions "library\n  default-extensions:\n    LambdaCase\n    MultiWayIf, BlockArguments\n"
+      found `shouldSatisfy` elem LambdaCase
+      found `shouldSatisfy` elem MultiWayIf
+      found `shouldSatisfy` elem BlockArguments
+
+    it "takes one back that the .cabal turns off" $
+      extensions "library\n  default-extensions: ImplicitPrelude, NoImplicitPrelude\n"
+        `shouldSatisfy` notElem ImplicitPrelude
+
+    it "starts from what the language edition puts in force" $ do
+      extensions "library\n  default-language: GHC2021\n"
+        `shouldSatisfy` elem TypeOperators
+      extensions "library\n  default-language: Haskell2010\n"
+        `shouldSatisfy` notElem TypeOperators
+
+    it "passes over a name no compiler knows" $
+      extensions "library\n  default-extensions: LambdaCase, NotAnExtension\n"
+        `shouldSatisfy` elem LambdaCase
+
+    it "takes every component's, since it does not know which one asks" $ do
+      let found =
+            extensions
+              "library\n  default-extensions: LambdaCase\ntest-suite t\n  default-extensions: MultiWayIf\n"
+      found `shouldSatisfy` elem LambdaCase
+      found `shouldSatisfy` elem MultiWayIf
+
   describe "the union is deliberate" $
     it "does not need to know which branch a build would take" $ do
       -- Both are reported. A module the real build does not expose cannot
@@ -125,3 +158,7 @@ spec = do
 
 exposed :: Text -> [Text]
 exposed = exposedModules . T.pack . T.unpack
+
+-- | What a @.cabal@ of this shape puts in force.
+extensions :: Text -> [Extension]
+extensions = declaredExtensions

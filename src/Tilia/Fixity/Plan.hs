@@ -48,7 +48,7 @@ import Data.List (isSuffixOf)
 import Data.List qualified
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe (catMaybes, listToMaybe, mapMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -57,6 +57,7 @@ import Data.Text.Encoding qualified as T
 import GHC.Hs (HsModule)
 import GHC.Hs.Extension (GhcPs)
 import GHC.IO.Handle (hDuplicate)
+import GHC.LanguageExtensions.Type (Extension)
 import System.Directory
   ( doesFileExist,
     getHomeDirectory,
@@ -80,11 +81,19 @@ import Tilia.Cpp (branchLeaves)
 import Tilia.Fixity
 import Tilia.Fixity.Builtin (builtinFixities)
 import Tilia.Fixity.ByHand (byHandFixities)
-import Tilia.Fixity.Cabal (containedModules, findCabalFile, packageModules, sourceDirs)
+import Tilia.Fixity.Cabal
+  ( containedModules,
+    declaredExtensions,
+    findCabalFile,
+    packageModules,
+    sourceDirs,
+  )
 import Tilia.Fixity.Cache
 import Tilia.Fixity.Interface
 import Tilia.Fixity.PackageDb
+import Tilia.Package (newPackageReader)
 import Tilia.Parser
+import Tilia.Pragma (effectiveExtensions)
 import Tilia.Utils (quietly)
 
 ----------------------------------------------------------------------------
@@ -498,6 +507,8 @@ newResolverVia routes plan = do
   local <- localModules plan
   memo <- newIORef Map.empty
   childrenRead <- newIORef Map.empty
+  askPackage <- newPackageReader
+  extensionsRead <- newIORef Map.empty
   exportsRead <- newIORef Map.empty
   interfacesRead <- newIORef Map.empty
   let interfaceOf modName = do
@@ -527,7 +538,8 @@ newResolverVia routes plan = do
             wkInterfaceOf = interfaceOf,
             wkReach = reach,
             wkReachChildren = children,
-            wkReachExports = exports
+            wkReachExports = exports,
+            wkExtensionsOf = extensionsOf
           }
       reach visiting modName
         | modName `Set.member` visiting = pure Nothing
@@ -549,6 +561,22 @@ newResolverVia routes plan = do
                 names <- exportNamesOfModule workings visiting modName
                 atomicModifyIORef' exportsRead (\m -> (Map.insert modName names m, ()))
                 pure names
+      extensionsOf modName
+        | Just path <- Map.lookup modName local =
+            either (const []) id <$> askPackage path
+        | Just (package, tarball) <- Map.lookup modName index = do
+            seen <- readIORef extensionsRead
+            case Map.lookup package seen of
+              Just extensions -> pure extensions
+              Nothing -> do
+                extensions <- fromTarball tarball
+                atomicModifyIORef' extensionsRead (\m -> (Map.insert package extensions m, ()))
+                pure extensions
+        | otherwise = pure []
+      fromTarball tarball =
+        quietly [] $ do
+          bytes <- BL.readFile tarball
+          pure (foldMap declaredExtensions (findCabalFile (Tar.read (GZip.decompress bytes))))
       children visiting modName
         | modName `Set.member` visiting = pure Map.empty
         | otherwise = do
@@ -620,51 +648,67 @@ exportNamesOfModule
 -- | What a module keeps under each of its names, so that a @T(..)@ in an
 -- import list can be told what it brings in.
 childrenOfModule :: Workings -> Set Text -> Text -> IO (Map OpName (Set OpName))
-childrenOfModule Workings {wkRoutes, wkCache, wkLocal, wkIndex, wkInterfaces, wkInterfaceOf, wkReachChildren} visiting modName
-  | Just path <- Map.lookup modName wkLocal =
-      fromMaybe Map.empty <$> (traverse inSource =<< readFileText path)
-  | otherwise = firstAnswer (map taking wkRoutes)
-  where
-    taking = \case
-      FromInterface -> case Map.lookup modName wkInterfaces of
+childrenOfModule
+  Workings
+    { wkRoutes,
+      wkCache,
+      wkLocal,
+      wkIndex,
+      wkInterfaces,
+      wkInterfaceOf,
+      wkReachChildren,
+      wkExtensionsOf
+    }
+  visiting
+  modName
+    | Just path <- Map.lookup modName wkLocal =
+        readFileText path >>= \case
+          Nothing -> pure Map.empty
+          Just text -> inSource text
+    | otherwise = firstAnswer (map taking wkRoutes)
+    where
+      taking = \case
+        FromInterface -> case Map.lookup modName wkInterfaces of
+          Nothing -> pure Nothing
+          Just (key, _) -> keptUnder key outOfInterface
+        FromSource -> case Map.lookup modName wkIndex of
+          Nothing -> pure Nothing
+          Just (package, tarball) ->
+            keptUnder package (traverse inSource =<< readModule tarball modName)
+      firstAnswer [] = pure Map.empty
+      firstAnswer (route : rest) =
+        route >>= \case
+          Just kept -> pure kept
+          Nothing -> firstAnswer rest
+      keptUnder package readIt =
+        remembered package >>= \case
+          Just kept -> pure (Just kept)
+          Nothing -> do
+            kept <- readIt
+            traverse_ (store package) kept
+            pure kept
+      remembered package = case wkCache of
         Nothing -> pure Nothing
-        Just (key, _) -> keptUnder key outOfInterface
-      FromSource -> case Map.lookup modName wkIndex of
-        Nothing -> pure Nothing
-        Just (package, tarball) ->
-          keptUnder package (traverse inSource =<< readModule tarball modName)
-    firstAnswer [] = pure Map.empty
-    firstAnswer (route : rest) =
-      route >>= \case
-        Just kept -> pure kept
-        Nothing -> firstAnswer rest
-    keptUnder package readIt =
-      remembered package >>= \case
-        Just kept -> pure (Just kept)
-        Nothing -> do
-          kept <- readIt
-          traverse_ (store package) kept
-          pure kept
-    remembered package = case wkCache of
-      Nothing -> pure Nothing
-      Just c -> cachedChildren c package modName
-    store package kept = case wkCache of
-      Nothing -> pure ()
-      Just c -> storeChildren c package modName kept
-    outOfInterface = fmap interfaceChildren <$> wkInterfaceOf modName
-    inSource text = case parsedLeaves text of
-      Nothing -> pure Map.empty
-      Just modules ->
-        Map.unionsWith Set.union
-          <$> traverse (childrenWithReexports (wkReachChildren visiting') modName) modules
-    visiting' = Set.insert modName visiting
-    parsedLeaves text = do
-      leaves <- either (const Nothing) Just (branchLeaves text)
-      traverse parsed leaves
-    parsed =
-      fmap pmModule
-        . either (const Nothing) Just
-        . parseModule defaultParserConfig (T.unpack modName)
+        Just c -> cachedChildren c package modName
+      store package kept = case wkCache of
+        Nothing -> pure ()
+        Just c -> storeChildren c package modName kept
+      outOfInterface = fmap interfaceChildren <$> wkInterfaceOf modName
+      inSource text = do
+        extensions <- wkExtensionsOf modName
+        case parsedLeaves extensions text of
+          Nothing -> pure Map.empty
+          Just modules ->
+            Map.unionsWith Set.union
+              <$> traverse (childrenWithReexports (wkReachChildren visiting') modName) modules
+      visiting' = Set.insert modName visiting
+      parsedLeaves extensions text = do
+        leaves <- either (const Nothing) Just (branchLeaves text)
+        traverse (parsed extensions) leaves
+      parsed extensions leaf =
+        fmap pmModule
+          . either (const Nothing) Just
+          $ parseModule (configFor extensions leaf) (T.unpack modName) leaf
 
 -- | Work out what a module can see, using a resolver to reach its imports.
 --
@@ -737,7 +781,11 @@ data Workings = Workings
     wkReachChildren :: Set Text -> Text -> IO (Map OpName (Set OpName)),
     -- | How to reach another module for what its export list names, tied
     -- back the same way again.
-    wkReachExports :: Set Text -> Text -> IO (Maybe (Set OpName))
+    wkReachExports :: Set Text -> Text -> IO (Maybe (Set OpName)),
+    -- | What the package a module belongs to puts in force. A module that
+    -- leans on its package's @default-extensions@ does not parse without
+    -- them, and one that does not parse cannot be read for anything.
+    wkExtensionsOf :: Text -> IO [Extension]
   }
 
 -- | Where a module's fixities come from, in order of cost.
@@ -764,7 +812,8 @@ resolveModule
       wkInterfaces,
       wkInterfaceOf,
       wkReach,
-      wkReachChildren
+      wkReachChildren,
+      wkExtensionsOf
     }
   visiting
   modName
@@ -772,8 +821,15 @@ resolveModule
     | Just path <- Map.lookup modName wkLocal =
         readFileText path >>= \case
           Nothing -> pure Nothing
-          Just source ->
-            fromText (wkReach visiting') (wkReachChildren visiting') visiting' source modName
+          Just source -> do
+            extensions <- wkExtensionsOf modName
+            fromText
+              extensions
+              (wkReach visiting')
+              (wkReachChildren visiting')
+              visiting'
+              source
+              modName
     | otherwise = answered <$> firstAnswer (map taking wkRoutes)
     where
       visiting' = Set.insert modName visiting
@@ -803,8 +859,15 @@ resolveModule
         Just (package, tarball) ->
           cachedFor package >>= \case
             Just remembered -> pure (Just remembered)
-            Nothing ->
-              fromSource (wkReach visiting') (wkReachChildren visiting') visiting' tarball modName
+            Nothing -> do
+              extensions <- wkExtensionsOf modName
+              fromSource
+                extensions
+                (wkReach visiting')
+                (wkReachChildren visiting')
+                visiting'
+                tarball
+                modName
                 >>= \case
                   NoArchive -> pure Nothing
                   FromArchive established -> do
@@ -979,6 +1042,8 @@ sha256OfFile path = do
 
 -- | Read a module's fixities out of a tarball, following re-exports.
 fromSource ::
+  -- | What the module's package puts in force, before its own pragmas.
+  [Extension] ->
   -- | How to reach another module, for chasing re-exports. This is
   -- 'resolveModule' tied back on itself, with the visiting set already
   -- extended.
@@ -995,7 +1060,7 @@ fromSource ::
   -- | What it declares, including what it only passes on, and whether that
   -- is worth remembering.
   IO Reading
-fromSource reach reachChildren visiting tarball modName =
+fromSource extensions reach reachChildren visiting tarball modName =
   doesFileExist tarball >>= \case
     False -> pure NoArchive
     True ->
@@ -1003,7 +1068,7 @@ fromSource reach reachChildren visiting tarball modName =
         Nothing -> pure (FromArchive Unreadable)
         Just source ->
           FromArchive . maybe Unreadable Declares
-            <$> fromText reach reachChildren visiting source modName
+            <$> fromText extensions reach reachChildren visiting source modName
 
 -- | What came of looking for a module in an archive.
 data Reading
@@ -1016,6 +1081,8 @@ data Reading
 
 -- | The fixities a module's text declares and passes on.
 fromText ::
+  -- | What the module's package puts in force, before its own pragmas.
+  [Extension] ->
   -- | How to reach another module, for chasing re-exports. This is
   -- 'resolveModule' tied back on itself, with the visiting set already
   -- extended.
@@ -1030,14 +1097,17 @@ fromText ::
   -- | Its name.
   Text ->
   IO (Maybe (Map OpName Fixity))
-fromText reach reachChildren visiting source modName =
+fromText extensions reach reachChildren visiting source modName =
   case traverse parsed =<< configurations of
     Nothing -> pure Nothing
     Just modules ->
       agreeing <$> traverse (withReexports reach reachChildren visiting modName) modules
   where
     configurations = either (const Nothing) Just (branchLeaves source)
-    parsed = fmap pmModule . either (const Nothing) Just . parseModule defaultParserConfig (T.unpack modName)
+    parsed leaf =
+      fmap pmModule
+        . either (const Nothing) Just
+        $ parseModule (configFor extensions leaf) (T.unpack modName) leaf
 
 -- | One answer from every configuration that could be read, if they agree.
 --
@@ -1284,6 +1354,11 @@ wantedModules modName hsModule items =
       aliased -> aliased
     imports = moduleImports hsModule
     isSelf m = Just m == moduleName hsModule || m == modName
+
+-- | What to parse a module with: what its package puts in force, and then
+-- whatever its own pragmas say about that.
+configFor :: [Extension] -> Text -> ParserConfig
+configFor extensions source = parserConfigFor (effectiveExtensions extensions source)
 
 -- | Find a module inside a tarball and decode it.
 readModule :: FilePath -> Text -> IO (Maybe Text)

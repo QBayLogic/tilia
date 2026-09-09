@@ -17,6 +17,7 @@ import Control.Monad (when)
 import Data.Foldable (traverse_)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.List (isInfixOf)
+import Data.List qualified
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -279,6 +280,24 @@ withPlan plan = do
     it "distinguishes a boot module with no operators from an unknown one" $ do
       quiet <- resolve "Data.Char"
       quiet `shouldBe` Just Map.empty
+
+  describe "a module that leans on its package's extensions" $ do
+    it "reads it, given what the .cabal puts in force" $
+      withFakeProject [("fake.cabal", package ["LambdaCase"]), ("src/Fancy.hs", fancy)] $
+        \rs ->
+          askFixities rs "Fancy"
+            >>= (`shouldBe` Just (Map.singleton (OpName "<+>") (Fixity RightAssoc 5)))
+
+    it "cannot read it when the .cabal puts nothing in force" $
+      withFakeProject [("fake.cabal", package []), ("src/Fancy.hs", fancy)] $
+        \rs -> askFixities rs "Fancy" `shouldReturn` Nothing
+
+    it "takes an extension the .cabal turns off into account"
+      $ withFakeProject
+        [ ("fake.cabal", package ["LambdaCase", "NoLambdaCase"]),
+          ("src/Fancy.hs", fancy)
+        ]
+      $ \rs -> askFixities rs "Fancy" `shouldReturn` Nothing
 
   describe "modules whose source defeats us" $ do
     it "answers for Test.QuickCheck.Property, which cannot be parsed" $
@@ -732,6 +751,35 @@ check resolve (modName, op, expected) = do
     | actual /= Just expected
     ]
 
+-- | A module that needs @LambdaCase@ to parse, and declares a fixity worth
+-- finding once it does.
+fancy :: Text
+fancy =
+  T.unlines
+    [ "module Fancy where",
+      "infixr 5 <+>",
+      "(<+>) :: Int -> Int -> Int",
+      "a <+> b = a + b",
+      "describe :: Int -> Int",
+      "describe = \\case",
+      "  0 -> 1",
+      "  _ -> 2"
+    ]
+
+-- | A @.cabal@ for the fake project, putting the named extensions in force.
+package :: [Text] -> Text
+package extensions =
+  T.unlines $
+    [ "cabal-version: 2.4",
+      "name: fake",
+      "version: 0.1.0.0",
+      "library",
+      "  exposed-modules: Fancy",
+      "  hs-source-dirs: src",
+      "  default-language: Haskell2010"
+    ]
+      <> ["  default-extensions: " <> T.intercalate ", " extensions | not (null extensions)]
+
 -- | A module that is perfectly readable and still cannot be resolved: the
 -- operator it exports comes from somewhere nothing can be read from.
 opaqueSource :: Text
@@ -761,16 +809,19 @@ withFakePlan :: [(FilePath, Text)] -> (BuildPlan -> IO a) -> IO a
 withFakePlan sources act =
   withSystemTempDirectory "tilia-plan" $ \dir -> do
     createDirectoryIfMissing True (dir </> "src")
-    T.writeFile (dir </> "fake.cabal") $
-      T.unlines
-        [ "cabal-version: 2.4",
-          "name: fake",
-          "version: 0.1.0.0",
-          "library",
-          "  exposed-modules: " <> T.intercalate ", " (map named sources),
-          "  hs-source-dirs: src",
-          "  default-language: Haskell2010"
-        ]
+    if any ((".cabal" `Data.List.isSuffixOf`) . fst) sources
+      then pure ()
+      else
+        T.writeFile (dir </> "fake.cabal") $
+          T.unlines
+            [ "cabal-version: 2.4",
+              "name: fake",
+              "version: 0.1.0.0",
+              "library",
+              "  exposed-modules: " <> T.intercalate ", " (map named (haskellIn sources)),
+              "  hs-source-dirs: src",
+              "  default-language: Haskell2010"
+            ]
     traverse_ (\(path, text) -> T.writeFile (dir </> path) text) sources
     T.writeFile (dir </> "plan.json") $
       "{\"compiler-id\":\"ghc-0.0\",\"install-plan\":\
@@ -782,6 +833,7 @@ withFakePlan sources act =
       Left why -> error (T.unpack why)
       Right plan -> act plan
   where
+    haskellIn = filter ((".hs" `Data.List.isSuffixOf`) . fst)
     named (path, _) = T.pack (takeBaseName path)
 
 -- | Say why nothing could be tested, once, instead of failing repeatedly.

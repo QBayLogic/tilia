@@ -8,6 +8,7 @@ module Tilia.Fixity.Cabal
     exposedModules,
     containedModules,
     sourceDirs,
+    declaredExtensions,
   )
 where
 
@@ -17,9 +18,13 @@ import Data.ByteString.Lazy qualified as BL
 import Data.Char (isSpace)
 import Data.List (isSuffixOf)
 import Data.List qualified
+import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
+import GHC.Driver.Session qualified as GHC
+import GHC.LanguageExtensions.Type (Extension)
+import Tilia.Pragma (lookupExtension)
 import Tilia.Utils (quietly)
 
 -- | The modules a package exposes, read from the @.cabal@ file in its
@@ -100,6 +105,28 @@ sourceDirs contents = Data.List.nub (named <> ["."])
         . concatMap T.words
         . fieldsNamed "hs-source-dirs"
         $ T.lines contents
+
+-- | The extensions a package puts in force, read from its @.cabal@ file.
+declaredExtensions :: Text -> [Extension]
+declaredExtensions contents =
+  foldl apply (GHC.languageExtensions edition) named
+  where
+    ls = T.lines contents
+    edition = listToMaybe (mapMaybe languageNamed (fieldsNamed "default-language" ls))
+    named =
+      concatMap (T.split (== ',')) . concatMap T.words $
+        fieldsNamed "default-extensions" ls
+    apply acc written = case T.strip written of
+      name
+        | Just off <- T.stripPrefix "No" name,
+          Just extension <- lookupExtension off ->
+            filter (/= extension) acc
+        | Just extension <- lookupExtension name,
+          extension `notElem` acc ->
+            acc <> [extension]
+        | otherwise -> acc
+    languageNamed written =
+      lookup (T.unpack (T.strip written)) [(show e, e) | e <- [minBound .. maxBound]]
 
 -- | The values of every field with the given name, wherever it appears and
 -- however deeply it is nested.
