@@ -93,9 +93,13 @@ spec = do
 
   describe "the shape of it" $ do
     it "sets out under headings" $ do
-      told <- notesFor [("Prelude", Just [])] "f = 1\n"
+      told <- notesFor [("Prelude", Just [("+", infixl' 6)])] "f a b = a + b\n"
       map T.stripStart told `shouldContain` ["· imports"]
       map T.stripStart told `shouldContain` ["· operators"]
+
+    it "leaves out a heading it would have nothing to put under" $
+      notesFor [("Prelude", Just [])] "f = 1\n"
+        >>= (`shouldSatisfy` all ((/= "· operators") . T.stripStart))
 
     it "indents an entry further than the heading it sits under" $ do
       told <- notesFor [("Prelude", Just [])] "import Data.Map\n"

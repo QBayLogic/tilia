@@ -150,14 +150,14 @@ renderFixityNotes palette notes =
 aboutFile :: Palette -> FixityNotes -> [Text]
 aboutFile palette notes =
   concat
-    [ [heading "imports"],
-      map (entry . fromImport) (notedImports notes),
-      [heading "operators"],
-      map (entry . fromOperator) (notedOperators notes),
-      [heading "declared here" | not (null (notedDeclarations notes))],
-      map (entry . fromOwn) (notedDeclarations notes)
+    [ section "imports" fromImport (notedImports notes),
+      section "operators" fromOperator (notedOperators notes),
+      section "declared here" fromOwn (notedDeclarations notes)
     ]
   where
+    section what render items
+      | null items = []
+      | otherwise = heading what : map (entry . render) items
     heading what = indent 2 <> "· " <> what
     entry line = indent 3 <> "· " <> line
 
