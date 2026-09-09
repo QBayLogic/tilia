@@ -48,10 +48,12 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Base16 qualified as B16
 import Data.ByteString.Lazy qualified as BL
 import Data.Choice (Choice, fromBool)
-import Data.Foldable (traverse_)
+import Data.Foldable (toList, traverse_)
 import Data.IORef
 import Data.List (isSuffixOf)
 import Data.List qualified
+import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
@@ -1232,8 +1234,8 @@ fromText extensions reach reachChildren visiting source modName =
 -- Every configuration unresolvable is still no answer. There is nothing
 -- left to agree, and saying the module declares nothing would be a guess
 -- rather than the silence it deserves.
-agreeing :: [Maybe (Fixities)] -> Maybe (Fixities)
-agreeing answers = case catMaybes answers of
+agreeing :: NonEmpty (Maybe (Fixities)) -> Maybe (Fixities)
+agreeing answers = case catMaybes (toList answers) of
   [] -> Nothing
   readable -> foldM together Map.empty readable
   where
@@ -1502,11 +1504,9 @@ configFor extensions source = parserConfigFor (effectiveExtensions extensions so
 whatParsed :: Either e a -> Maybe a
 whatParsed = either (const Nothing) Just
 
--- | Every configuration the preprocessor allows of a module's text,
--- parsed, each with whether it has the Prelude without importing it.
---
--- 'Nothing' where any of them will not parse: a module read in part is a
--- module whose fixities are a guess.
+-- | Every configuration the preprocessor allows of a module's text that is
+-- Haskell, parsed, each with whether it has the Prelude without importing
+-- it.
 configurationsOf ::
   -- | What the module's package puts in force, or 'Nothing' where nothing
   -- is known about it. Then it is parsed under the most generous edition
@@ -1517,9 +1517,9 @@ configurationsOf ::
   Text ->
   -- | Its text
   Text ->
-  Maybe [(Choice "implicitPrelude", HsModule GhcPs)]
+  Maybe (NonEmpty (Choice "implicitPrelude", HsModule GhcPs))
 configurationsOf extensions modName text =
-  traverse parsed =<< whatParsed (branchLeaves text)
+  NE.nonEmpty . mapMaybe parsed =<< whatParsed (branchLeaves text)
   where
     parsed leaf =
       (,) (hasImplicitPrelude (fromMaybe [] extensions) leaf) . pmModule

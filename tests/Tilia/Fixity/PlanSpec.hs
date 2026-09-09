@@ -495,6 +495,25 @@ withPlan plan = do
         askFixities rs "Platform"
           >>= (`shouldBe` Just (Map.singleton (InTerms, OpName "<+>") (Fixity LeftAssoc 6)))
 
+    it "answers from the configurations that are Haskell at all"
+      $ withFakeProject
+        [ ( "src/Guarded.hs",
+            T.unlines
+              [ "{-# LANGUAGE CPP #-}",
+                "module Guarded ((<+>)) where",
+                "infixl 6 <+>",
+                "(<+>) :: Int -> Int -> Int",
+                "a <+> b = a + b",
+                "#ifdef ANCIENT",
+                "f x = case",
+                "#endif"
+              ]
+          )
+        ]
+      $ \rs ->
+        askFixities rs "Guarded"
+          >>= (`shouldBe` Just (Map.singleton (InTerms, OpName "<+>") (Fixity LeftAssoc 6)))
+
     it "still refuses when the configurations it can read disagree"
       $ withFakeProject
         [ ( "src/Disagree.hs",
