@@ -72,6 +72,21 @@ spec = do
                      "import Data.Set qualified as S"
                    ]
 
+    it "parses a module that takes back an extension the edition puts in force" $
+      format
+        [ "{-# LANGUAGE NoStarIsType #-}",
+          "{-# LANGUAGE TypeOperators #-}",
+          "module M (type (*)) where",
+          "import GHC.TypeLits (type (*))"
+        ]
+        `shouldBe` [ "{-# LANGUAGE TypeOperators #-}",
+                     "{-# LANGUAGE NoStarIsType #-}",
+                     "",
+                     "module M (type (*)) where",
+                     "",
+                     "import GHC.TypeLits (type (*))"
+                   ]
+
   describe "comments" $ do
     it "keeps one written between declarations" $
       format

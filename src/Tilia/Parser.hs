@@ -139,7 +139,7 @@ parseConfiguration config path written@(Written writtenText) source =
 
     config' =
       config
-        { pcExtensions = withImplied (pcExtensions config <> effectiveExtensions [] source)
+        { pcExtensions = withImplied (effectiveExtensions (pcExtensions config) source)
         }
 
     initialState =
