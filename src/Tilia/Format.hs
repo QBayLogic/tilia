@@ -39,7 +39,7 @@ import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Equivalence (commentDifference, syntaxDifference)
 import Tilia.Fixity (OpName, Unknown (..), operatorSpelling, spellUnreadIn, unknownOperators)
 import Tilia.Fixity.Debug (FixityNotes, fixityNotes)
-import Tilia.Fixity.Plan (Resolver (..), loadPlan, newResolver, scopeFor)
+import Tilia.Fixity.Plan (PlanComponent, Resolver (..), loadPlan, newResolver, scopeFor)
 import Tilia.Package
   ( PackageProblem (..),
     PackageReader,
@@ -63,7 +63,7 @@ import Tilia.Source (comments)
 
 -- | Why a file could not be formatted.
 data FormatError
-  = -- | No @cabal.project@, @stack.yaml@ or @.cabal@ file above it.
+  = -- | No @cabal.project@ or @.cabal@ file above it.
     NoProject FilePath
   | -- | A project, but no build plan we could read or produce. The text is
     -- whatever @cabal@ had to say about it.
@@ -90,7 +90,7 @@ data FormatError
 describeFormatError :: Palette -> FormatError -> Text
 describeFormatError palette = \case
   NoProject path ->
-    "no project above " <> file path <> ": expected a cabal.project, a stack.yaml or a .cabal file"
+    "no project above " <> file path <> ": expected a cabal.project or a .cabal file"
   NoBuildPlan root reason ->
     "no build plan for " <> file root <> ": " <> reason
   NoPackage path problem ->
@@ -188,6 +188,9 @@ data Session = Session
 newSession ::
   -- | Where to start looking for the project
   FilePath ->
+  -- | The components about to be formatted, so that a plan which says
+  -- nothing about them can be solved again rather than trusted
+  [PlanComponent] ->
   -- | Check AST equivalence.
   Choice "checkAst" ->
   -- | Check idempotence.
@@ -196,9 +199,9 @@ newSession ::
   -- with 'fixityNotesOf'.
   Choice "debugFixity" ->
   IO (Either FormatError Session)
-newSession start checkAst checkIdempotence debugFixity = runExceptT $ do
+newSession start components checkAst checkIdempotence debugFixity = runExceptT $ do
   root <- prPath <$> (need (NoProject start) =<< liftIO (findProjectRoot start))
-  plan <- orElse (NoBuildPlan root) =<< liftIO (loadPlan root)
+  plan <- orElse (NoBuildPlan root) =<< liftIO (loadPlan components root)
   resolver <- liftIO (newResolver plan)
   askPackage <- liftIO newPackageReader
   notes <-

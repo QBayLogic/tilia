@@ -40,7 +40,9 @@ import Tilia.Run
     writeBack,
   )
 import Tilia.Target
-  ( Target,
+  ( Component,
+    Target,
+    componentInPlan,
     componentsOfTarget,
     describeTargetProblem,
     filesOfComponents,
@@ -58,9 +60,17 @@ main = do
       (die usageExitCode palette)
       pure
       (maybe (parseTarget "all") parseTarget optTarget)
-  files <- filesFor palette target
+  components <- componentsFor palette target
+  files <-
+    traverse makeRelativeToCurrentDirectory
+      =<< filesOfComponents components
   session <-
-    newSession "." optCheckAst optCheckIdempotence optDebugFixity
+    newSession
+      "."
+      (componentInPlan <$> components)
+      optCheckAst
+      optCheckIdempotence
+      optDebugFixity
       >>= either (dieFormatting palette) pure
   outcomes <- runOver session files
   fixityNotesOf session
@@ -88,18 +98,16 @@ printReport report = do
   traverse_ (T.hPutStrLn stderr) (reportErr report)
   hFlush stderr
 
--- | Every file the target asks for, relative to the current directory.
-filesFor :: Palette -> Target -> IO [FilePath]
-filesFor palette target =
+-- | Every component the target asks for.
+componentsFor :: Palette -> Target -> IO [Component]
+componentsFor palette target =
   findProjectRoot "." >>= \case
     Nothing ->
-      die 2 palette "no cabal.project, stack.yaml or .cabal file at or above the working directory"
+      die 2 palette "no cabal.project or .cabal file at or above the working directory"
     Just root ->
       componentsOfTarget root target >>= \case
         Left problem -> die usageExitCode palette (describeTargetProblem problem)
-        Right components -> do
-          found <- filesOfComponents components
-          traverse makeRelativeToCurrentDirectory found
+        Right components -> pure components
 
 -- | What @sysexits.h@ has called a usage error since 4.3BSD, and well clear
 -- of the codes 'formatErrorExitCode' returns.

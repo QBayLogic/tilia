@@ -10,6 +10,7 @@ module Tilia.Target
     TargetProblem (..),
     describeTargetProblem,
     componentsOfTarget,
+    componentInPlan,
     filesOfComponents,
   )
 where
@@ -49,7 +50,8 @@ import System.Directory
     listDirectory,
   )
 import System.FilePath (normalise, takeDirectory, takeExtension, (</>))
-import Tilia.Project (ProjectRoot (..))
+import Tilia.Fixity.Plan (PlanComponent (..))
+import Tilia.Project (Marker (..), ProjectRoot (..), markerFile)
 import Tilia.Utils (attempted, quietly)
 
 -- | Which components a run was asked for.
@@ -142,7 +144,7 @@ componentsOfTarget :: ProjectRoot -> Target -> IO (Either TargetProblem [Compone
 componentsOfTarget root target = do
   files <- packageFilesOf root
   if null files
-    then pure (Left (NoPackages (prPath root </> prMarker root)))
+    then pure (Left (NoPackages (prPath root </> markerFile (prMarker root))))
     else
       traverse componentsInCabalFile files >>= \case
         results
@@ -162,6 +164,19 @@ spellComponent c =
     <> spellKind (componentKind c)
     <> ":"
     <> componentName c
+
+-- | How a build plan names this component.
+--
+-- A plan writes a library as @lib@ and everything else as its kind and
+-- name, which is not quite how a target is written: see 'spellComponent'.
+componentInPlan :: Component -> PlanComponent
+componentInPlan c =
+  PlanComponent
+    { pcPackage = componentPackage c,
+      pcName = case componentKind c of
+        Lib -> "lib"
+        kind -> spellKind kind <> ":" <> componentName c
+    }
 
 -- | Render 'Kind' the way it would be accepted on the command line.
 spellKind :: Kind -> Text
@@ -216,19 +231,16 @@ formattableFileExtensions = [".hs", ".hs-boot", ".hsig"]
 -- A @cabal.project@ names them, possibly through globs; anything else means
 -- the marker found by the walk upwards is itself the only package.
 packageFilesOf :: ProjectRoot -> IO [FilePath]
-packageFilesOf root
-  | ".cabal" `isSuffixOf` prMarker root = pure [prPath root </> prMarker root]
-  | prMarker root == "cabal.project" = do
-      contents <-
-        quietly BS.empty (BS.readFile (prPath root </> "cabal.project"))
-      found <-
-        traverse
-          (packageToCabalFile (prPath root))
-          (packagesInCabalProjectContents contents)
-      pure (Set.toList (Set.fromList (concat found)))
-  -- A stack.yaml is not a format this reads, so the packages are whatever
-  -- .cabal files sit beside it.
-  | otherwise = cabalFilesIn (prPath root)
+packageFilesOf root = case prMarker root of
+  PackageFile named -> pure [prPath root </> named]
+  ProjectFile -> do
+    contents <-
+      quietly BS.empty (BS.readFile (prPath root </> "cabal.project"))
+    found <-
+      traverse
+        (packageToCabalFile (prPath root))
+        (packagesInCabalProjectContents contents)
+    pure (Set.toList (Set.fromList (concat found)))
 
 -- | The entries of a @cabal.project@'s @packages@ field.
 packagesInCabalProjectContents :: BS.ByteString -> [Text]

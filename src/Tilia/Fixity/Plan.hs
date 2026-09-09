@@ -15,6 +15,9 @@ module Tilia.Fixity.Plan
 
     -- * Readiness
     Readiness (..),
+    PlanComponent (..),
+    spellComponent,
+    plannedComponents,
     planPathFor,
     checkReadiness,
     plannedTarballs,
@@ -89,9 +92,14 @@ import Tilia.Utils (quietly)
 
 -- | One package of a build plan.
 data PlanPackage = PlanPackage
-  { ppName :: Text,
+  { -- | Package name
+    ppName :: Text,
+    -- | Package version
     ppVersion :: Text,
-    ppSource :: PackageSource
+    -- | Package source
+    ppSource :: PackageSource,
+    -- | Which component of the package the entry is about
+    ppComponent :: Maybe Text
   }
   deriving (Eq, Show)
 
@@ -178,10 +186,12 @@ instance FromJSON PlanPackage where
     sourceKind <- o .:? "pkg-src" >>= traverse (.: "type")
     sourcePath <- o .:? "pkg-src" >>= traverse (.:? "path")
     sourceHash <- o .:? "pkg-src-sha256"
+    component <- o .:? "component-name"
     pure
       PlanPackage
         { ppName = name,
           ppVersion = version,
+          ppComponent = component,
           ppSource = case (kind :: Maybe Text, sourceKind :: Maybe Text) of
             (Just "pre-existing", _) -> PreExisting
             (_, Just "repo-tar") -> HackagePackage sourceHash
@@ -200,6 +210,28 @@ readBuildPlan path =
 ----------------------------------------------------------------------------
 -- Readiness
 
+-- | A component of the project, named the way a build plan names one.
+data PlanComponent = PlanComponent
+  { -- | The package it belongs to.
+    pcPackage :: Text,
+    -- | @lib@, @exe:name@, @test:name@, @bench:name@.
+    pcName :: Text
+  }
+  deriving (Eq, Ord, Show)
+
+-- | A component as it would be written on the command line.
+spellComponent :: PlanComponent -> Text
+spellComponent c = pcPackage c <> ":" <> pcName c
+
+-- | The components of the project's own packages that a plan covers.
+plannedComponents :: BuildPlan -> [PlanComponent]
+plannedComponents plan =
+  [ PlanComponent (ppName p) component
+  | p <- bpPackages plan,
+    LocalPackage _ <- [ppSource p],
+    Just component <- [ppComponent p]
+  ]
+
 -- | Whether everything the resolver needs is on disk.
 data Readiness
   = -- | Nothing to do.
@@ -208,6 +240,8 @@ data Readiness
     PlanMissing
   | -- | The plan is older than the files that determine it.
     PlanStale [FilePath]
+  | -- | The plan says nothing about components the run is about to format.
+    PlanNarrow [Text]
   | -- | The plan is there, and some packages have neither been downloaded
     -- nor built. The names are listed so that a caller can say what it is
     -- waiting for.
@@ -226,25 +260,28 @@ planPathFor projectDir = projectDir </> "dist-newstyle" </> "cache" </> "plan.js
 --
 -- One read of the plan and one @stat@ per package, so this is fast enough
 -- to run before every format without anyone noticing.
-checkReadiness :: FilePath -> IO Readiness
-checkReadiness projectDir =
+checkReadiness :: [PlanComponent] -> FilePath -> IO Readiness
+checkReadiness wanted projectDir =
   readBuildPlan (planPathFor projectDir) >>= \case
     Left _ -> pure PlanMissing
     Right plan -> do
       newer <- filesNewerThanPlan projectDir
-      if not (null newer)
-        then pure (PlanStale newer)
-        else do
+      let covered = plannedComponents plan
+          missing = [spellComponent c | c <- wanted, c `notElem` covered]
+      case (newer, missing) of
+        (_ : _, _) -> pure (PlanStale newer)
+        ([], _ : _) -> pure (PlanNarrow missing)
+        ([], []) -> do
           tarballs <- filter (isFetchable . fst) <$> plannedTarballs plan
           absent <- map fst <$> filterM (fmap not . doesFileExist . snd) tarballs
-          wanted <-
+          short <-
             if null absent
               then pure []
               else do
                 cache <- openCache (planToken plan)
                 installed <- whatTheCompilerSees cache
                 pure (filter (not . builtAlready installed) absent)
-          pure $ case map ppName wanted of
+          pure $ case map ppName short of
             [] -> Ready
             ns -> SourcesMissing ns
 
@@ -288,30 +325,33 @@ filesNewerThanPlan projectDir = quietly [] $ do
 -- This runs a subprocess and may reach the network, so it is a separate
 -- call rather than something 'newResolver' does behind the caller's back.
 -- An editor formatting on save must not block on it.
-prepare :: FilePath -> Readiness -> IO (Either Text ())
-prepare projectDir = prepareWith (runCabal projectDir) projectDir
+prepare :: [PlanComponent] -> FilePath -> Readiness -> IO (Either Text ())
+prepare wanted projectDir = prepareWith (runCabal projectDir) wanted projectDir
 
 -- | 'prepare', given a way to run @cabal@.
 prepareWith ::
   -- | Run @cabal@ with these arguments
   ([String] -> IO (Either Text ())) ->
+  -- | The components the run is about to format
+  [PlanComponent] ->
   -- | The project being prepared
   FilePath ->
   -- | What it was found to be short of
   Readiness ->
   IO (Either Text ())
-prepareWith cabal projectDir = \case
+prepareWith cabal wanted projectDir = \case
   Ready -> pure (Right ())
   SourcesMissing _ -> fetch
   PlanMissing -> solveThenFetch
   PlanStale _ -> solveThenFetch
+  PlanNarrow _ -> solveThenFetch
   where
-    fetch = cabal ["build", "--only-download"]
+    fetch = cabal ["build", "all", "--only-download"]
     solveThenFetch =
-      cabal ["build", "--dry-run"] >>= \case
+      cabal ["build", "all", "--dry-run"] >>= \case
         Left err -> pure (Left err)
         Right () ->
-          checkReadiness projectDir >>= \case
+          checkReadiness wanted projectDir >>= \case
             SourcesMissing _ -> fetch
             -- Either there is nothing left to do, or the plan @cabal@ has
             -- just written is one we still cannot read. A second dry run
@@ -345,10 +385,10 @@ runCabal projectDir args = quietly (Left "could not run cabal") $ do
 -- at most one solve and one fetch however much is missing, so a project
 -- whose files are merely newer than its plan cannot send this into a loop,
 -- and the plan is read once at the end rather than judged again.
-loadPlan :: FilePath -> IO (Either Text BuildPlan)
-loadPlan projectDir = do
-  readiness <- checkReadiness projectDir
-  prepare projectDir readiness >>= \case
+loadPlan :: [PlanComponent] -> FilePath -> IO (Either Text BuildPlan)
+loadPlan wanted projectDir = do
+  readiness <- checkReadiness wanted projectDir
+  prepare wanted projectDir readiness >>= \case
     Left err -> pure (Left err)
     _ -> readBuildPlan (planPathFor projectDir)
 

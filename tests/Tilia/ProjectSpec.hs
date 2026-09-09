@@ -14,15 +14,15 @@ spec = do
   describe "in this repository" $ do
     it "finds the root from the root" $ do
       root <- findProjectRoot "."
-      (prMarker <$> root) `shouldBe` Just "cabal.project"
+      (prMarker <$> root) `shouldBe` Just ProjectFile
 
     it "finds the root from a nested source directory" $ do
       root <- findProjectRoot "src/Tilia/Printer"
-      (prMarker <$> root) `shouldBe` Just "cabal.project"
+      (prMarker <$> root) `shouldBe` Just ProjectFile
 
     it "finds the root from a file rather than a directory" $ do
       root <- findProjectRoot "src/Tilia/Fixity.hs"
-      (prMarker <$> root) `shouldBe` Just "cabal.project"
+      (prMarker <$> root) `shouldBe` Just ProjectFile
 
     it "returns the same directory however it is reached" $ do
       a <- findProjectRoot "."
@@ -35,17 +35,23 @@ spec = do
     it "prefers cabal.project to a bare .cabal file" $
       withTree [("cabal.project", ""), ("thing.cabal", "")] $ \dir -> do
         root <- findProjectRoot dir
-        (prMarker <$> root) `shouldBe` Just "cabal.project"
+        (prMarker <$> root) `shouldBe` Just ProjectFile
 
     it "accepts a bare .cabal file when there is no project" $
       withTree [("thing.cabal", "")] $ \dir -> do
         root <- findProjectRoot dir
-        (prMarker <$> root) `shouldBe` Just "thing.cabal"
+        (prMarker <$> root) `shouldBe` Just (PackageFile "thing.cabal")
 
-    it "accepts stack.yaml" $
-      withTree [("stack.yaml", "")] $ \dir -> do
+    it "passes over a stack.yaml, which cabal does not read" $
+      withTree [("stack.yaml", ""), ("thing.cabal", "")] $ \dir -> do
         root <- findProjectRoot dir
-        (prMarker <$> root) `shouldBe` Just "stack.yaml"
+        (prMarker <$> root) `shouldBe` Just (PackageFile "thing.cabal")
+
+    it "climbs out of a stack project to the package it is asked about" $
+      withTree [("stack.yaml", ""), ("packages/inner/inner.cabal", "")] $
+        \dir -> do
+          root <- findProjectRoot (dir </> "packages" </> "inner")
+          prPath <$> root `shouldBe` Just (dir </> "packages" </> "inner")
 
     it "climbs past a package to the project that contains it"
       $ withTree
@@ -54,16 +60,46 @@ spec = do
         ]
       $ \dir -> do
         root <- findProjectRoot (dir </> "packages" </> "inner")
-        (prMarker <$> root) `shouldBe` Just "cabal.project"
+        (prMarker <$> root) `shouldBe` Just ProjectFile
 
-    it "stops at an inner package that has its own .cabal"
+    it "climbs past a package that has its own .cabal"
       $ withTree
         [ ("cabal.project", ""),
           ("packages/inner/inner.cabal", "")
         ]
       $ \dir -> do
         root <- findProjectRoot (dir </> "packages" </> "inner")
-        (prMarker <$> root) `shouldBe` Just "inner.cabal"
+        (prPath <$> root) `shouldBe` Just dir
+        (prMarker <$> root) `shouldBe` Just ProjectFile
+
+    it "takes the nearest project of the ones above"
+      $ withTree
+        [ ("cabal.project", ""),
+          ("packages/inner/cabal.project", ""),
+          ("packages/inner/inner.cabal", "")
+        ]
+      $ \dir -> do
+        root <- findProjectRoot (dir </> "packages" </> "inner")
+        prPath <$> root `shouldBe` Just (dir </> "packages" </> "inner")
+
+    it "takes the nearest package when no project is above either"
+      $ withTree
+        [ ("outer.cabal", ""),
+          ("packages/inner/inner.cabal", "")
+        ]
+      $ \dir -> do
+        root <- findProjectRoot (dir </> "packages" </> "inner")
+        (prMarker <$> root) `shouldBe` Just (PackageFile "inner.cabal")
+
+    it "climbs to a project past a package that is not the one asked about"
+      $ withTree
+        [ ("cabal.project", ""),
+          ("outer.cabal", ""),
+          ("packages/inner/inner.cabal", "")
+        ]
+      $ \dir -> do
+        root <- findProjectRoot (dir </> "packages" </> "inner")
+        (prMarker <$> root) `shouldBe` Just ProjectFile
 
   describe "no project" $
     it "gives up rather than guessing" $

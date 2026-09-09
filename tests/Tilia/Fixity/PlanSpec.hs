@@ -52,32 +52,71 @@ preparation = describe "preparing a project" $ do
       steps <- newIORef []
       let cabal args = do
             record steps args
-            when (args == ["build", "--dry-run"]) (writePlan dir wantingATarball)
+            when (args == ["build", "all", "--dry-run"]) (writePlan dir wantingATarball)
             pure (Right ())
-      checkReadiness dir `shouldReturn` PlanMissing
-      prepareWith cabal dir PlanMissing `shouldReturn` Right ()
+      checkReadiness [] dir `shouldReturn` PlanMissing
+      prepareWith cabal [] dir PlanMissing `shouldReturn` Right ()
       readIORef steps
-        `shouldReturn` [["build", "--dry-run"], ["build", "--only-download"]]
+        `shouldReturn` [["build", "all", "--dry-run"], ["build", "all", "--only-download"]]
 
   it "fetches without solving when the plan is already good" $
     withTempProject (Just wantingATarball) $ \dir -> do
       steps <- newIORef []
-      readiness <- checkReadiness dir
+      readiness <- checkReadiness [] dir
       readiness `shouldBe` SourcesMissing ["tilia-phantom"]
-      prepareWith (obliging steps) dir readiness `shouldReturn` Right ()
-      readIORef steps `shouldReturn` [["build", "--only-download"]]
+      prepareWith (obliging steps) [] dir readiness `shouldReturn` Right ()
+      readIORef steps `shouldReturn` [["build", "all", "--only-download"]]
 
   it "runs nothing at all when nothing is missing" $ do
     steps <- newIORef []
-    prepareWith (obliging steps) "." Ready `shouldReturn` Right ()
+    prepareWith (obliging steps) [] "." Ready `shouldReturn` Right ()
     readIORef steps `shouldReturn` []
 
   it "does not go on to fetch when the solve fails" $
     withTempProject Nothing $ \dir -> do
       steps <- newIORef []
       let cabal args = record steps args >> pure (Left "cabal said no")
-      prepareWith cabal dir PlanMissing `shouldReturn` Left "cabal said no"
-      readIORef steps `shouldReturn` [["build", "--dry-run"]]
+      prepareWith cabal [] dir PlanMissing `shouldReturn` Left "cabal said no"
+      readIORef steps `shouldReturn` [["build", "all", "--dry-run"]]
+
+  describe "a plan narrower than the run" $ do
+    it "notices a component the plan says nothing about" $
+      withTempProject (Just twoComponents) $ \dir ->
+        checkReadiness [component "test:tests"] dir
+          `shouldReturn` PlanNarrow ["thing:test:tests"]
+
+    it "names every one it is missing" $
+      withTempProject (Just twoComponents) $ \dir ->
+        checkReadiness [component "test:tests", component "bench:speed"] dir
+          `shouldReturn` PlanNarrow ["thing:test:tests", "thing:bench:speed"]
+
+    it "is content with the components the plan does cover" $
+      withTempProject (Just twoComponents) $ \dir ->
+        checkReadiness [component "lib", component "exe:thing"] dir
+          `shouldReturn` Ready
+
+    it "asks for nothing when the run asks about nothing" $
+      withTempProject (Just twoComponents) $ \dir ->
+        checkReadiness [] dir `shouldReturn` Ready
+
+    it "solves again rather than trusting it" $
+      withTempProject (Just twoComponents) $ \dir -> do
+        steps <- newIORef []
+        let cabal args = do
+              record steps args
+              when (args == ["build", "all", "--dry-run"]) (writePlan dir twoComponents)
+              pure (Right ())
+        prepareWith cabal [component "test:tests"] dir (PlanNarrow ["thing:test:tests"])
+          `shouldReturn` Right ()
+        readIORef steps `shouldReturn` [["build", "all", "--dry-run"]]
+
+    it "counts the components of this very project as covered" $ do
+      plan' <- readBuildPlan (planPathFor ".")
+      case plan' of
+        Left _ -> pendingWith "no build plan; run cabal build first"
+        Right p ->
+          checkReadiness (plannedComponents p) "."
+            `shouldNotReturn` PlanNarrow []
 
 -- | Chasing an operator a module passes on rather than declares.
 --
@@ -595,11 +634,11 @@ withPlan plan = do
 
   describe "readiness" $ do
     it "reports something other than a missing plan for this project" $ do
-      readiness <- checkReadiness "."
+      readiness <- checkReadiness [] "."
       readiness `shouldNotBe` PlanMissing
 
     it "reports a missing plan for a directory that has none" $
-      checkReadiness "/" `shouldReturn` PlanMissing
+      checkReadiness [] "/" `shouldReturn` PlanMissing
 
 ----------------------------------------------------------------------------
 -- Helpers
@@ -623,6 +662,20 @@ wantingATarball =
   "{\"compiler-id\":\"ghc-0.0\",\"install-plan\":\
   \[{\"pkg-name\":\"tilia-phantom\",\"pkg-version\":\"9.9.9\",\
   \\"pkg-src\":{\"type\":\"repo-tar\"}}]}"
+
+-- | A plan holding a local package with a library and an executable, and
+-- no test suite.
+twoComponents :: Text
+twoComponents =
+  "{\"compiler-id\":\"ghc-0.0\",\"install-plan\":\
+  \[{\"pkg-name\":\"thing\",\"pkg-version\":\"1.0\",\"component-name\":\"lib\",\
+  \\"pkg-src\":{\"type\":\"local\",\"path\":\"/nowhere\"}},\
+  \{\"pkg-name\":\"thing\",\"pkg-version\":\"1.0\",\"component-name\":\"exe:thing\",\
+  \\"pkg-src\":{\"type\":\"local\",\"path\":\"/nowhere\"}}]}"
+
+-- | A component of that package, by the name a plan gives it.
+component :: Text -> PlanComponent
+component = PlanComponent "thing"
 
 -- | Note that @cabal@ was asked for something.
 record :: IORef [[String]] -> [String] -> IO ()

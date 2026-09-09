@@ -10,11 +10,14 @@
 -- cache are found relative to.
 module Tilia.Project
   ( ProjectRoot (..),
+    Marker (..),
+    markerFile,
     findProjectRoot,
   )
 where
 
 import Data.List (isSuffixOf)
+import Data.Maybe (listToMaybe)
 import System.Directory
   ( canonicalizePath,
     doesDirectoryExist,
@@ -27,20 +30,40 @@ import Tilia.Utils (quietly)
 data ProjectRoot = ProjectRoot
   { -- | The directory.
     prPath :: FilePath,
-    -- | The file that identified it, for reporting.
-    prMarker :: FilePath
+    -- | What identified it.
+    prMarker :: Marker
   }
   deriving (Eq, Show)
 
+-- | What a project was recognised by.
+--
+-- The two are read differently—one names the packages of a build, the
+-- other is a package—so which it was has to survive being found.
+data Marker
+  = -- | A @cabal.project@, which names the packages.
+    ProjectFile
+  | -- | A @.cabal@ file, by its name: a package with no project around it.
+    PackageFile FilePath
+  deriving (Eq, Show)
+
+-- | The file a marker stands for, for reporting.
+markerFile :: Marker -> FilePath
+markerFile = \case
+  ProjectFile -> "cabal.project"
+  PackageFile named -> named
+
 -- | Walk upwards from a file or directory looking for a project.
 --
--- The markers are tried in order of authority at each level before moving
--- up, so a package inside a multi-package repository resolves to the
--- repository rather than to itself:
+-- A @cabal.project@ anywhere above wins over a @.cabal@ file nearer to
+-- hand, so that a package inside a multi-package repository resolves to the
+-- repository rather than to itself. That is where @cabal@ solves the build
+-- and writes the plan, and a run rooted at the package would go looking for
+-- a plan that is one directory up.
 --
---   * @cabal.project@ — names the whole build, and is what @cabal@ solves
---   * @stack.yaml@ — the same for Stack
---   * any @.cabal@ file — a single package with no project around it
+-- Only what @cabal@ reads counts. A @stack.yaml@ is not a project here: it
+-- would stop the climb at a directory @cabal@ cannot solve in, whereas
+-- passing over it settles on a @.cabal@ that @cabal@ can, which is the
+-- difference between formatting a stack project and refusing it.
 --
 -- Stops at the filesystem root and returns 'Nothing' rather than guessing.
 -- Formatting a file that belongs to no project is a perfectly ordinary
@@ -48,24 +71,23 @@ data ProjectRoot = ProjectRoot
 findProjectRoot :: FilePath -> IO (Maybe ProjectRoot)
 findProjectRoot start = quietly Nothing $ do
   from <- startingDirectory
-  climb from
+  found <- traverse markersIn (from : ancestorsOf from)
+  pure (listToMaybe (concatMap fst found <> concatMap snd found))
   where
     startingDirectory = do
       absolute <- canonicalizePath start
       isDirectory <- doesDirectoryExist absolute
       pure (if isDirectory then absolute else takeDirectory absolute)
 
-    climb directory =
-      markerIn directory >>= \case
-        Just marker -> pure (Just (ProjectRoot directory marker))
-        Nothing ->
-          let parent = takeDirectory directory
-           in if parent == directory then pure Nothing else climb parent
+    ancestorsOf directory =
+      let parent = takeDirectory directory
+       in if parent == directory then [] else parent : ancestorsOf parent
 
-    markerIn directory = quietly Nothing $ do
+    markersIn directory = quietly ([], []) $ do
       entries <- listDirectory directory
-      pure $ case filter (`elem` entries) ["cabal.project", "stack.yaml"] of
-        (named : _) -> Just named
-        [] -> case filter (".cabal" `isSuffixOf`) entries of
-          (packageFile : _) -> Just packageFile
-          [] -> Nothing
+      pure
+        ( [ProjectRoot directory ProjectFile | "cabal.project" `elem` entries],
+          [ ProjectRoot directory (PackageFile named)
+          | named <- take 1 (filter (".cabal" `isSuffixOf`) entries)
+          ]
+        )

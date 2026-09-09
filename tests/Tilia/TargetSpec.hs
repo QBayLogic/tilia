@@ -12,7 +12,7 @@ import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeFileName, (</>))
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
-import Tilia.Project (ProjectRoot (..), findProjectRoot)
+import Tilia.Project (Marker (..), ProjectRoot (..), findProjectRoot)
 import Tilia.Target
 
 spec :: Spec
@@ -59,7 +59,7 @@ spec = do
       Nothing -> it "needs a project" $ pendingWith "no project above the working directory"
       Just here -> do
         it "is rooted at the cabal.project, not the .cabal file" $
-          prMarker here `shouldBe` "cabal.project"
+          prMarker here `shouldBe` ProjectFile
 
         it "finds the three components this package declares" $
           componentsOfTarget here Everything >>= \case
@@ -282,9 +282,10 @@ withProject files act =
       createDirectoryIfMissing True (directory </> parent path)
       T.writeFile (directory </> path) contents
     parent = reverse . drop 1 . dropWhile (/= '/') . reverse
-    marker fs = case [p | (p, _) <- fs, p == "cabal.project"] <> [p | (p, _) <- fs, ".cabal" `isSuffixOf` p] of
-      (found : _) -> found
-      [] -> "cabal.project"
+    marker fs
+      | any ((== "cabal.project") . fst) fs = ProjectFile
+      | (named : _) <- [p | (p, _) <- fs, ".cabal" `isSuffixOf` p] = PackageFile named
+      | otherwise = ProjectFile
 
 -- | A package whose library sweeps the whole directory and whose benchmark
 -- names a directory inside it, so that the two overlap.
