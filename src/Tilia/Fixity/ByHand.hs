@@ -28,7 +28,24 @@ byHandFixities =
           (".||.", RightAssoc, 1),
           ("===", NoAssoc, 4),
           ("=/=", NoAssoc, 4)
-        ]
+        ],
+      -- @network@ writes its system calls as @foreign import CALLCONV@,
+      -- and @CALLCONV@ is a macro out of @HsNetDef.h@ standing where the
+      -- calling convention goes. It has to be expanded for the line to be
+      -- Haskell at all, so no configuration of these five parses.
+      --
+      -- Not one of them declares a fixity, defines an operator, or gives a
+      -- constructor an operator name, in any version; every entry below is
+      -- therefore empty. What that buys is not their own operators but
+      -- everything downstream: @Network.Socket@ is perfectly readable and
+      -- was only ever refused because these are what it passes on, and
+      -- refusing it refused @wai@, @http-client@, @warp@ and in the end
+      -- every @servant@ module that reaches one of them.
+      entry "Network.Socket.If" [],
+      entry "Network.Socket.Internal" [],
+      entry "Network.Socket.Name" [],
+      entry "Network.Socket.Shutdown" [],
+      entry "Network.Socket.Syscall" []
     ]
   where
     entry name ops =
