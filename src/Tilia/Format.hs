@@ -19,7 +19,7 @@ import Control.Applicative ((<|>))
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
-import Data.Choice (Choice, isTrue)
+import Data.Choice (Choice, fromBool, isTrue)
 import Data.Foldable (traverse_)
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.Map.Strict (Map)
@@ -27,6 +27,7 @@ import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
+import GHC.LanguageExtensions.Type (Extension (ImplicitPrelude))
 import Tilia.Cpp
   ( CppError (..),
     blankCpp,
@@ -251,11 +252,18 @@ formatSource session path source = runExceptT $ do
       config = parserConfigFor package
       cpp = usesCpp (effectiveExtensions package source) source
       renderConfigFor extensions hsModule = do
-        scope <- liftIO (scopeFor resolver hsModule)
+        let implicitPrelude =
+              fromBool (Set.member ImplicitPrelude extensions)
+        scope <- liftIO (scopeFor resolver implicitPrelude hsModule)
         liftIO $ case sessionFixityNotes session of
           Nothing -> pure ()
           Just ref -> do
-            told <- fixityNotes (askFixities resolver) scope hsModule
+            told <-
+              fixityNotes
+                implicitPrelude
+                (askFixities resolver)
+                scope
+                hsModule
             atomicModifyIORef' ref (\m -> (Map.insertWith (\_ old -> old) path told m, ()))
         case unknownOperators scope hsModule of
           [] ->

@@ -1,8 +1,12 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 -- | The account a run gives of how it settled a module's operators.
 module Tilia.Fixity.DebugSpec (spec) where
 
+import Data.Choice (pattern Is)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -121,9 +125,10 @@ spec = do
 notesFor :: [(Text, Maybe [(Text, Fixity)])] -> Text -> IO [Text]
 notesFor world source =
   renderFixityNotes Plain . Map.singleton "M.hs"
-    <$> fixityNotes (pure . exportsOf) scope hsModule
+    <$> fixityNotes (Is #implicitPrelude) (pure . exportsOf) scope hsModule
   where
-    scope = resolveScope nothingKnown {knownFixities = exportsOf} hsModule
+    scope =
+      resolveScope (Is #implicitPrelude) nothingKnown {knownFixities = exportsOf} hsModule
     hsModule = pmModule parsed
     parsed = case parseModule defaultParserConfig "M.hs" ("module M where\n" <> source) of
       Left problem -> error (T.unpack (describeParseError problem))

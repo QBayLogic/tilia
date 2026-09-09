@@ -209,6 +209,7 @@ test-suite tests
     base >=4.14 && <5,
     base16-bytestring >=1 && <2,
     bytestring >=0.11 && <0.13,
+    choice >=0.2 && <0.3,
     containers >=0.5 && <0.9,
     cryptohash-sha256 >=0.11 && <0.12,
     directory ^>=1.3,

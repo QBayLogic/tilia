@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -9,6 +10,7 @@ module Tilia.Imports
 where
 
 import Data.Char (isAlphaNum)
+import Data.Choice (Choice, isTrue)
 import Data.Function (on, (&))
 import Data.List (groupBy, sortOn)
 import Data.Text (Text)
@@ -38,7 +40,7 @@ data PreludeImport
 -- thing.
 normalizeImports ::
   -- | Whether @ImplicitPrelude@ is on
-  Bool ->
+  Choice "implicitPrelude" ->
   -- | Source lines the block must not be sorted across
   [Int] ->
   -- | The module's comments
@@ -50,7 +52,7 @@ normalizeImports ::
 normalizeImports implicitPrelude barriers written imports =
   concatMap stretch (segmented (dividing imports barriers) tidied)
   where
-    prelude = if implicitPrelude then Refines else Provides
+    prelude = if isTrue implicitPrelude then Refines else Provides
     tidied = map (fmap (tidyList written)) imports
     stretch is = foldRuns (fuse written) [((identity prelude i, alone i), i) | i <- is]
     alone i

@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -46,6 +47,7 @@ import Data.Aeson (FromJSON (..), Value, eitherDecodeFileStrict, withObject, (.:
 import Data.ByteString qualified as BS
 import Data.ByteString.Base16 qualified as B16
 import Data.ByteString.Lazy qualified as BL
+import Data.Choice (Choice, fromBool)
 import Data.Foldable (traverse_)
 import Data.IORef
 import Data.List (isSuffixOf)
@@ -61,7 +63,7 @@ import Data.Text.Encoding qualified as T
 import GHC.Hs (HsModule)
 import GHC.Hs.Extension (GhcPs)
 import GHC.IO.Handle (hDuplicate)
-import GHC.LanguageExtensions.Type (Extension)
+import GHC.LanguageExtensions.Type (Extension (ImplicitPrelude))
 import System.Directory
   ( doesFileExist,
     getHomeDirectory,
@@ -708,24 +710,25 @@ exportNamesOfModule
       store package answer = case wkCache of
         Nothing -> pure ()
         Just c -> storeExportNames c package modName answer
-
-      -- Across every configuration the preprocessor allows, since a name
-      -- exported under any of them is one the module can supply.
       namesIn text = case parsedLeaves =<< text of
         Nothing -> pure Nothing
         Just modules ->
-          fmap Set.unions . sequence
-            <$> traverse
-              (exportNamesWithReexports (wkReachExports visiting') (wkReachChildren visiting') modName)
-              modules
+          fmap Set.unions . sequence <$> traverse readOne modules
+      readOne (implicitPrelude, hsModule) =
+        exportNamesWithReexports
+          implicitPrelude
+          (wkReachExports visiting')
+          (wkReachChildren visiting')
+          modName
+          hsModule
       visiting' = Set.insert modName visiting
       parsedLeaves text = do
         leaves <- either (const Nothing) Just (branchLeaves text)
         traverse parsed leaves
-      parsed =
-        fmap pmModule
-          . either (const Nothing) Just
-          . parseModule defaultParserConfig (T.unpack modName)
+      parsed leaf =
+        (,) (hasImplicitPrelude [] leaf) . pmModule
+          <$> whatParsed (parseModule defaultParserConfig named leaf)
+      named = T.unpack modName
 
 -- | What a module keeps under each of its names, so that a @T(..)@ in an
 -- import list can be told what it brings in.
@@ -782,15 +785,21 @@ childrenOfModule
           Nothing -> pure Map.empty
           Just modules ->
             Map.unionsWith Set.union
-              <$> traverse (childrenWithReexports (wkReachChildren visiting') modName) modules
+              <$> traverse readOne modules
+      readOne (implicitPrelude, hsModule) =
+        childrenWithReexports
+          implicitPrelude
+          (wkReachChildren visiting')
+          modName
+          hsModule
       visiting' = Set.insert modName visiting
       parsedLeaves extensions text = do
         leaves <- either (const Nothing) Just (branchLeaves text)
         traverse (parsed extensions) leaves
       parsed extensions leaf =
-        fmap pmModule
-          . either (const Nothing) Just
-          $ parseModule (configFor extensions leaf) (T.unpack modName) leaf
+        (,) (hasImplicitPrelude extensions leaf) . pmModule
+          <$> whatParsed (parseModule (configFor extensions leaf) named leaf)
+      named = T.unpack modName
 
 -- | Work out what a module can see, using a resolver to reach its imports.
 --
@@ -802,12 +811,15 @@ childrenOfModule
 scopeFor ::
   -- | What can be asked about the modules it imports
   Resolver ->
+  -- | Whether @ImplicitPrelude@ is on, which the module's own pragmas
+  -- and its package's @default-extensions@ decide between them
+  Choice "implicitPrelude" ->
   -- | The module whose scope is wanted, already parsed
   HsModule GhcPs ->
   -- | Everything that module can see, and what it could not find out
   IO Scope
-scopeFor resolver hsModule = do
-  let imports = moduleImports hsModule
+scopeFor resolver implicitPrelude hsModule = do
+  let imports = moduleImports implicitPrelude hsModule
   answers <- traverse (\m -> (m,) <$> askFixities resolver m) (map importModule imports)
   let table = Map.fromList answers
       unread = [m | (m, Nothing) <- answers]
@@ -819,6 +831,7 @@ scopeFor resolver hsModule = do
         (Set.toList (Set.fromList (map importModule (filter expands imports))))
   pure $
     resolveScope
+      implicitPrelude
       Known
         { knownFixities = \m -> Map.findWithDefault Nothing m table,
           knownChildren = \m -> Map.findWithDefault Map.empty m kept,
@@ -1182,13 +1195,21 @@ fromText extensions reach reachChildren visiting source modName =
   case traverse parsed =<< configurations of
     Nothing -> pure Nothing
     Just modules ->
-      agreeing <$> traverse (withReexports reach reachChildren visiting modName) modules
+      agreeing <$> traverse readOne modules
   where
     configurations = either (const Nothing) Just (branchLeaves source)
     parsed leaf =
-      fmap pmModule
-        . either (const Nothing) Just
-        $ parseModule (configFor extensions leaf) (T.unpack modName) leaf
+      (,) (hasImplicitPrelude extensions leaf) . pmModule
+        <$> whatParsed (parseModule (configFor extensions leaf) named leaf)
+    named = T.unpack modName
+    readOne (implicitPrelude, hsModule) =
+      withReexports
+        implicitPrelude
+        reach
+        reachChildren
+        visiting
+        modName
+        hsModule
 
 -- | One answer from every configuration that could be read, if they agree.
 --
@@ -1263,6 +1284,8 @@ readFileText path = quietly Nothing $ do
 -- its own for it, so the declaration is chased through the export list into
 -- whichever module the name came from.
 withReexports ::
+  -- | Whether @ImplicitPrelude@ is on in the module being read.
+  Choice "implicitPrelude" ->
   -- | How to reach another module, for names this one only passes on.
   (Text -> IO (Maybe (Fixities))) ->
   -- | How to reach another module for what its names carry with them,
@@ -1279,11 +1302,11 @@ withReexports ::
   -- | What it declares together with what it re-exports, or 'Nothing' if a
   -- module it passes names on from could not be read.
   IO (Maybe (Fixities))
-withReexports reach reachChildren visiting modName hsModule =
+withReexports implicitPrelude reach reachChildren visiting modName hsModule =
   case moduleExports hsModule of
     Nothing -> pure (Just own)
     Just items -> do
-      carried <- carriedNames reachChildren hsModule items
+      carried <- carriedNames implicitPrelude reachChildren hsModule items
       let wanted = wantedNames items <> fromCarried carried
       visible <-
         if null wanted
@@ -1292,8 +1315,10 @@ withReexports reach reachChildren visiting modName hsModule =
             sequence
               <$> traverse
                 (\i -> fmap ((,) i) <$> fromModule (importModule i))
-                (moduleImports hsModule)
-      wholeModules <- sequence <$> traverse fromModule (wantedModules modName hsModule items)
+                (moduleImports implicitPrelude hsModule)
+      let handedOnWhole =
+            wantedModules implicitPrelude modName hsModule items
+      wholeModules <- sequence <$> traverse fromModule handedOnWhole
       pure $ do
         seen <- visible
         whole <- wholeModules
@@ -1329,6 +1354,8 @@ withReexports reach reachChildren visiting modName hsModule =
 
 -- | What each name a module's export list hands on carries with it.
 childrenWithReexports ::
+  -- | Whether @ImplicitPrelude@ is on in the module being read.
+  Choice "implicitPrelude" ->
   -- | How to reach another module for what its names carry
   (Text -> IO (Map OpName (Set OpName))) ->
   -- | The name this module was looked up under
@@ -1336,12 +1363,14 @@ childrenWithReexports ::
   -- | The module, already parsed
   HsModule GhcPs ->
   IO (Map OpName (Set OpName))
-childrenWithReexports reachChildren modName hsModule =
+childrenWithReexports implicitPrelude reachChildren modName hsModule =
   case moduleExports hsModule of
     Nothing -> pure (moduleChildren hsModule)
     Just items -> do
-      carried <- carriedNames reachChildren hsModule items
-      wholes <- traverse reachChildren (wantedModules modName hsModule items)
+      carried <- carriedNames implicitPrelude reachChildren hsModule items
+      let handedOnWhole =
+            wantedModules implicitPrelude modName hsModule items
+      wholes <- traverse reachChildren handedOnWhole
       pure . Map.unionsWith Set.union $
         moduleChildren hsModule
           : Map.fromListWith Set.union [(parent, ops) | ((_, parent), Just ops) <- carried]
@@ -1358,6 +1387,8 @@ childrenWithReexports reachChildren modName hsModule =
 -- well carry. Everything or nothing: this answer is only ever used to rule
 -- a module out.
 exportNamesWithReexports ::
+  -- | Whether @ImplicitPrelude@ is on in the module being read.
+  Choice "implicitPrelude" ->
   -- | How to reach another module for what its export list names
   (Text -> IO (Maybe (Set OpName))) ->
   -- | How to reach another module for what its names carry
@@ -1367,41 +1398,53 @@ exportNamesWithReexports ::
   -- | The module, already parsed
   HsModule GhcPs ->
   IO (Maybe (Set OpName))
-exportNamesWithReexports reachNames reachChildren modName hsModule =
-  case moduleExports hsModule of
-    Nothing -> pure (Just (Set.fromList [op | (_, op) <- Map.keys (declaredFixities hsModule)]))
-    Just items -> do
-      carried <- carriedNames reachChildren hsModule items
-      wholes <- traverse reachNames (wantedModules modName hsModule items)
-      pure $ do
-        fromWholes <- sequence wholes
-        fromCarried <-
-          traverse (\((_, parent), kids) -> Set.insert parent <$> kids) carried
-        pure (Set.unions (named items : declaredHere items : fromCarried <> fromWholes))
-  where
-    declared = declaredChildren hsModule
-    named items = Set.fromList [op | ExportName _ op <- items]
-    declaredHere items =
-      Set.unions
-        [ Set.insert parent kids
-        | ExportAll _ parent <- items,
-          Just kids <- [Map.lookup parent declared]
-        ]
+exportNamesWithReexports
+  implicitPrelude
+  reachNames
+  reachChildren
+  modName
+  hsModule =
+    case moduleExports hsModule of
+      Nothing -> pure (Just (Set.fromList [op | (_, op) <- Map.keys (declaredFixities hsModule)]))
+      Just items -> do
+        carried <- carriedNames implicitPrelude reachChildren hsModule items
+        let handedOnWhole =
+              wantedModules implicitPrelude modName hsModule items
+        wholes <- traverse reachNames handedOnWhole
+        pure $ do
+          fromWholes <- sequence wholes
+          fromCarried <-
+            traverse (\((_, parent), kids) -> Set.insert parent <$> kids) carried
+          pure (Set.unions (named items : declaredHere items : fromCarried <> fromWholes))
+    where
+      declared = declaredChildren hsModule
+      named items = Set.fromList [op | ExportName _ op <- items]
+      declaredHere items =
+        Set.unions
+          [ Set.insert parent kids
+          | ExportAll _ parent <- items,
+            Just kids <- [Map.lookup parent declared]
+          ]
 
 -- | What the types a module hands on but does not declare carry with them,
 -- asked of the modules they could have come from.
 carriedNames ::
+  -- | Whether @ImplicitPrelude@ is on in the module being read.
+  Choice "implicitPrelude" ->
+  -- | How to reach another module for what its export list names
   (Text -> IO (Map OpName (Set OpName))) ->
+  -- | The module, already parsed
   HsModule GhcPs ->
+  -- | Export items
   [ExportItem] ->
   -- | For each handed-on name, what it carries, or 'Nothing' where no
   -- module that could have supplied it had anything to say about it.
   IO [((Maybe Text, OpName), Maybe (Set OpName))]
-carriedNames reachChildren hsModule items =
+carriedNames implicitPrelude reachChildren hsModule items =
   traverse (\(qualifier, parent) -> ((qualifier, parent),) <$> carriedBy qualifier parent) handedOn
   where
     declared = declaredChildren hsModule
-    imports = moduleImports hsModule
+    imports = moduleImports implicitPrelude hsModule
     handedOn =
       [ (qualifier, parent)
       | ExportAll qualifier parent <- items,
@@ -1426,21 +1469,35 @@ canSupply qualifier op i =
       Just q -> importAlias i == q
 
 -- | The modules a @module M@ export hands on whole, by their own names.
-wantedModules :: Text -> HsModule GhcPs -> [ExportItem] -> [Text]
-wantedModules modName hsModule items =
+wantedModules ::
+  Choice "implicitPrelude" ->
+  Text ->
+  HsModule GhcPs ->
+  [ExportItem] ->
+  [Text]
+wantedModules implicitPrelude modName hsModule items =
   Set.toList . Set.fromList $
     concat [under m | ExportModule m <- items, not (isSelf m)]
   where
     under m = case [importModule i | i <- imports, importAlias i == m] of
       [] -> [m]
       aliased -> aliased
-    imports = moduleImports hsModule
+    imports = moduleImports implicitPrelude hsModule
     isSelf m = Just m == moduleName hsModule || m == modName
 
 -- | What to parse a module with: what its package puts in force, and then
 -- whatever its own pragmas say about that.
 configFor :: [Extension] -> Text -> ParserConfig
 configFor extensions source = parserConfigFor (effectiveExtensions extensions source)
+
+-- | What a parse produced, where only having it or not matters.
+whatParsed :: Either e a -> Maybe a
+whatParsed = either (const Nothing) Just
+
+-- | Does this module see the Prelude without importing it?
+hasImplicitPrelude :: [Extension] -> Text -> Choice "implicitPrelude"
+hasImplicitPrelude extensions source =
+  fromBool (ImplicitPrelude `elem` effectiveExtensions extensions source)
 
 -- | Find a module inside a tarball and decode it.
 readModule :: FilePath -> Text -> IO (Maybe Text)

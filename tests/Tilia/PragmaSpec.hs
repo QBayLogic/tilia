@@ -37,8 +37,10 @@ spec = do
     it "starts from what is on by default" $
       effectiveExtensions [] "module M where\n" `shouldBe` [ImplicitPrelude]
     it "keeps what the package puts in force" $
-      effectiveExtensions [GADTs] "module M where\n"
+      effectiveExtensions [ImplicitPrelude, GADTs] "module M where\n"
         `shouldBe` [ImplicitPrelude, GADTs]
+    it "leaves the Prelude off where the package's own set does" $
+      effectiveExtensions [GADTs] "module M where\n" `shouldBe` [GADTs]
     it "reads one extension" $
       effectiveExtensions [] "{-# LANGUAGE BangPatterns #-}\nmodule M where\n"
         `shouldBe` [ImplicitPrelude, BangPatterns]
@@ -57,8 +59,11 @@ spec = do
     it "treats a No-prefix as turning one off" $
       effectiveExtensions [] "{-# LANGUAGE NoImplicitPrelude #-}\n" `shouldBe` []
     it "lets a module refuse what its package put in force" $
-      effectiveExtensions [GADTs] "{-# LANGUAGE NoGADTs #-}\n"
+      effectiveExtensions [ImplicitPrelude, GADTs] "{-# LANGUAGE NoGADTs #-}\n"
         `shouldBe` [ImplicitPrelude]
+    it "lets a module take back a Prelude its package turned off" $
+      effectiveExtensions [GADTs] "{-# LANGUAGE ImplicitPrelude #-}\n"
+        `shouldBe` [GADTs, ImplicitPrelude]
     it "does not repeat an extension named twice" $
       effectiveExtensions [] "{-# LANGUAGE GADTs #-}\n{-# LANGUAGE GADTs #-}\n"
         `shouldBe` [ImplicitPrelude, GADTs]

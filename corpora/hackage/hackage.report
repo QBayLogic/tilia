@@ -24,160 +24,161 @@ Agda-2.8.0/src/full/Agda/TypeChecking/Conversion.hs
     --- input
     +++ output
     @@ -1,137 +1,131 @@
-      {-# LANGUAGE CPP #-}
-      {-# LANGUAGE NondecreasingIndentation #-}
+     {-# LANGUAGE CPP #-}
+     {-# LANGUAGE NondecreasingIndentation #-}
     -
-      #if __GLASGOW_HASKELL__ >= 810
-      {-# OPTIONS_GHC -fmax-pmcheck-models=390 #-} -- Andreas, 2023-05-12, limit determined by binary search
-      #endif
-    
-      module Agda.TypeChecking.Conversion where
-    
-    - import Control.Arrow (second)
-    - import Control.Monad.Except ( MonadError(..) )
+     #if __GLASGOW_HASKELL__ >= 810
+     {-# OPTIONS_GHC -fmax-pmcheck-models=390 #-} -- Andreas, 2023-05-12, limit determined by binary search
+     #endif
+     
+     module Agda.TypeChecking.Conversion where
+     
+    -import Control.Arrow (second)
+    -import Control.Monad.Except ( MonadError(..) )
     -
-    - import Data.Function (on)
-    - import Data.Semigroup ((<>))
-    - import Data.IntMap (IntMap)
+    -import Data.Function (on)
+    -import Data.Semigroup ((<>))
+    -import Data.IntMap (IntMap)
     -
-    - import qualified Data.List   as List
-    - import qualified Data.IntMap as IntMap
-    - import qualified Data.IntSet as IntSet
-    - import qualified Data.Set    as Set
+    -import qualified Data.List   as List
+    -import qualified Data.IntMap as IntMap
+    -import qualified Data.IntSet as IntSet
+    -import qualified Data.Set    as Set
     -
-    + import Agda.Interaction.Options
-      import Agda.Syntax.Common
-    + import Agda.Syntax.Common.Pretty (prettyShow)
-      import Agda.Syntax.Internal
-      import Agda.Syntax.Internal.MetaVars
-      import Agda.Syntax.Translation.InternalToAbstract (reify)
+    +import Agda.Interaction.Options
+     import Agda.Syntax.Common
+    +import Agda.Syntax.Common.Pretty (prettyShow)
+     import Agda.Syntax.Internal
+     import Agda.Syntax.Internal.MetaVars
+     import Agda.Syntax.Translation.InternalToAbstract (reify)
     -
-    - import Agda.TypeChecking.Monad
-    - import Agda.TypeChecking.MetaVars
-    - import Agda.TypeChecking.MetaVars.Occurs (killArgs,PruneResult(..),rigidVarsNotContainedIn)
-    - import Agda.TypeChecking.Names
-    - import Agda.TypeChecking.Reduce
-    - import Agda.TypeChecking.Substitute
-    - import qualified Agda.TypeChecking.SyntacticEquality as SynEq
-    - import Agda.TypeChecking.Telescope
-      import Agda.TypeChecking.Constraints
-      import Agda.TypeChecking.Conversion.Pure (pureCompareAs, runPureConversion)
+    -import Agda.TypeChecking.Monad
+    -import Agda.TypeChecking.MetaVars
+    -import Agda.TypeChecking.MetaVars.Occurs (killArgs,PruneResult(..),rigidVarsNotContainedIn)
+    -import Agda.TypeChecking.Names
+    -import Agda.TypeChecking.Reduce
+    -import Agda.TypeChecking.Substitute
+    -import qualified Agda.TypeChecking.SyntacticEquality as SynEq
+    -import Agda.TypeChecking.Telescope
+     import Agda.TypeChecking.Constraints
+     import Agda.TypeChecking.Conversion.Pure (pureCompareAs, runPureConversion)
+    +import Agda.TypeChecking.Da
 
 dlist-1.0/Data/DList.hs
     a configuration of the input does not parse: 54:13: parse error on input `Nil'
     --- input
     +++ output
     @@ -1,6 +1,5 @@
-      {- ORMOLU_DISABLE -}
-      {-# LANGUAGE CPP #-}
+     {- ORMOLU_DISABLE -}
+     {-# LANGUAGE CPP #-}
     -
-      -- CPP: GHC >= 7.8 && <= 8 for 'pattern' required in the export list
-      #if __GLASGOW_HASKELL__ >= 708 && __GLASGOW_HASKELL__ < 800
-      {-# LANGUAGE PatternSynonyms #-}
+     -- CPP: GHC >= 7.8 && <= 8 for 'pattern' required in the export list
+     #if __GLASGOW_HASKELL__ >= 708 && __GLASGOW_HASKELL__ < 800
+     {-# LANGUAGE PatternSynonyms #-}
     @@ -41,23 +40,33 @@
-    
-      module Data.DList
-        ( -- * Difference List Type
+     
+     module Data.DList
+       ( -- * Difference List Type
     -
-    - -- CPP: GHC >= 8 for pattern synonyms allowed in the constructor
-      #if __GLASGOW_HASKELL__ >= 800
+    --- CPP: GHC >= 8 for pattern synonyms allowed in the constructor
+     #if __GLASGOW_HASKELL__ >= 800
     +
-    +     -- CPP: GHC >= 8 for pattern synonyms allowed in the constructor
-          DList (Nil, Cons),
+    +    -- CPP: GHC >= 8 for pattern synonyms allowed in the constructor
+         DList (Nil, Cons),
     +
-    +     -- * Conversion
-      #else
+    +    -- * Conversion
+     #else
     +
-    +     -- CPP: GHC >= 8 for pattern synonyms allowed in the constructor
-          DList,
-    
-    - -- CPP: GHC >= 7.8 && <= 8 for 'pattern' required in the export list
-      #if __GLASGOW_HASKELL__ >= 708
+    +    -- CPP: GHC >= 8 for pattern synonyms allowed in the constructor
+         DList,
+     
+    --- CPP: GHC >= 7.8 && <= 8 for 'pattern' required in the export list
+     #if __GLASGOW_HASKELL__ >= 708
     +
-    +     -- CPP: GHC >= 7.8 && <= 8 for 'pattern' required in the export list
+    +    -- CPP: GHC >= 7.8 && <= 8 for 'pattern' required in the export list
     +
-          -- ** Bundled Patterns
-          pattern Nil,
-          pattern Cons,
-    - #endif
-    
-    - #endif
-    +     -- * Conversion
-    + #else
-    
-    +     -- CPP: GHC >= 7.8 && <= 8 for 'pattern' required in the export list
+         -- ** Bundled Patterns
+         pattern Nil,
+         pattern Cons,
+    -#endif
+     
+    -#endif
+    +    -- * Conversion
+    +#else
+     
+    +    -- CPP: GHC >= 7.8 && <= 8 for 'pattern' required in the export list
     +
-          -- * Conversion
-    + #endif
-    + #endif
-          fromList,
-          toList,
-          apply,
+         -- * Conversion
+    +#endif
+    +#endif
+         fromList,
+         toList,
+         apply,
 
 hashable-1.5.1.0/tests/Regress.hs
     formatting changed how many configurations there are, from 6 to 8
     --- input
     +++ output
     @@ -4,126 +4,190 @@
-    
-      module Regress (regressions) where
-    
-    - import Test.Tasty (TestTree, testGroup)
-      import Control.Monad (when)
-    - import Test.Tasty.HUnit (testCase, Assertion, assertFailure, (@?=))
-    - import Test.Tasty.QuickCheck (testProperty)
-    - import GHC.Generics (Generic)
-    - import Data.List (nub)
-    - import Data.Fixed (Pico)
-    - import Data.Text (Text)
-      import Data.ByteString (ByteString)
+     
+     module Regress (regressions) where
+     
+    -import Test.Tasty (TestTree, testGroup)
+     import Control.Monad (when)
+    -import Test.Tasty.HUnit (testCase, Assertion, assertFailure, (@?=))
+    -import Test.Tasty.QuickCheck (testProperty)
+    -import GHC.Generics (Generic)
+    -import Data.List (nub)
+    -import Data.Fixed (Pico)
+    -import Data.Text (Text)
+     import Data.ByteString (ByteString)
     -
-    - import qualified Data.Text.Lazy as TL
-      import qualified Data.ByteString.Char8 as BS8
-      import qualified Data.ByteString.Lazy as BSL
-      import qualified Data.ByteString.Lazy.Char8 as BSL8
+    -import qualified Data.Text.Lazy as TL
+     import qualified Data.ByteString.Char8 as BS8
+     import qualified Data.ByteString.Lazy as BSL
+     import qualified Data.ByteString.Lazy.Char8 as BSL8
     -
-    + import Data.Fixed (Pico)
-    + import Data.List (nub)
-    + import Data.Text (Text)
-    + import qualified Data.Text.Lazy as TL
-    + import GHC.Generics (Generic)
-    + import Test.Tasty (TestTree, testGroup)
-    + import Test.Tasty.HUnit (Assertion, assertFailure, testCase, (@?=))
-    + import Test.Tasty.QuickCheck (testProperty)
-      #ifdef HAVE_MMAP
-      import qualified Regress.Mmap as Mmap
-      #endif
+    +import Data.Fixed (Pico)
+    +import Data.List (nub)
+    +import Data.Text (Text)
+    +import qualified Data.Text.Lazy as TL
+    +import GHC.Generics (Generic)
+    +import Test.Tasty (TestTree, testGroup)
+    +import Test.Tasty.HUnit (Assertion, assertFailure, testCase, (@?=))
+    +import Test.Tasty.QuickCheck (testProperty)
+     #ifdef HAVE_MMAP
+     import qualified Regress.Mmap as Mmap
+     #endif
     -
-      import Data.Hashable
-    
-      #include "MachDeps.h"
-    
-    - assertInequal :: Eq a => String -> a -> a -> Assertion
-    + assertInequal :: (Eq a) => String -> a -> a -> Assertion
-      assertInequal msg x y
-    -     | x == y    = assertFailure msg
-    -     | otherwise = return ()
-    +   | x == y = assertFailure msg
-    +   | otherwise = return ()
-    
-      regressions :: [TestTree]
-    - regressions = [] ++
-    + regressions =
-    +   []
-      #ifdef HAVE_MMAP
-    -     Mmap.regressions ++
-    -     [ testCase "Fixed" $ do
-    -         (hash (1 :: Pico) == hash (2 :: Pico)) @?= False
-    -     ] ++
-    - #endif
-    -     [ testGroup "Generic: sum of nullary constructors"
-    -         [ testCase "0" $ nullaryCase 0 S0
-    -         , testCase "1" $ nullaryCase 1 S1
-    -         , testCase "2" $ nullaryCase 2 S2
-    -         , testCase "3" $ nullaryCase 3 S3
-    -         , testCase "4" $ nullaryCase 4 S4
-    -         ]
+     import Data.Hashable
+     
+     #include "MachDeps.h"
+     
+    -assertInequal :: Eq a => String -> a -> a -> Assertion
+    +assertInequal :: (Eq a) => String -> a -> a -> Assertion
+     assertInequal msg x y
+    -    | x == y    = assertFailure msg
+    -    | otherwise = return ()
+    +  | x == y = assertFailure msg
+    +  | otherwise = return ()
+     
+     regressions :: [TestTree]
+    -regressions = [] ++
+    +regressions =
+    +  []
+     #ifdef HAVE_MMAP
+    -    Mmap.regressions ++
+    -    [ testCase "Fixed" $ do
+    -        (hash (1 :: Pico) == hash (2 :: Pico)) @?= False
+    -    ] ++
+    -#endif
+    -    [ testGroup "Generic: sum of nullary constructors"
+    -        [ testCase "0" $ nullaryCase 0 S0
+    -        , testCase "1" $ nullaryCase 1 S1
+    -        , testCase "2" $ nullaryCase 2 S2
+    -        , testCase "3" $ nullaryCase 3 S3
+    -        , testCase "4" $ nullaryCase 4 S4
+    -        ]
     … and 214 more lines
 
 hspec-core-2.11.17/src/Test/Hspec/Core/Compat.hs
@@ -185,49 +186,49 @@ hspec-core-2.11.17/src/Test/Hspec/Core/Compat.hs
     --- first pass
     +++ second pass
     @@ -78,17 +78,21 @@
-      #endif
-      import Control.Concurrent
-      import Data.Bool as Imports (bool)
-    + #ifndef __MHS__
-    + import GHC.IO.Exception
-    +   ( IOErrorType (..),
-    +     ioe_type,
-    +   )
-    + #endif
-      import System.Environment as Imports (lookupEnv)
-    - import Text.Read as Imports (readMaybe)
-    - import
-      #ifndef __MHS__
-    -   GHC.IO.Exception
-      #else
-    -   System.IO.Error
-    - #endif
-    + import System.IO.Error
-        ( IOErrorType (..),
-          ioe_type,
-        )
-    + #endif
-    + import Text.Read as Imports (readMaybe)
-    
-      isUnsupportedOperation :: IOError -> Bool
-      isUnsupportedOperation e = ioe_type e == UnsupportedOperation
+     #endif
+     import Control.Concurrent
+     import Data.Bool as Imports (bool)
+    +#ifndef __MHS__
+    +import GHC.IO.Exception
+    +  ( IOErrorType (..),
+    +    ioe_type,
+    +  )
+    +#endif
+     import System.Environment as Imports (lookupEnv)
+    -import Text.Read as Imports (readMaybe)
+    -import
+     #ifndef __MHS__
+    -  GHC.IO.Exception
+     #else
+    -  System.IO.Error
+    -#endif
+    +import System.IO.Error
+       ( IOErrorType (..),
+         ioe_type,
+       )
+    +#endif
+    +import Text.Read as Imports (readMaybe)
+     
+     isUnsupportedOperation :: IOError -> Bool
+     isUnsupportedOperation e = ioe_type e == UnsupportedOperation
 
 idris-1.3.4/src/Idris/AbsSyntax.hs
     formatting is non-idempotent
     --- first pass
     +++ second pass
     @@ -1517,9 +1517,8 @@
-          mkShadow (NS x s) = NS (mkShadow x) s
-    
-          en ::
-    -       Int -- \^ The quotation level - only transform terms that are used, not terms
-    -           -- that are merely mentioned.
-    -       ->
-    +       Int -> -- \^ The quotation level - only transform terms that are used, not terms
-    +       -- that are merely mentioned.
-            PTerm ->
-            PTerm
-          en 0 (PLam fc n nfc t s)
+         mkShadow (NS x s) = NS (mkShadow x) s
+     
+         en ::
+    -      Int -- \^ The quotation level - only transform terms that are used, not terms
+    -          -- that are merely mentioned.
+    -      ->
+    +      Int -> -- \^ The quotation level - only transform terms that are used, not terms
+    +      -- that are merely mentioned.
+           PTerm ->
+           PTerm
+         en 0 (PLam fc n nfc t s)
 
 leksah-0.16.2.2/src/IDE/Pane/PackageEditor.hs
     the output cannot be formatted again: too many configurations to format
@@ -237,122 +238,124 @@ lens-5.3.6/src/Control/Exception/Lens.hs
     --- input
     +++ output
     @@ -1,19 +1,19 @@
-      {-# LANGUAGE CPP #-}
-    - {-# LANGUAGE Rank2Types #-}
-      {-# LANGUAGE FlexibleInstances #-}
-    - {-# LANGUAGE ScopedTypeVariables #-}
-      {-# LANGUAGE MultiParamTypeClasses #-}
-    - {-# LANGUAGE NoMonomorphismRestriction #-}
-      {-# LANGUAGE PatternSynonyms #-}
-    - {-# LANGUAGE ViewPatterns #-}
+     {-# LANGUAGE CPP #-}
+    -{-# LANGUAGE Rank2Types #-}
+     {-# LANGUAGE FlexibleInstances #-}
+    -{-# LANGUAGE ScopedTypeVariables #-}
+     {-# LANGUAGE MultiParamTypeClasses #-}
+    -{-# LANGUAGE NoMonomorphismRestriction #-}
+     {-# LANGUAGE PatternSynonyms #-}
+    -{-# LANGUAGE ViewPatterns #-}
     -
-    + {-# LANGUAGE Rank2Types #-}
-    + {-# LANGUAGE ScopedTypeVariables #-}
-      #ifdef TRUSTWORTHY
-      {-# LANGUAGE Trustworthy #-}
-      #endif
-    + {-# LANGUAGE ViewPatterns #-}
-    + {-# LANGUAGE NoMonomorphismRestriction #-}
-    
-      #include "lens-common.h"
-    
-      -----------------------------------------------------------------------------
+    +{-# LANGUAGE Rank2Types #-}
+    +{-# LANGUAGE ScopedTypeVariables #-}
+     #ifdef TRUSTWORTHY
+     {-# LANGUAGE Trustworthy #-}
+     #endif
+    +{-# LANGUAGE ViewPatterns #-}
+    +{-# LANGUAGE NoMonomorphismRestriction #-}
+     
+     #include "lens-common.h"
+     
+     -----------------------------------------------------------------------------
     +
-      -- |
-      -- Module      :  Control.Exception.Lens
-      -- Copyright   :  (C) 2012-16 Edward Kmett
+     -- |
+     -- Module      :  Control.Exception.Lens
+     -- Copyright   :  (C) 2012-16 Edward Kmett
     @@ -31,139 +31,177 @@
-      -- The combinators in this module have been generalized to work with
-      -- 'MonadCatch' instead of just 'Prelude.IO'. This enables them to be used
-      -- more easily in 'Monad' transformer stacks.
+     -- The combinators in this module have been generalized to work with
+     -- 'MonadCatch' instead of just 'Prelude.IO'. This enables them to be used
+     -- more easily in 'Monad' transformer stacks.
     +
-      ----------------------------------------------------------------------------
-      module Control.Exception.Lens
-    -   (
-    -   -- * Handling
-    -     catching, catching_
-    -   , handling, handling_
-    -   -- * Trying
-    -   , trying, trying_
-    -   -- * Throwing
-    -   , throwing
-    -   , throwing_
-    -   , throwingM
-    -   , throwingTo
-    -   -- * Mapping
-    -   , mappedException, mappedException'
-    -   -- * Exceptions
-    -   , exception
-    -   , pattern Exception
-    -   -- * Exception Handlers
-    -   , Handleable(..)
-    -   -- ** IOExceptions
-    -   , AsIOException(.
+     ----------------------------------------------------------------------------
+     module Control.Exception.Lens
+    -  (
+    -  -- * Handling
+    -    catching, catching_
+    -  , handling, handling_
+    -  -- * Trying
+    -  , trying, trying_
+    -  -- * Throwing
+    -  , throwing
+    -  , throwing_
+    -  , throwingM
+    -  , throwingTo
+    -  -- * Mapping
+    -  , mappedException, mappedException'
+    -  -- * Exceptions
+    -  , exception
+    -  , pattern Exception
+    -  -- * Exception Handlers
+    -  , Handleable(..)
+    -  -- ** IOExceptions
+    -  , AsIOException(..)
+    -  , pattern IOException_
+    -  -- ** Arith
 
 lens-5.3.6/src/Control/Lens/Internal/FieldTH.hs
     formatting changed how many configurations there are, from 6 to 8
     --- input
     +++ output
     @@ -1,19 +1,24 @@
-      {-# LANGUAGE CPP #-}
-      {-# LANGUAGE PatternGuards #-}
-    + #ifdef TRUSTWORTHY
-    + #if MIN_VERSION_template_haskell(2,12,0)
-    + {-# LANGUAGE Safe #-}
-    + #endif
-    + #endif
-      #if __GLASGOW_HASKELL__ >= 800
-      {-# LANGUAGE TemplateHaskellQuotes #-}
-      #else
-      {-# LANGUAGE TemplateHaskell #-}
-      #endif
-      #ifdef TRUSTWORTHY
-    - # if MIN_VERSION_template_haskell(2,12,0)
-    - {-# LANGUAGE Safe #-}
-    - # else
-    + #if MIN_VERSION_template_haskell(2,12,0)
-    + #else
-      {-# LANGUAGE Trustworthy #-}
-    - # endif
-      #endif
-    + #endif
-    
-      -----------------------------------------------------------------------------
+     {-# LANGUAGE CPP #-}
+     {-# LANGUAGE PatternGuards #-}
+    +#ifdef TRUSTWORTHY
+    +#if MIN_VERSION_template_haskell(2,12,0)
+    +{-# LANGUAGE Safe #-}
+    +#endif
+    +#endif
+     #if __GLASGOW_HASKELL__ >= 800
+     {-# LANGUAGE TemplateHaskellQuotes #-}
+     #else
+     {-# LANGUAGE TemplateHaskell #-}
+     #endif
+     #ifdef TRUSTWORTHY
+    -# if MIN_VERSION_template_haskell(2,12,0)
+    -{-# LANGUAGE Safe #-}
+    -# else
+    +#if MIN_VERSION_template_haskell(2,12,0)
+    +#else
+     {-# LANGUAGE Trustworthy #-}
+    -# endif
+     #endif
+    +#endif
+     
+     -----------------------------------------------------------------------------
     +
-      -- |
-      -- Module      :  Control.Lens.Internal.FieldTH
-      -- Copyright   :  (C) 2014-2016 Edward Kmett, (C) 2014 Eric Mertens
+     -- |
+     -- Module      :  Control.Lens.Internal.FieldTH
+     -- Copyright   :  (C) 2014-2016 Edward Kmett, (C) 2014 Eric Mertens
     @@ -22,55 +27,55 @@
-      -- Stability   :  experimental
-      -- Portability :  non-portable
-      --
+     -- Stability   :  experimental
+     -- Portability :  non-portable
+     --
     +
-      -----------------------------------------------------------------------------
-    
-      module Control.Lens.Internal.FieldTH
-    -   ( LensRules(..)
-    -   , FieldNamer
-    -   , DefName(..)
-    -   , ClassyNamer
-    -   , makeFieldOptics
-    -   , makeFieldOpticsForDec
-    -   , makeFieldOpticsForDec'
-    -   , HasFieldClasses
-    -   ) where
+     -----------------------------------------------------------------------------
+     
+     module Control.Lens.Internal.FieldTH
+    -  ( LensRules(..)
+    -  , FieldNamer
+    -  , DefName(..)
+    -  , ClassyNamer
+    -  , makeFieldOptics
+    -  , makeFieldOpticsForDec
+    -  , makeFieldOpticsForDec'
+    -  , HasFieldClasses
+    -  ) where
     -
-    - import Prelude ()
-    +   ( LensRules (..),
-    +     FieldNamer,
-    +     DefName (..),
-    +     ClassyNamer,
-    +     makeFieldOptics,
-    +     makeFieldOpticsForDec,
-    +     makeFieldOpticsForDec',
-    +     HasFieldClasses,
-    +   )
-    + where
-    
-      import Control.Lens.At
+    -import Prelude ()
+    +  ( LensRules (..),
+    +    FieldNamer,
+    +    DefName (..),
+    +    ClassyNamer,
+    +    makeFieldOptics,
+    +    makeFieldOpticsForDec,
+    +    makeFieldOpticsForDec',
+    +    HasFieldClasses,
+    +  )
+    +where
+     
+     import Control.Lens.At
     … and 1002 more lines
 
 lens-5.3.6/src/Control/Lens/Internal/TH.hs
@@ -360,65 +363,65 @@ lens-5.3.6/src/Control/Lens/Internal/TH.hs
     --- input
     +++ output
     @@ -1,16 +1,21 @@
-      {-# LANGUAGE CPP #-}
-    - {-# LANGUAGE TemplateHaskellQuotes #-}
-      #ifdef TRUSTWORTHY
-    - # if MIN_VERSION_template_haskell(2,12,0)
-    + #if MIN_VERSION_template_haskell(2,12,0)
-      {-# LANGUAGE Safe #-}
-    - # else
-    + #endif
-    + #endif
-    + {-# LANGUAGE TemplateHaskellQuotes #-}
-    + #ifdef TRUSTWORTHY
-    + #if MIN_VERSION_template_haskell(2,12,0)
-    + #else
-      {-# LANGUAGE Trustworthy #-}
-    - # endif
-      #endif
-    + #endif
-    
-      #include "lens-common.h"
-    
-      -----------------------------------------------------------------------------
+     {-# LANGUAGE CPP #-}
+    -{-# LANGUAGE TemplateHaskellQuotes #-}
+     #ifdef TRUSTWORTHY
+    -# if MIN_VERSION_template_haskell(2,12,0)
+    +#if MIN_VERSION_template_haskell(2,12,0)
+     {-# LANGUAGE Safe #-}
+    -# else
+    +#endif
+    +#endif
+    +{-# LANGUAGE TemplateHaskellQuotes #-}
+    +#ifdef TRUSTWORTHY
+    +#if MIN_VERSION_template_haskell(2,12,0)
+    +#else
+     {-# LANGUAGE Trustworthy #-}
+    -# endif
+     #endif
+    +#endif
+     
+     #include "lens-common.h"
+     
+     -----------------------------------------------------------------------------
     +
-      -- |
-      -- Module      :  Control.Lens.Internal.TH
-      -- Copyright   :  (C) 2013-2016 Edward Kmett and Eric Mertens
+     -- |
+     -- Module      :  Control.Lens.Internal.TH
+     -- Copyright   :  (C) 2013-2016 Edward Kmett and Eric Mertens
     @@ -19,14 +24,16 @@
-      -- Stability   :  experimental
-      -- Portability :  non-portable
-      --
+     -- Stability   :  experimental
+     -- Portability :  non-portable
+     --
     +
-      ----------------------------------------------------------------------------
-      module Control.Lens.Internal.TH
-    -   ( module Control.Lens.Internal.TH
-    +   ( module Control.Lens.Internal.TH,
-      #if MIN_VERSION_template_haskell(2,21,0) || MIN_VERSION_th_abstraction(0,6,0)
-    -   , D.TyVarBndrVis
-    -   , D.bndrReq
-    +     D.TyVarBndrVis,
-    +     D.bndrReq,
-      #endif
-    -   ) where
-    +   )
-    + where
-    
-      import Control.Lens.Iso
-      import Control.Lens.Prism
+     ----------------------------------------------------------------------------
+     module Control.Lens.Internal.TH
+    -  ( module Control.Lens.Internal.TH
+    +  ( module Control.Lens.Internal.TH,
+     #if MIN_VERSION_template_haskell(2,21,0) || MIN_VERSION_th_abstraction(0,6,0)
+    -  , D.TyVarBndrVis
+    -  , D.bndrReq
+    +    D.TyVarBndrVis,
+    +    D.bndrReq,
+     #endif
+    -  ) where
+    +  )
+    +where
+     
+     import Control.Lens.Iso
+     import Control.Lens.Prism
     @@ -34,8 +41,8 @@
-      import Control.Lens.Type
-      import Control.Lens.Wrapped
-      import Data.Functor.Contravariant
-    - import qualified Data.Set as Set
-      import Data.Set (Set)
-    + import qualified Data.Set as Set
-      import Language.Haskell.TH
-      import qualified Language.Haskell.TH.Datatype as D
-      import qualified Language.Haskell.TH.Datatype.TyVarBndr as D
+     import Control.Lens.Type
+     import Control.Lens.Wrapped
+     import Data.Functor.Contravariant
+    -import qualified Data.Set as Set
+     import Data.Set (Set)
+    +import qualified Data.Set as Set
+     import Language.Haskell.TH
+     import qualified Language.Haskell.TH.Datatype as D
+     import qualified Language.Haskell.TH.Datatype.TyVarBndr as D
     @@ -68,8 +75,13 @@
-      conAppsT conName = foldl AppT (ConT conName)
-    
+     conAppsT conName = foldl AppT (ConT conName)
+     
     … and 236 more lines
 
 ==========================================================================

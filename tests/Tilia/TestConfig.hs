@@ -1,4 +1,7 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 -- | The settings every corpus example is formatted with.
 module Tilia.TestConfig
@@ -6,6 +9,7 @@ module Tilia.TestConfig
   )
 where
 
+import Data.Choice (pattern Is)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
@@ -43,7 +47,11 @@ exampleRenderConfig package source hsModule =
   defaultRenderConfig
     { rcExtensions =
         Set.fromList (effectiveExtensions package source),
-      rcScope = Just (underEveryQualifier (resolveScope known hsModule))
+      rcScope =
+        Just
+          ( underEveryQualifier
+              (resolveScope (Is #implicitPrelude) known hsModule)
+          )
     }
   where
     known = nothingKnown {knownFixities = exportsOf}

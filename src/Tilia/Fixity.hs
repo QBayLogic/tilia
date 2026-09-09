@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -63,6 +64,7 @@ module Tilia.Fixity
   )
 where
 
+import Data.Choice (Choice, isTrue)
 import Data.Foldable (toList)
 import Data.Generics.Schemes (listify)
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
@@ -480,18 +482,16 @@ surelyNames carries op = any $ \case
     names parent kids = parent == op || Set.member op kids
 
 -- | The imports of a module.
---
--- @Prelude@ is added when the module does not name it itself. It is where
--- @($)@, @(.)@ and most of what an operator chain is made of are declared,
--- and a module that does not mention it still sees all of them. A module
--- compiled with @NoImplicitPrelude@ does not, but the extensions are not
--- visible here, and the cost of the mistake is one extra module consulted
--- for names the module is not using.
-moduleImports :: HsModule GhcPs -> [Import]
-moduleImports hsModule = implicitPrelude <> written
+moduleImports ::
+  -- | Whether @ImplicitPrelude@ is on
+  Choice "implicitPrelude" ->
+  HsModule GhcPs ->
+  [Import]
+moduleImports implicitPrelude hsModule = prelude <> written
   where
     written = map (fromDecl . unLoc) (hsmodImports hsModule)
-    implicitPrelude
+    prelude
+      | not (isTrue implicitPrelude) = []
       | any ((== "Prelude") . importModule) written = []
       | otherwise =
           [ Import
@@ -639,11 +639,13 @@ nothingKnown =
 -- "Tilia.Fixity.Plan" already follows, through export lists in source and
 -- through the export section of an interface.
 resolveScope ::
+  -- | Whether @ImplicitPrelude@ is on
+  Choice "implicitPrelude" ->
   -- | What is known about the modules this one imports
   Known ->
   HsModule GhcPs ->
   Scope
-resolveScope known hsModule =
+resolveScope implicitPrelude known hsModule =
   Scope
     { scopeInTypes = reachAmong InTypes,
       scopeInTerms = reachAmong InTerms,
@@ -652,7 +654,7 @@ resolveScope known hsModule =
   where
     Known {knownFixities = exportsOf, knownChildren, knownExportNames} = known
     exportNamesOf = knownExportNames
-    imports = moduleImports hsModule
+    imports = moduleImports implicitPrelude hsModule
     declared = declaredFixities hsModule
 
     reachAmong namespace =

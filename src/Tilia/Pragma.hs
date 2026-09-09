@@ -31,9 +31,11 @@ effectiveExtensions ::
   -- | The module's source, read here for its @LANGUAGE@ pragmas alone.
   Text ->
   [Extension]
-effectiveExtensions package = pragmasOver (onUnlessRefused <> package)
+effectiveExtensions package
+  | null package = pragmasOver onUnlessRefused
+  | otherwise = pragmasOver package
 
--- | The extensions that are on until a module says otherwise.
+-- | The extensions that are on until something says otherwise.
 onUnlessRefused :: [Extension]
 onUnlessRefused = [ImplicitPrelude]
 

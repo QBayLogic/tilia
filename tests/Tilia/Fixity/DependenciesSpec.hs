@@ -1,5 +1,8 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TupleSections #-}
 
 -- | The fixity machinery, run over every dependency this project has.
@@ -14,6 +17,7 @@ module Tilia.Fixity.DependenciesSpec (spec) where
 
 import Control.Monad (filterM)
 import Data.ByteString qualified as BS
+import Data.Choice (pattern Is)
 import Data.Foldable (for_)
 import Data.List (isSuffixOf, sort)
 import Data.Map.Strict qualified as Map
@@ -347,7 +351,7 @@ importedByOwn own =
   Set.toList . Set.fromList $
     [ importModule i
     | (_, Just hsModule) <- own,
-      i <- moduleImports hsModule,
+      i <- moduleImports (Is #implicitPrelude) hsModule,
       not ("Paths_" `T.isPrefixOf` importModule i)
     ]
 
@@ -363,7 +367,7 @@ unsettledIn ::
   (FilePath, HsModule GhcPs) ->
   IO [String]
 unsettledIn resolver (path, hsModule) = do
-  scope <- scopeFor resolver hsModule
+  scope <- scopeFor resolver (Is #implicitPrelude) hsModule
   pure
     [ path <> ": " <> T.unpack (operatorSpelling qualifier op) <> " " <> show why
     | ((qualifier, op), why) <- unknownOperators scope hsModule

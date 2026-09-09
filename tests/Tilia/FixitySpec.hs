@@ -1,9 +1,13 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 -- | Whether fixities can be resolved exactly from source alone.
 module Tilia.FixitySpec (spec) where
 
+import Data.Choice (Choice, pattern Is, pattern Isn't)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
@@ -403,6 +407,29 @@ spec = do
               "module M where\nimport Data.Map\nimport Other\nimport qualified Data.Map as M\nimport qualified Other as M\n"
        in amb `shouldBe` [(Nothing, OpName "!"), (Just "M", OpName "!")]
 
+  describe "a module compiled with NoImplicitPrelude" $ do
+    it "settles an operator on the one module that is really in scope" $
+      let s =
+            scopeAboutPrelude (Isn't #implicitPrelude) takesItsPreludeElsewhere
+       in lookupFixity s InTerms Nothing (OpName "<%>")
+            `shouldBe` Resolved (Fixity LeftAssoc 6) (DeclaredIn "Pretty")
+
+    it "is left with nothing unsettled" $
+      unsettledAboutPrelude (Isn't #implicitPrelude) usingItBothWays
+        `shouldBe` []
+
+    it "would be caught between two spellings were the Prelude assumed" $
+      map snd (unsettledAboutPrelude (Is #implicitPrelude) usingItBothWays)
+        `shouldBe` [Ambiguous]
+
+    it "still takes the Prelude where the module does import it" $
+      let s =
+            scopeAboutPrelude
+              (Isn't #implicitPrelude)
+              "module M where\nimport Prelude\n"
+       in lookupFixity s InTerms Nothing (OpName "<%>")
+            `shouldBe` Resolved (Fixity RightAssoc 6) (DeclaredIn "Prelude")
+
   describe "lookupFixity" $ do
     it "finds an unqualified operator" $
       let s = fullScope "module M where\nimport Data.Map\n"
@@ -569,7 +596,8 @@ exportsOfSource = moduleExports . pmModule . parsed
 -- | A scope knowing what every module it can read exports, and nothing
 -- about the ones it cannot.
 fullScope :: Text -> Scope
-fullScope = resolveScope knowingExports . pmModule . parsed
+fullScope =
+  resolveScope (Is #implicitPrelude) knowingExports . pmModule . parsed
 
 -- | What is known in a world made of 'exportsOf' alone.
 knowingExports :: Known
@@ -590,7 +618,11 @@ twoUnread = "module M where\nimport Opaque\nimport Other.Opaque\nf a b = a <??> 
 -- assumes of every one of them.
 scopeKnowing :: [(Text, [Text])] -> Text -> Scope
 scopeKnowing said =
-  resolveScope knowingExports {knownExportNames = exportNamesOf} . pmModule . parsed
+  resolveScope
+    (Is #implicitPrelude)
+    knowingExports {knownExportNames = exportNamesOf}
+    . pmModule
+    . parsed
   where
     exportNamesOf m = Set.fromList . map OpName <$> lookup m said
 
@@ -613,7 +645,10 @@ brought carries source =
     [items] -> Set.toList (namesImported children items)
     other -> error ("expected one import with a list, got " <> show other)
   where
-    written = moduleImports (pmModule (parsed ("module M where\n" <> source)))
+    written =
+      moduleImports
+        (Is #implicitPrelude)
+        (pmModule (parsed ("module M where\n" <> source)))
     children = Map.fromList [(parent, Set.fromList kids) | (parent, kids) <- carries]
 
 -- | A scope over a world where Carrier keeps @:|@ under @T@.
@@ -623,6 +658,7 @@ brought carries source =
 scopeCarrying :: Text -> Scope
 scopeCarrying source =
   resolveScope
+    (Is #implicitPrelude)
     knowingExports {knownChildren = childrenOf}
     (pmModule (parsed ("module M where\n" <> source)))
   where
@@ -633,7 +669,10 @@ scopeCarrying source =
 -- | A scope over the two modules that spell @:>@ in different namespaces.
 scopeOfBoth :: Text -> Scope
 scopeOfBoth source =
-  resolveScope knowingExports (pmModule (parsed ("module M where\n" <> source)))
+  resolveScope
+    (Is #implicitPrelude)
+    knowingExports
+    (pmModule (parsed ("module M where\n" <> source)))
 
 -- | A scope over an unread module, told what it keeps under its names.
 --
@@ -642,6 +681,7 @@ scopeOfBoth source =
 scopeSuspecting :: [(Text, [(Text, [Text])])] -> Text -> Scope
 scopeSuspecting carries source =
   resolveScope
+    (Is #implicitPrelude)
     knowingExports {knownChildren = childrenOf}
     (pmModule (parsed ("module M where\n" <> source <> "f a b = a <??> b\n")))
   where
@@ -659,7 +699,50 @@ exportedIn = fmap Set.toList . exportedOperators . pmModule . parsed
 unsettledIn :: Text -> [((Maybe Text, OpName), Unknown)]
 unsettledIn src =
   let hsModule = pmModule (parsed src)
-   in unknownOperators (resolveScope knowingExports hsModule) hsModule
+   in unknownOperators
+        (resolveScope (Is #implicitPrelude) knowingExports hsModule)
+        hsModule
+
+-- | A module that takes its Prelude from elsewhere and hides an operator
+-- from it, in order to take that operator from a module which spells it the
+-- other way round.
+takesItsPreludeElsewhere :: Text
+takesItsPreludeElsewhere =
+  "module M where\nimport Prelude.Compat hiding ((<%>))\nimport Pretty\n"
+
+-- | The same, going on to use the operator it took.
+usingItBothWays :: Text
+usingItBothWays = takesItsPreludeElsewhere <> "f a b = a <%> b\n"
+
+-- | A world in which the Prelude and a pretty-printer spell one operator
+-- the two different ways, as @base@ and @pretty@ really do for @<>@.
+--
+-- Kept out of 'exportsOf' so that a Prelude which declares something does
+-- not have to be reckoned with by every other test in the file.
+disagreeingAboutPrelude :: Known
+disagreeingAboutPrelude = nothingKnown {knownFixities = said}
+  where
+    said = \case
+      "Prelude" -> whichever [(OpName "<%>", Fixity RightAssoc 6)]
+      "Pretty" -> whichever [(OpName "<%>", Fixity LeftAssoc 6)]
+      _ -> Just Map.empty
+    whichever = Just . inBothNamespaces . Map.fromList
+
+-- | That world's scope for a module, told whether it has the Prelude.
+scopeAboutPrelude :: Choice "implicitPrelude" -> Text -> Scope
+scopeAboutPrelude implicitPrelude =
+  resolveScope implicitPrelude disagreeingAboutPrelude . pmModule . parsed
+
+-- | What that world leaves unsettled in a module.
+unsettledAboutPrelude ::
+  Choice "implicitPrelude" ->
+  Text ->
+  [((Maybe Text, OpName), Unknown)]
+unsettledAboutPrelude implicitPrelude src =
+  let hsModule = pmModule (parsed src)
+   in unknownOperators
+        (resolveScope implicitPrelude disagreeingAboutPrelude hsModule)
+        hsModule
 
 scopeOf ::
   Text ->

@@ -8,6 +8,7 @@ module Tilia.Render
   )
 where
 
+import Data.Choice (fromBool)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
@@ -74,11 +75,14 @@ renderModule settings parsed =
     (pragmas, uncovered) = takeHeaderPragmas (pmSource parsed) (pmHeaderEnd parsed) rest
     loose = heldOffModuleDoc hsMod haddocks pragmas uncovered
 
+    implicitPrelude =
+      fromBool (Set.member ImplicitPrelude (rcExtensions settings))
+
     sorted m =
       m
         { hsmodImports =
             normalizeImports
-              (Set.member ImplicitPrelude (rcExtensions settings))
+              implicitPrelude
               (rcImportBarriers settings)
               (comments (pmSource parsed))
               (hsmodImports m)

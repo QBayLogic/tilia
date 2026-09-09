@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -11,6 +12,7 @@ module Tilia.Fixity.Debug
   )
 where
 
+import Data.Choice (Choice)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
@@ -78,6 +80,9 @@ data OperatorNote = OperatorNote
 
 -- | Record everything that decided one module's fixities.
 fixityNotes ::
+  -- | Whether @ImplicitPrelude@ is on, so that the Prelude is listed
+  -- among the imports exactly when the module actually has it
+  Choice "implicitPrelude" ->
   -- | What each module in scope exports, as the resolver answers it
   (Text -> IO (Maybe (Fixities))) ->
   -- | The scope the module was formatted under
@@ -85,8 +90,8 @@ fixityNotes ::
   -- | The module
   HsModule GhcPs ->
   IO FixityNotes
-fixityNotes resolve scope hsModule = do
-  brought <- traverse alongside (moduleImports hsModule)
+fixityNotes implicitPrelude resolve scope hsModule = do
+  brought <- traverse alongside (moduleImports implicitPrelude hsModule)
   pure
     FixityNotes
       { notedImports = brought,

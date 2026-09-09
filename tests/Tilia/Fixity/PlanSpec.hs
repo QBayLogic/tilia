@@ -1,5 +1,8 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 -- | The whole fixity pipeline, run against this project's own dependencies.
 --
@@ -14,6 +17,7 @@
 module Tilia.Fixity.PlanSpec (spec) where
 
 import Control.Monad (when)
+import Data.Choice (pattern Is)
 import Data.Foldable (traverse_)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef, writeIORef)
 import Data.List (isInfixOf)
@@ -255,7 +259,8 @@ reexports = describe "an operator a module passes on" $ do
 -- that disagree about it.
 chased :: Text -> IO (Maybe Fixity)
 chased source = do
-  answer <- withReexports reach carries Set.empty "M" (pmModule parsed)
+  answer <-
+    withReexports (Is #implicitPrelude) reach carries Set.empty "M" (pmModule parsed)
   pure (Map.lookup (InTerms, OpName "<+>") =<< answer)
   where
     carries m =
@@ -523,7 +528,8 @@ withPlan plan = do
           ("src/Inner.hs", "module Inner (T (..)) where\ninfixr 5 :|\ndata T = A | Int :| Int\n")
         ]
       $ \rs -> do
-        scope <- scopeFor rs (pmModule (parse "module M where\nimport Facade (T (..))\n"))
+        let m = parse "module M where\nimport Facade (T (..))\n"
+        scope <- scopeFor rs (Is #implicitPrelude) (pmModule m)
         lookupFixity scope InTerms Nothing (OpName ":|")
           `shouldBe` Resolved (Fixity RightAssoc 5) (DeclaredIn "Facade")
 
@@ -650,14 +656,16 @@ withPlan plan = do
     it "settles an operator no unread module in scope could have declared" $
       withFakeProject [("src/Opaque.hs", opaqueSource)] $
         \rs -> do
-          scope <- scopeFor rs (pmModule (parse "module M where\nimport Opaque\n"))
+          let m = parse "module M where\nimport Opaque\n"
+          scope <- scopeFor rs (Is #implicitPrelude) (pmModule m)
           lookupFixity scope InTerms Nothing (OpName "<??>")
             `shouldBe` Resolved defaultFixity ReportDefault
 
     it "leaves one alone that the unread module's list does name" $
       withFakeProject [("src/Opaque.hs", opaqueSource)] $
         \rs -> do
-          scope <- scopeFor rs (pmModule (parse "module M where\nimport Opaque\n"))
+          let m = parse "module M where\nimport Opaque\n"
+          scope <- scopeFor rs (Is #implicitPrelude) (pmModule m)
           lookupFixity scope InTerms Nothing (OpName "<+>")
             `shouldBe` Unresolved ("Opaque" :| [])
 
@@ -842,7 +850,7 @@ endToEnd resolver source assertion =
   case parseModule defaultParserConfig "test.hs" source of
     Left _ -> expectationFailure "the test input did not parse"
     Right pm -> do
-      scope <- scopeFor resolver (pmModule pm)
+      scope <- scopeFor resolver (Is #implicitPrelude) (pmModule pm)
       assertion scope
 
 -- | Check one expected fixity, returning a description of any mismatch.
