@@ -23,13 +23,15 @@ module Tilia.Fixity.Cache
     storeInstalled,
     cachedFutileSolve,
     storeFutileSolve,
+    cachedFutileFetch,
+    storeFutileFetch,
   )
 where
 
 import Control.Monad (join)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Data.Text (Text)
@@ -304,6 +306,21 @@ storeFutileSolve cache = quietly () $ do
   createDirectoryIfMissing True (takeDirectory (futileSolvePath cache))
   writeAtomically (futileSolvePath cache) ""
 
+-- | The packages an earlier run was still short of after asking @cabal@ to
+-- fetch them, and which asking again will therefore not bring in.
+cachedFutileFetch :: Cache -> IO [Text]
+cachedFutileFetch cache =
+  fromMaybe []
+    <$> readIfPresent
+      (futileFetchPath cache)
+      (filter (not . T.null) . T.lines)
+
+-- | Remember what fetching left missing.
+storeFutileFetch :: Cache -> [Text] -> IO ()
+storeFutileFetch cache packages = quietly () $ do
+  createDirectoryIfMissing True (takeDirectory (futileFetchPath cache))
+  writeAtomically (futileFetchPath cache) (T.unlines packages)
+
 ----------------------------------------------------------------------------
 -- Entries
 
@@ -363,6 +380,10 @@ installedPath (Cache root (PlanToken token)) =
 futileSolvePath :: Cache -> FilePath
 futileSolvePath (Cache root (PlanToken token)) =
   root </> "solves" </> T.unpack token
+
+futileFetchPath :: Cache -> FilePath
+futileFetchPath (Cache root (PlanToken token)) =
+  root </> "fetches" </> T.unpack token
 
 modulesPath :: Cache -> Text -> FilePath
 modulesPath (Cache root _) package = root </> "modules" </> T.unpack package

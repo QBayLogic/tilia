@@ -179,7 +179,7 @@ preparation = describe "preparing a project" $ do
               when (args == ["build", "all", "--dry-run"]) (writePlan dir twoComponents)
               pure (Right ())
             solves =
-              Solves
+              forgetfulSolves
                 { solveWasFutile = readIORef futile,
                   rememberFutileSolve = writeIORef futile True
                 }
@@ -208,13 +208,30 @@ preparation = describe "preparing a project" $ do
         steps <- newIORef []
         futile <- newIORef True
         let solves =
-              Solves
+              forgetfulSolves
                 { solveWasFutile = readIORef futile,
                   rememberFutileSolve = writeIORef futile True
                 }
             narrow = PlanNarrow ["thing:test:tests"]
         prepareWith (obliging steps) solves [component "test:tests"] dir narrow
           `shouldReturn` Right ()
+        readIORef steps `shouldReturn` [["build", "all", "--only-download"]]
+
+    it "does not ask again for what fetching did not bring in" $
+      withTempProject (Just narrowAndWanting) $ \dir -> do
+        steps <- newIORef []
+        refused <- newIORef []
+        let solves =
+              forgetfulSolves
+                { solveWasFutile = pure True,
+                  fetchWasFutileFor = readIORef refused,
+                  rememberFutileFetch = writeIORef refused
+                }
+            narrow = PlanNarrow ["thing:test:tests"]
+            again = prepareWith (obliging steps) solves [component "test:tests"] dir narrow
+        again `shouldReturn` Right ()
+        readIORef refused `shouldReturn` ["tilia-phantom"]
+        again `shouldReturn` Right ()
         readIORef steps `shouldReturn` [["build", "all", "--only-download"]]
 
     it "goes on solving while solving still widens it" $
@@ -226,7 +243,7 @@ preparation = describe "preparing a project" $ do
               when (args == ["build", "all", "--dry-run"]) (writePlan dir threeComponents)
               pure (Right ())
             solves =
-              Solves
+              forgetfulSolves
                 { solveWasFutile = readIORef futile,
                   rememberFutileSolve = writeIORef futile True
                 }

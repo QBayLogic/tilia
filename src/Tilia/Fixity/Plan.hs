@@ -403,18 +403,33 @@ prepare :: [PlanComponent] -> FilePath -> Readiness -> IO (Either Text ())
 prepare wanted projectDir readiness =
   prepareWith (runCabal projectDir) (solvesFor projectDir) wanted projectDir readiness
 
--- | What a run knows about solves already asked for, and how to add to it.
+-- | What a run knows about the asking earlier runs did, and how to add to
+-- it.
+--
+-- Both halves are the same idea: @cabal@ was asked for something, it did
+-- not help, and asking again will not help either. A run that formats on
+-- save would otherwise ask on every save.
 data Solves = Solves
   { -- | Has solving this plan already been tried and left it as narrow?
     solveWasFutile :: IO Bool,
     -- | Remember that it has.
-    rememberFutileSolve :: IO ()
+    rememberFutileSolve :: IO (),
+    -- | The packages an earlier fetch was still short of afterwards.
+    fetchWasFutileFor :: IO [Text],
+    -- | Remember what a fetch left missing.
+    rememberFutileFetch :: [Text] -> IO ()
   }
 
 -- | Solves remembered nowhere, for a caller with nothing to remember them
 -- in.
 forgetfulSolves :: Solves
-forgetfulSolves = Solves {solveWasFutile = pure False, rememberFutileSolve = pure ()}
+forgetfulSolves =
+  Solves
+    { solveWasFutile = pure False,
+      rememberFutileSolve = pure (),
+      fetchWasFutileFor = pure [],
+      rememberFutileFetch = const (pure ())
+    }
 
 -- | Solves remembered in the cache, under the plan the project has now.
 --
@@ -424,7 +439,9 @@ solvesFor :: FilePath -> Solves
 solvesFor projectDir =
   Solves
     { solveWasFutile = withCache False cachedFutileSolve,
-      rememberFutileSolve = withCache () storeFutileSolve
+      rememberFutileSolve = withCache () storeFutileSolve,
+      fetchWasFutileFor = withCache [] cachedFutileFetch,
+      rememberFutileFetch = \packages -> withCache () (`storeFutileFetch` packages)
     }
   where
     withCache fallback use =
@@ -461,10 +478,18 @@ prepareWith cabal solves wanted projectDir = \case
     fetchWhatIsShort =
       readBuildPlan (planPathFor projectDir) >>= \case
         Left _ -> pure (Right ())
-        Right plan ->
-          sourcesShortOf plan >>= \case
-            [] -> pure (Right ())
-            _ -> fetch
+        Right plan -> do
+          short <- sourcesShortOf plan
+          refused <- fetchWasFutileFor solves
+          if null short || all (`elem` refused) short
+            then pure (Right ())
+            else
+              fetch >>= \case
+                Left err -> pure (Left err)
+                Right () -> do
+                  left <- sourcesShortOf plan
+                  rememberFutileFetch solves left
+                  pure (Right ())
     solveThenFetch =
       cabal ["build", "all", "--dry-run"] >>= \case
         Left err -> pure (Left err)
