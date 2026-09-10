@@ -50,6 +50,7 @@ import Tilia.Package
 import Tilia.Palette (Color (Operator, Place), Palette, paint)
 import Tilia.Parser
   ( ParseError,
+    ParsedModule,
     ParserConfig,
     describeParseError,
     parseModule,
@@ -250,7 +251,9 @@ formatSource session path source = runExceptT $ do
   package <- orElse (NoPackage path) =<< liftIO (sessionPackage session path)
   let resolver = sessionResolver session
       config = parserConfigFor package
-      cpp = usesCpp (effectiveExtensions package source) source
+      extensionsAndCpp text =
+        let declared = effectiveExtensions package text
+         in (Set.fromList declared, usesCpp declared text)
       renderConfigFor extensions hsModule = do
         let implicitPrelude =
               fromBool (Set.member ImplicitPrelude extensions)
@@ -273,28 +276,35 @@ formatSource session path source = runExceptT $ do
                   rcScope = Just scope
                 }
           unknown -> throwE (UnknownFixity path unknown)
-      formatting text = do
-        let inForce = effectiveExtensions package text
-            extensions = Set.fromList inForce
-        if usesCpp inForce text
-          then do
+      formatting (extensions, cpp) already text
+        | cpp = do
             render <- case parseModule config path (blankCpp text) of
               Left _ -> pure defaultRenderConfig {rcExtensions = extensions}
               Right whole -> renderConfigFor extensions (pmModule whole)
-            orElse
-              (CppUnsupported path)
-              (formatWithCpp config render path text)
-          else do
-            parsed <- orElse NotParsed (parseModule config path text)
+            printed <-
+              orElse
+                (CppUnsupported path)
+                (formatWithCpp config render path text)
+            pure (printed, Nothing)
+        | otherwise = do
+            parsed <-
+              maybe (orElse NotParsed (parseModule config path text)) pure already
             render <- renderConfigFor extensions (pmModule parsed)
-            pure (printDoc defaultRenderOptions (renderModule render parsed))
-  formatted <- formatting source
-  when (isTrue (sessionCheckAst session)) $
-    traverse_
-      (throwE . NotEquivalent path)
-      (rewritten config cpp path source formatted)
+            pure
+              ( printDoc defaultRenderOptions (renderModule render parsed),
+                Just parsed
+              )
+  let inForce@(_, cpp) = extensionsAndCpp source
+  (formatted, tree) <- formatting inForce Nothing source
+  printedTree <-
+    if isTrue (sessionCheckAst session)
+      then do
+        let (changed, parsed) = rewritten config cpp path (source, tree) formatted
+        traverse_ (throwE . NotEquivalent path) changed
+        pure parsed
+      else pure Nothing
   when (isTrue (sessionCheckIdempotence session)) $ do
-    settled <- formatting formatted
+    (settled, _) <- formatting (extensionsAndCpp formatted) printedTree formatted
     when (settled /= formatted) $
       throwE (NotIdempotent path (whereTheyDiffer formatted settled))
   pure formatted
@@ -327,14 +337,33 @@ rewritten ::
   Bool ->
   -- | The file, for the parser's messages
   FilePath ->
-  -- | What was read
-  Text ->
+  -- | What was read, and the tree it was printed from where it has one
+  (Text, Maybe ParsedModule) ->
   -- | What was printed
   Text ->
-  Maybe Text
-rewritten config cpp path before after
-  | not cpp = difference before after
-  | otherwise = case (branchLeaves before, branchLeaves after) of
+  -- | What formatting changed, and the tree of what was printed
+  (Maybe Text, Maybe ParsedModule)
+rewritten config cpp path (before, printedFrom') after
+  | not cpp = case parseModule config path after of
+      Left e ->
+        ( Just ("the formatted output does not parse: " <> describeParseError e),
+          Nothing
+        )
+      Right a' -> case printedFrom' <|> whatParsed (parseModule config path before) of
+        -- The input parsed once already, or there would be nothing to
+        -- compare.
+        Nothing -> (Nothing, Just a')
+        Just b' -> (comparing b' a', Just a')
+  | otherwise = (underCpp, Nothing)
+  where
+    comparing b' a' =
+      syntaxDifference (pmModule b') (pmModule a')
+        <|> commentDifference
+          (pmModule b', pmModule a')
+          (comments (pmSource b'))
+          (comments (pmSource a'))
+    whatParsed = either (const Nothing) Just
+    underCpp = case (branchLeaves before, branchLeaves after) of
       -- Neither can really happen: a source that would not split never got
       -- as far as being formatted. Saying so beats saying nothing.
       (Left _, _) -> Just "the input could not be split into configurations"
@@ -352,18 +381,12 @@ rewritten config cpp path before after
               [ ("in one configuration, " <>) <$> difference b a
               | (b, a) <- zip went came
               ]
-  where
     difference b a = case (parseModule config path b, parseModule config path a) of
       -- The input parsed once already, or there would be nothing to compare.
       (Left _, _) -> Nothing
       (_, Left e) ->
         Just ("the formatted output does not parse: " <> describeParseError e)
-      (Right b', Right a') ->
-        syntaxDifference (pmModule b') (pmModule a')
-          <|> commentDifference
-            (pmModule b', pmModule a')
-            (comments (pmSource b'))
-            (comments (pmSource a'))
+      (Right b', Right a') -> comparing b' a'
     firstJust = foldr (<|>) Nothing
     tshow :: Int -> Text
     tshow = T.pack . show
