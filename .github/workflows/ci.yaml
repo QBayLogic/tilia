@@ -30,7 +30,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: [ghc9103, ghc9124, ghc9141]
+        include:
+          - ghc: ghc9103
+            shard: 1/3
+          - ghc: ghc9124
+            shard: 2/3
+          - ghc: ghc9141
+            shard: 3/3
     name: Build and test on ${{ matrix.ghc }}
     runs-on: ubuntu-latest
     steps:
@@ -65,7 +71,7 @@ jobs:
           tests="$(nix build --no-link --print-out-paths .#${{ matrix.ghc }}.tests-exe)"
           nix develop -L .#${{ matrix.ghc }} -c bash -c "cabal update && cabal build --dry-run"
           nix run .#sources
-          nix develop -L .#${{ matrix.ghc }} -c "$tests/bin/tests"
+          nix develop -L .#${{ matrix.ghc }} -c bash -c "TILIA_SHARD=${{ matrix.shard }} $tests/bin/tests"
   format:
     needs: build
     name: Self-format
