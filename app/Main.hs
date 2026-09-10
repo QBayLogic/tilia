@@ -175,24 +175,22 @@ optsParser =
       fromBool
         <$> (switch . mconcat)
           [ long "check-ast",
-            help "Check AST equivalence."
+            help "Check AST equivalence"
           ]
     checkIdempotenceSwitch =
       fromBool
         <$> (switch . mconcat)
           [ long "check-idempotence",
-            help "Check that formatting twice changes nothing."
+            help "Check idempotence"
           ]
     debugFixitySwitch =
       fromBool
         <$> (switch . mconcat)
           [ long "debug-fixity",
-            help "Print debugging information about fixities."
+            help "Print debugging information about fixities"
           ]
     targetArgument =
       (strArgument . mconcat)
         [ metavar "TARGET",
-          help
-            "Component to format: all, a package or component name, or one of\
-            \ lib:, exe:, test:, bench: followed by a name. Defaults to all."
+          help "Component to format: all (the default) or a package/component name"
         ]
