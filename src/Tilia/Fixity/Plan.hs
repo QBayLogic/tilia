@@ -540,7 +540,12 @@ prepareWith cabal solves wanted projectDir = \case
       True -> fetchWhatIsShort
       False -> solveThenFetch
   where
-    fetch = cabal ["build", "all", "--only-download"]
+    wholeProject = ["--enable-tests", "--enable-benchmarks"]
+    tryWholeProject args =
+      cabal (args <> wholeProject) >>= \case
+        Right () -> pure (Right ())
+        Left _ -> cabal args
+    fetch = tryWholeProject ["build", "all", "--only-download"]
     fetchWhatIsShort =
       readBuildPlan (planPathFor projectDir) >>= \case
         Left _ -> pure (Right ())
@@ -557,7 +562,7 @@ prepareWith cabal solves wanted projectDir = \case
                   rememberFutileFetch solves left
                   pure (Right ())
     solveThenFetch =
-      cabal ["build", "all", "--dry-run"] >>= \case
+      tryWholeProject ["build", "all", "--dry-run"] >>= \case
         Left err -> pure (Left err)
         Right () ->
           checkReadiness wanted projectDir >>= \case

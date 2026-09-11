@@ -105,12 +105,12 @@ preparation = describe "preparing a project" $ do
       steps <- newIORef []
       let cabal args = do
             record steps args
-            when (args == ["build", "all", "--dry-run"]) (writePlan dir wantingATarball)
+            when (args == solving) (writePlan dir wantingATarball)
             pure (Right ())
       checkReadiness [] dir `shouldReturn` PlanMissing
       prepareWith cabal forgetfulSolves [] dir PlanMissing `shouldReturn` Right ()
       readIORef steps
-        `shouldReturn` [["build", "all", "--dry-run"], ["build", "all", "--only-download"]]
+        `shouldReturn` [solving, fetching]
 
   it "fetches without solving when the plan is already good" $
     withTempProject (Just wantingATarball) $ \dir -> do
@@ -118,7 +118,7 @@ preparation = describe "preparing a project" $ do
       readiness <- checkReadiness [] dir
       readiness `shouldBe` SourcesMissing ["tilia-phantom"]
       prepareWith (obliging steps) forgetfulSolves [] dir readiness `shouldReturn` Right ()
-      readIORef steps `shouldReturn` [["build", "all", "--only-download"]]
+      readIORef steps `shouldReturn` [fetching]
 
   it "runs nothing at all when nothing is missing" $ do
     steps <- newIORef []
@@ -130,7 +130,32 @@ preparation = describe "preparing a project" $ do
       steps <- newIORef []
       let cabal args = record steps args >> pure (Left "cabal said no")
       prepareWith cabal forgetfulSolves [] dir PlanMissing `shouldReturn` Left "cabal said no"
-      readIORef steps `shouldReturn` [["build", "all", "--dry-run"]]
+      readIORef steps `shouldReturn` [solving, narrowSolve]
+
+  it "asks about the test suites and the benchmarks, not the library alone" $
+    withTempProject Nothing $ \dir -> do
+      steps <- newIORef []
+      let cabal args = do
+            record steps args
+            when (args == solving) (writePlan dir wantingATarball)
+            pure (Right ())
+      _ <- prepareWith cabal forgetfulSolves [] dir PlanMissing
+      asked <- readIORef steps
+      asked `shouldSatisfy` all (\args -> wholeProject `Data.List.isSuffixOf` args)
+
+  it "settles for what will solve when the whole project will not" $
+    withTempProject Nothing $ \dir -> do
+      steps <- newIORef []
+      let cabal args = do
+            record steps args
+            if wholeProject `Data.List.isSuffixOf` args
+              then pure (Left "a test suite will not solve")
+              else do
+                when (args == narrowSolve) (writePlan dir wantingATarball)
+                pure (Right ())
+      prepareWith cabal forgetfulSolves [] dir PlanMissing `shouldReturn` Right ()
+      readIORef steps
+        `shouldReturn` [solving, narrowSolve, fetching, narrowFetch]
 
   describe "a plan narrower than the run" $ do
     it "notices a component the plan says nothing about" $
@@ -157,11 +182,11 @@ preparation = describe "preparing a project" $ do
         steps <- newIORef []
         let cabal args = do
               record steps args
-              when (args == ["build", "all", "--dry-run"]) (writePlan dir twoComponents)
+              when (args == solving) (writePlan dir twoComponents)
               pure (Right ())
         prepareWith cabal forgetfulSolves [component "test:tests"] dir (PlanNarrow ["thing:test:tests"])
           `shouldReturn` Right ()
-        readIORef steps `shouldReturn` [["build", "all", "--dry-run"]]
+        readIORef steps `shouldReturn` [solving]
 
     it "counts the components of this very project as covered" $ do
       plan' <- readBuildPlan (planPathFor ".")
@@ -177,7 +202,7 @@ preparation = describe "preparing a project" $ do
         futile <- newIORef False
         let cabal args = do
               record steps args
-              when (args == ["build", "all", "--dry-run"]) (writePlan dir twoComponents)
+              when (args == solving) (writePlan dir twoComponents)
               pure (Right ())
             solves =
               forgetfulSolves
@@ -189,20 +214,20 @@ preparation = describe "preparing a project" $ do
         once `shouldReturn` Right ()
         readIORef futile `shouldReturn` True
         once `shouldReturn` Right ()
-        readIORef steps `shouldReturn` [["build", "all", "--dry-run"]]
+        readIORef steps `shouldReturn` [solving]
 
     it "fetches what a plan it cannot widen is short of" $
       withTempProject (Just narrowAndWanting) $ \dir -> do
         steps <- newIORef []
         let cabal args = do
               record steps args
-              when (args == ["build", "all", "--dry-run"]) (writePlan dir narrowAndWanting)
+              when (args == solving) (writePlan dir narrowAndWanting)
               pure (Right ())
             narrow = PlanNarrow ["thing:test:tests"]
         prepareWith cabal forgetfulSolves [component "test:tests"] dir narrow
           `shouldReturn` Right ()
         readIORef steps
-          `shouldReturn` [["build", "all", "--dry-run"], ["build", "all", "--only-download"]]
+          `shouldReturn` [solving, fetching]
 
     it "fetches it even once solving again has been given up on" $
       withTempProject (Just narrowAndWanting) $ \dir -> do
@@ -216,7 +241,7 @@ preparation = describe "preparing a project" $ do
             narrow = PlanNarrow ["thing:test:tests"]
         prepareWith (obliging steps) solves [component "test:tests"] dir narrow
           `shouldReturn` Right ()
-        readIORef steps `shouldReturn` [["build", "all", "--only-download"]]
+        readIORef steps `shouldReturn` [fetching]
 
     it "does not ask again for what fetching did not bring in" $
       withTempProject (Just narrowAndWanting) $ \dir -> do
@@ -233,7 +258,7 @@ preparation = describe "preparing a project" $ do
         again `shouldReturn` Right ()
         readIORef refused `shouldReturn` ["tilia-phantom"]
         again `shouldReturn` Right ()
-        readIORef steps `shouldReturn` [["build", "all", "--only-download"]]
+        readIORef steps `shouldReturn` [fetching]
 
     it "goes on solving while solving still widens it" $
       withTempProject (Just twoComponents) $ \dir -> do
@@ -241,7 +266,7 @@ preparation = describe "preparing a project" $ do
         futile <- newIORef False
         let cabal args = do
               record steps args
-              when (args == ["build", "all", "--dry-run"]) (writePlan dir threeComponents)
+              when (args == solving) (writePlan dir threeComponents)
               pure (Right ())
             solves =
               forgetfulSolves
@@ -251,7 +276,7 @@ preparation = describe "preparing a project" $ do
         prepareWith cabal solves [component "test:tests"] dir (PlanNarrow ["thing:test:tests"])
           `shouldReturn` Right ()
         readIORef futile `shouldReturn` False
-        readIORef steps `shouldReturn` [["build", "all", "--dry-run"]]
+        readIORef steps `shouldReturn` [solving]
 
   describe "a package the plan could not take apart" $ do
     it "counts the components it lists under one entry" $
@@ -1008,6 +1033,23 @@ component :: Text -> PlanComponent
 component = PlanComponent "thing"
 
 -- | Note that @cabal@ was asked for something.
+-- | What a solve and a fetch are asked for.
+--
+-- Both name the test suites and the benchmarks, because both are things a
+-- run formats and so things the plan has to reach.
+solving, fetching :: [String]
+solving = narrowSolve <> wholeProject
+fetching = narrowFetch <> wholeProject
+
+-- | The same two, asked only about what @cabal@ builds by default. What is
+-- fallen back on where the whole project will not solve.
+narrowSolve, narrowFetch :: [String]
+narrowSolve = ["build", "all", "--dry-run"]
+narrowFetch = ["build", "all", "--only-download"]
+
+wholeProject :: [String]
+wholeProject = ["--enable-tests", "--enable-benchmarks"]
+
 record :: IORef [[String]] -> [String] -> IO ()
 record steps args = modifyIORef' steps (<> [args])
 
