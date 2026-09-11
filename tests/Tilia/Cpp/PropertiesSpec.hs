@@ -5,12 +5,15 @@
 -- involved in.
 module Tilia.Cpp.PropertiesSpec (spec) where
 
+import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Test.Hspec hiding (after, before)
 import Test.Hspec.QuickCheck (modifyMaxSuccess)
 import Test.QuickCheck
-import Tilia.Cpp (answeredLeaves, formatWithCpp)
+import Tilia.Cpp (answeredLeaves, formatWithCpp, withoutRuledOut)
+import Tilia.Cpp.Macros (Macros (..))
 import Tilia.Equivalence (syntaxDifference)
 import Tilia.Parser (defaultParserConfig, parseModule, pmModule)
 import Tilia.Render (defaultRenderConfig)
@@ -35,6 +38,21 @@ spec = modifyMaxSuccess (const 5000) $
               | (_, t) <- configurations
               ]
 
+    it "is read as configurations it already had, once a plan rules some out" $
+      property $ \m ->
+        let source = sourceOf m
+         in case (answeredLeaves source, answeredLeaves (withoutRuledOut macros source)) of
+              (Right went, Right came) ->
+                let had = Set.fromList (map snd went)
+                 in conjoin $
+                      counterexample "nothing was left to read" (not (null came))
+                        : [ counterexample
+                              (T.unpack ("not a configuration the module had:\n" <> t))
+                              (Set.member t had)
+                          | (_, t) <- came
+                          ]
+              _ -> property Discard
+
     xit "is the same program in every configuration it went in as" $
       property $ \m -> formatted m $ \out ->
         case (answeredLeaves (sourceOf m), answeredLeaves out) of
@@ -49,6 +67,16 @@ spec = modifyMaxSuccess (const 5000) $
 
 ----------------------------------------------------------------------------
 -- Running the formatter
+
+-- | A plan that settles the version the generator asks about and nothing
+-- else, so that a module comes out with some of its conditionals answered
+-- and some of them left open.
+macros :: Macros
+macros =
+  Macros
+    { macroVersions = Map.fromList [("MIN_VERSION_thing", [1, 2, 3])],
+      macroNumbers = Map.empty
+    }
 
 format :: Text -> Either Text Text
 format source = case formatWithCpp defaultParserConfig defaultRenderConfig "M.hs" source of
@@ -133,7 +161,14 @@ item depth =
 
 conditional :: Int -> Gen Item
 conditional depth = do
-  guard' <- elements ["if FLAG", "ifdef OTHER", "if FLAG"]
+  guard' <-
+    elements
+      [ "if FLAG",
+        "ifdef OTHER",
+        "if FLAG",
+        "if MIN_VERSION_thing(1,0,0)",
+        "if MIN_VERSION_thing(9,0,0)"
+      ]
   yes <- items (depth - 1) 3
   no <- frequency [(1, pure []), (1, items (depth - 1) 2)]
   pure (Cond guard' yes no)

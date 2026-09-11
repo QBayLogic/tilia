@@ -15,6 +15,7 @@ module Tilia.Fixity.Plan
     readBuildPlan,
     planToken,
     tokenFor,
+    macrosOf,
 
     -- * Readiness
     Readiness (..),
@@ -62,6 +63,7 @@ import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
+import Data.Text.Read qualified as T
 import GHC.Hs (HsModule)
 import GHC.Hs.Extension (GhcPs)
 import GHC.IO.Handle (hDuplicate)
@@ -85,7 +87,8 @@ import System.Process
     std_out,
     waitForProcess,
   )
-import Tilia.Cpp (branchLeaves)
+import Tilia.Cpp (branchLeaves, withoutRuledOut)
+import Tilia.Cpp.Macros (Macros (..))
 import Tilia.Fixity
 import Tilia.Fixity.Builtin (builtinFixities)
 import Tilia.Fixity.ByHand (byHandFixities, hscFixities)
@@ -261,6 +264,53 @@ readBuildPlan path =
   doesFileExist path >>= \case
     False -> pure (Left ("no build plan at " <> T.pack path))
     True -> either (Left . T.pack) Right <$> eitherDecodeFileStrict path
+
+-- | The version macros a plan settles.
+macrosOf :: BuildPlan -> Macros
+macrosOf plan =
+  Macros
+    { macroVersions =
+        Map.fromList
+          ( [ ("MIN_VERSION_" <> T.map underscore name, version)
+            | (name, [version]) <- Map.toList (Map.map Set.toList versions)
+            ]
+              <> [("MIN_VERSION_GLASGOW_HASKELL", v) | v <- toList compiler]
+          ),
+      macroNumbers =
+        Map.fromList
+          [ entry
+          | (major : minor : patches) <- toList compiler,
+            entry <-
+              [ ("__GLASGOW_HASKELL__", major * 100 + minor),
+                ("__GLASGOW_HASKELL_PATCHLEVEL1__", nth 0 patches),
+                ("__GLASGOW_HASKELL_PATCHLEVEL2__", nth 1 patches)
+              ]
+          ]
+    }
+  where
+    versions =
+      Map.fromListWith
+        Set.union
+        [ (ppName p, Set.singleton v)
+        | p <- bpPackages plan,
+          Just v <- [numberedVersion (ppVersion p)]
+        ]
+    compiler = do
+      version <- T.stripPrefix "ghc-" (bpCompiler plan)
+      parts <- numberedVersion version
+      case parts of
+        _ : _ : _ -> Just (take 4 (parts <> repeat 0))
+        _ -> Nothing
+    nth i xs = if i < length xs then xs !! i else 0
+    underscore c = if c == '-' then '_' else c
+
+-- | A version as its numbers, or 'Nothing' where any of them is not one.
+numberedVersion :: Text -> Maybe [Integer]
+numberedVersion = traverse number . T.splitOn "."
+  where
+    number part = case T.decimal part of
+      Right (n, rest) | T.null rest -> Just n
+      _ -> Nothing
 
 ----------------------------------------------------------------------------
 -- Readiness
@@ -671,7 +721,8 @@ newResolverVia routes plan = do
             wkReach = reach,
             wkReachChildren = children,
             wkReachExports = exports,
-            wkExtensionsOf = extensionsOf
+            wkExtensionsOf = extensionsOf,
+            wkMacros = macrosOf plan
           }
       reach visiting modName
         | modName `Set.member` visiting = pure Nothing
@@ -736,7 +787,7 @@ newResolverVia routes plan = do
 -- every fixity it could supply.
 exportNamesOfModule :: Workings -> Set Text -> Text -> IO (Maybe (Set OpName))
 exportNamesOfModule
-  Workings {wkCache, wkLocal, wkIndex, wkReachChildren, wkReachExports}
+  Workings {wkCache, wkLocal, wkIndex, wkReachChildren, wkReachExports, wkMacros}
   visiting
   modName
     | Just path <- Map.lookup modName wkLocal,
@@ -777,7 +828,7 @@ exportNamesOfModule
           modName
           hsModule
       visiting' = Set.insert modName visiting
-      parsedLeaves = configurationsOf Nothing modName
+      parsedLeaves = configurationsOf wkMacros Nothing modName
 
 -- | What a module keeps under each of its names, so that a @T(..)@ in an
 -- import list can be told what it brings in.
@@ -791,7 +842,8 @@ childrenOfModule
       wkInterfaces,
       wkInterfaceOf,
       wkReachChildren,
-      wkExtensionsOf
+      wkExtensionsOf,
+      wkMacros
     }
   visiting
   modName
@@ -849,7 +901,7 @@ childrenOfModule
           modName
           hsModule
       visiting' = Set.insert modName visiting
-      parsedLeaves extensions = configurationsOf (Just extensions) modName
+      parsedLeaves extensions = configurationsOf wkMacros (Just extensions) modName
 
 -- | Work out what a module can see, using a resolver to reach its imports.
 --
@@ -930,7 +982,11 @@ data Workings = Workings
     -- | What the package a module belongs to puts in force. A module that
     -- leans on its package's @default-extensions@ does not parse without
     -- them, and one that does not parse cannot be read for anything.
-    wkExtensionsOf :: Text -> IO [Extension]
+    wkExtensionsOf :: Text -> IO [Extension],
+    -- | What the plan settles about the questions a module's conditionals
+    -- ask, so that a branch written for another version of a dependency is
+    -- not read as part of it.
+    wkMacros :: Macros
   }
 
 -- | Where a module's fixities come from, in order of cost.
@@ -958,7 +1014,8 @@ resolveModule
       wkInterfaceOf,
       wkReach,
       wkReachChildren,
-      wkExtensionsOf
+      wkExtensionsOf,
+      wkMacros
     }
   visiting
   modName
@@ -972,6 +1029,7 @@ resolveModule
           Just source -> do
             extensions <- wkExtensionsOf modName
             fromText
+              wkMacros
               extensions
               (wkReach visiting')
               (wkReachChildren visiting')
@@ -1010,6 +1068,7 @@ resolveModule
             Nothing -> do
               extensions <- wkExtensionsOf modName
               fromSource
+                wkMacros
                 extensions
                 (wkReach visiting')
                 (wkReachChildren visiting')
@@ -1189,6 +1248,8 @@ sha256OfFile path = do
 
 -- | Read a module's fixities out of a tarball, following re-exports.
 fromSource ::
+  -- | What the plan settles about its conditionals.
+  Macros ->
   -- | What the module's package puts in force, before its own pragmas.
   [Extension] ->
   -- | How to reach another module, for chasing re-exports. This is
@@ -1207,7 +1268,7 @@ fromSource ::
   -- | What it declares, including what it only passes on, and whether that
   -- is worth remembering.
   IO Reading
-fromSource extensions reach reachChildren visiting tarball modName =
+fromSource macros extensions reach reachChildren visiting tarball modName =
   doesFileExist tarball >>= \case
     False -> pure NoArchive
     True ->
@@ -1216,7 +1277,7 @@ fromSource extensions reach reachChildren visiting tarball modName =
         Just ForHsc -> pure (FromArchive (hscDeclares modName))
         Just (Haskell source) ->
           FromArchive . maybe Unreadable Declares
-            <$> fromText extensions reach reachChildren visiting source modName
+            <$> fromText macros extensions reach reachChildren visiting source modName
 
 -- | What came of looking for a module in an archive.
 data Reading
@@ -1229,6 +1290,8 @@ data Reading
 
 -- | The fixities a module's text declares and passes on.
 fromText ::
+  -- | What the plan settles about its conditionals.
+  Macros ->
   -- | What the module's package puts in force, before its own pragmas.
   [Extension] ->
   -- | How to reach another module, for chasing re-exports. This is
@@ -1245,8 +1308,8 @@ fromText ::
   -- | Its name.
   Text ->
   IO (Maybe (Fixities))
-fromText extensions reach reachChildren visiting source modName =
-  case configurationsOf (Just extensions) modName source of
+fromText macros extensions reach reachChildren visiting source modName =
+  case configurationsOf macros (Just extensions) modName source of
     Nothing -> pure Nothing
     Just modules ->
       agreeing <$> traverse readOne modules
@@ -1553,6 +1616,8 @@ whatParsed = either (const Nothing) Just
 -- Haskell, parsed, each with whether it has the Prelude without importing
 -- it.
 configurationsOf ::
+  -- | What the plan settles about the questions its conditionals ask.
+  Macros ->
   -- | What the module's package puts in force, or 'Nothing' where nothing
   -- is known about it. Then it is parsed under the most generous edition
   -- rather than the narrowest, and taken to have the Prelude unless it
@@ -1563,8 +1628,9 @@ configurationsOf ::
   -- | Its text
   Text ->
   Maybe (NonEmpty (Choice "implicitPrelude", HsModule GhcPs))
-configurationsOf extensions modName text =
-  NE.nonEmpty . mapMaybe parsed =<< whatParsed (branchLeaves text)
+configurationsOf macros extensions modName text =
+  NE.nonEmpty . mapMaybe parsed
+    =<< whatParsed (branchLeaves (withoutRuledOut macros text))
   where
     parsed leaf =
       (,) (hasImplicitPrelude (fromMaybe [] extensions) leaf) . pmModule

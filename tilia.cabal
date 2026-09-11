@@ -39,6 +39,7 @@ library
     Tilia.Comments.Attach
     Tilia.Comments.Place
     Tilia.Cpp
+    Tilia.Cpp.Macros
     Tilia.Diff
     Tilia.Doc
     Tilia.Doc.Body
@@ -180,6 +181,7 @@ test-suite tests
     Tilia.Corpus
     Tilia.Corpus.Manifest
     Tilia.CorpusSpec
+    Tilia.Cpp.MacrosSpec
     Tilia.Cpp.PropertiesSpec
     Tilia.CppSpec
     Tilia.Doc.BodySpec

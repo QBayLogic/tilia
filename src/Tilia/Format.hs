@@ -35,12 +35,21 @@ import Tilia.Cpp
     describeCppError,
     formatWithCpp,
     usesCpp,
+    withoutRuledOut,
   )
+import Tilia.Cpp.Macros (Macros)
 import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Equivalence (commentDifference, syntaxDifference)
 import Tilia.Fixity (OpName, Unknown (..), operatorSpelling, spellUnreadIn, unknownOperators)
 import Tilia.Fixity.Debug (FixityNotes, fixityNotes)
-import Tilia.Fixity.Plan (PlanComponent, Resolver (..), loadPlan, newResolver, scopeFor)
+import Tilia.Fixity.Plan
+  ( PlanComponent,
+    Resolver (..),
+    loadPlan,
+    macrosOf,
+    newResolver,
+    scopeFor,
+  )
 import Tilia.Package
   ( PackageProblem (..),
     PackageReader,
@@ -174,6 +183,9 @@ refused = \case
 data Session = Session
   { -- | What can be asked about the modules a file imports.
     sessionResolver :: Resolver,
+    -- | What the plan settles about the questions a file's conditionals
+    -- ask, so that a branch it rules out is not read as part of the file.
+    sessionMacros :: Macros,
     -- | What each file's package puts in force.
     sessionPackage :: PackageReader,
     -- | Whether to check AST equivalence.
@@ -213,6 +225,7 @@ newSession start components checkAst checkIdempotence debugFixity = runExceptT $
   pure
     Session
       { sessionResolver = resolver,
+        sessionMacros = macrosOf plan,
         sessionPackage = askPackage,
         sessionCheckAst = checkAst,
         sessionCheckIdempotence = checkIdempotence,
@@ -251,6 +264,7 @@ formatSource session path source = runExceptT $ do
   package <- orElse (NoPackage path) =<< liftIO (sessionPackage session path)
   let resolver = sessionResolver session
       config = parserConfigFor package
+      reading = blankCpp . withoutRuledOut (sessionMacros session)
       extensionsAndCpp text =
         let declared = effectiveExtensions package text
          in (Set.fromList declared, usesCpp declared text)
@@ -278,7 +292,7 @@ formatSource session path source = runExceptT $ do
           unknown -> throwE (UnknownFixity path unknown)
       formatting (extensions, cpp) already text
         | cpp = do
-            render <- case parseModule config path (blankCpp text) of
+            render <- case parseModule config path (reading text) of
               Left _ -> pure defaultRenderConfig {rcExtensions = extensions}
               Right whole -> renderConfigFor extensions (pmModule whole)
             printed <-

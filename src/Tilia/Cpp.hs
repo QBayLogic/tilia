@@ -7,6 +7,7 @@ module Tilia.Cpp
     formatWithCpp,
     usesCpp,
     blankCpp,
+    withoutRuledOut,
     CppError (..),
     describeCppError,
 
@@ -34,6 +35,7 @@ import Data.Maybe (isJust, listToMaybe, maybeToList)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.LanguageExtensions.Type (Extension (..))
+import Tilia.Cpp.Macros (Macros, answerTo)
 import Tilia.Doc (defaultRenderOptions, printDoc)
 import Tilia.Doc.Combinators qualified as Doc
 import Tilia.Doc.Internal (Doc (..), Layout (..))
@@ -927,6 +929,43 @@ blankCpp = T.unlines . go False . T.lines
       | continuing || isDirective l = "" : go (runsOn l) ls
       | otherwise = l : go False ls
     runsOn = T.isSuffixOf "\\" . T.stripEnd
+
+-- | Blank out every branch the macros rule out, and the conditionals that
+-- ask about them.
+--
+-- This is for reading a module, not for printing one. What it takes out is
+-- text the file contains and the output must keep, so nothing that builds
+-- the output may be given the result.
+withoutRuledOut :: Macros -> Text -> Text
+withoutRuledOut macros source = case scanDirectives source of
+  Nothing -> source
+  Just ds ->
+    blanking
+      [ range
+      | group <- allGroups ds,
+        Just gs <- [groupSpec group],
+        Just taken <- [branchTaken macros gs],
+        range <- blankingFor gs taken
+      ]
+      source
+
+-- | Which branch of a conditional the macros settle on, where they settle
+-- one.
+--
+-- A branch is taken when its own condition holds and every condition before
+-- it failed, so one unanswered condition leaves every branch after it
+-- unanswered too. Where they all fail the answer is the last branch, which
+-- is the @#else@ where there is one and nothing at all where there is not:
+-- the same numbering 'blankingFor' uses.
+branchTaken :: Macros -> GroupSpec -> Maybe Int
+branchTaken macros = go 0 . gsGuards
+  where
+    go i = \case
+      [] -> Just i
+      g : rest -> case answerTo macros (guardText g) of
+        Just True -> Just i
+        Just False -> go (i + 1) rest
+        Nothing -> Nothing
 
 -- | Why a module using the preprocessor could not be formatted.
 data CppError
