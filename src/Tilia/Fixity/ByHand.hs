@@ -55,7 +55,38 @@ byHandFixities =
       -- It exports no operator and declares no fixity. What it costs to
       -- refuse is @Data.HashMap.Strict@, and after that @Data.Aeson.KeyMap@
       -- and everything that reads a JSON object.
-      entry "Data.HashMap.Internal.Array" []
+      entry "Data.HashMap.Internal.Array" [],
+      -- @monad-logger@ writes one method body once and hands it to sixteen
+      -- instances: @#define DEF monadLoggerLog a b c d = …@, and then
+      -- @instance … where DEF@ for each of them. A @where@ with a bare name
+      -- after it is not Haskell, and the @#define@ sits outside every
+      -- conditional, so there is no configuration in which it is.
+      --
+      -- It declares no fixity, and its export list is explicit throughout:
+      -- no module is handed on whole, and none of the types it exports with
+      -- @(..)@ keeps an operator. What refusing it costs is @Yesod.Core@,
+      -- and after that every module of @yesod@ that reaches one.
+      entry "Control.Monad.Logger" [],
+      -- @cereal@ writes its generic sum instances through three macros, and
+      -- the one that matters expands into a guard and its right-hand side
+      -- at once: @gPut | PUTSUM(Word8) | …@. Unexpanded that is a guard
+      -- with nothing after it.
+      --
+      -- It declares no fixity. It does hand @Data.Serialize.Get@, @.Put@
+      -- and @.IEEE754@ on whole, so this claim is about those as well, and
+      -- not one of the three declares a fixity or exports an operator
+      -- either: what they supply has the Report's @infixl 9@, which is what
+      -- an absence here already says.
+      entry "Data.Serialize" [],
+      -- @th-lift-instances@ has @LIFT_TYPED_DEFAULT@, defined three ways
+      -- against the @template-haskell@ version and to nothing at all in the
+      -- oldest of them, and written bare in five instance bodies.
+      --
+      -- Its export list is empty—the module exists for its orphan
+      -- instances—so it supplies no operator whatever it declares. It is
+      -- reached through eight modules of @persistent@, which is a long way
+      -- to be refused from.
+      entry "Instances.TH.Lift" []
     ]
   where
     entry name ops =
