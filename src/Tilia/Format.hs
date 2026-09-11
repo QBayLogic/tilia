@@ -122,18 +122,32 @@ describeFormatError palette = \case
   UnknownFixity path unknown ->
     "will not format "
       <> file path
-      <> ": the fixity of "
-      <> T.intercalate ", " (map saying unknown)
+      <> ": "
+      <> T.intercalate ", and " (map saying (together unknown))
     where
-      saying ((qualifier, op), why) =
-        paint palette Operator (operatorSpelling qualifier op) <> " " <> because why
+      saying (why, ops) =
+        (if length ops == 1 then "the fixity of " else "the fixities of ")
+          <> listing ops
+          <> " "
+          <> because why
       because = \case
         NotRead missing -> "may be declared in " <> spellUnreadIn palette missing
         Ambiguous -> "is declared differently by two modules in scope"
+      together = foldl put []
+        where
+          put seen ((qualifier, op), why) =
+            let named = paint palette Operator (operatorSpelling qualifier op)
+             in case break ((== why) . fst) seen of
+                  (before, (_, ops) : after) ->
+                    before <> [(why, ops <> [named])] <> after
+                  _ -> seen <> [(why, [named])]
+      listing ops = case reverse ops of
+        [] -> ""
+        [one] -> one
+        [second, first'] -> first' <> " and " <> second
+        (final : rest) -> T.intercalate ", " (reverse rest) <> ", and " <> final
   where
     file = paint palette Place . T.pack
-    -- A parse error opens with the span the parser rendered, which opens
-    -- with the file. Set that much of it like every other file name here.
     located t = case T.breakOn ":" t of
       (where', rest) -> paint palette Place where' <> rest
 
@@ -279,6 +293,7 @@ formatSource session path source = runExceptT $ do
               fixityNotes
                 implicitPrelude
                 (askFixities resolver)
+                (askChain resolver)
                 scope
                 hsModule
             atomicModifyIORef' ref (\m -> (Map.insertWith (\_ old -> old) path told m, ()))

@@ -34,10 +34,12 @@ module Tilia.Fixity
     Namespace (..),
     Fixities,
     inBothNamespaces,
+    Unread (..),
+    ModuleChain (..),
+    spellModuleChain,
     Scope (..),
     Reach (..),
     reachIn,
-    Unread (..),
     resolveScope,
 
     -- * Answers
@@ -63,7 +65,7 @@ where
 import Data.Choice (Choice, isTrue)
 import Data.Foldable (toList)
 import Data.Generics.Schemes (listify)
-import Data.List.NonEmpty (NonEmpty, nonEmpty)
+import Data.List.NonEmpty (NonEmpty ((:|)), nonEmpty)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -527,9 +529,25 @@ data Unread = Unread
     -- | What it keeps under each of its names, for expanding a @T(..)@ in
     -- the import list. Empty is ignorance, and leaves such a list
     -- suspected of bringing in anything.
-    unreadCarries :: Map OpName (Set OpName)
+    unreadCarries :: Map OpName (Set OpName),
+    -- | The modules below this one that reading went through, ending at
+    -- the one that actually stopped it. Empty where the import is itself
+    -- what could not be read. Diagnostic only.
+    unreadBelow :: [Text]
   }
   deriving (Eq, Show)
+
+-- | An import that could not be read, and the way down to the module that
+-- actually stopped us. The head is the import as the file being formatted
+-- writes it, and the last name is where reading gave up.
+newtype ModuleChain = ModuleChain (NonEmpty Text)
+  deriving (Eq, Show)
+
+-- | A chain as it is shown, with the modules painted and arrows between
+-- them.
+spellModuleChain :: Palette -> ModuleChain -> Text
+spellModuleChain palette (ModuleChain modules) =
+  T.intercalate " → " (map (paint palette Place) (toList modules))
 
 -- | Every fixity a module can see, and how.
 data Scope = Scope
@@ -591,7 +609,12 @@ data Known = Known
     -- enumerated without reading what it passes on. Asked only about
     -- modules 'knownFixities' could not answer for, and only to decide
     -- which of them an unsettled operator can be blamed on.
-    knownExportNames :: Text -> Maybe (Set OpName)
+    knownExportNames :: Text -> Maybe (Set OpName),
+    -- | The modules reading a module went through before giving up, the one
+    -- it gave up on last. Asked only about modules 'knownFixities' could
+    -- not answer for, and only so that a message can name the module that
+    -- is really in the way.
+    knownChain :: Text -> [Text]
   }
 
 -- | Knowing nothing about anything: every question answered with a shrug.
@@ -603,7 +626,8 @@ nothingKnown =
   Known
     { knownFixities = const Nothing,
       knownChildren = const Map.empty,
-      knownExportNames = const Nothing
+      knownExportNames = const Nothing,
+      knownChain = const []
     }
 
 -- | Work out what a module can see.
@@ -633,7 +657,7 @@ resolveScope implicitPrelude known hsModule =
       scopeUnread = unread
     }
   where
-    Known {knownFixities = exportsOf, knownChildren, knownExportNames} = known
+    Known {knownFixities = exportsOf, knownChildren, knownExportNames, knownChain} = known
     exportNamesOf = knownExportNames
     imports = moduleImports implicitPrelude hsModule
     declared = declaredFixities hsModule
@@ -674,7 +698,8 @@ resolveScope implicitPrelude known hsModule =
       [ Unread
           { unreadImport = i,
             unreadExports = exportNamesOf (importModule i),
-            unreadCarries = knownChildren (importModule i)
+            unreadCarries = knownChildren (importModule i),
+            unreadBelow = knownChain (importModule i)
           }
       | i <- imports,
         Nothing <- [exportsOf (importModule i)]
@@ -719,13 +744,14 @@ data Provenance
 data Resolution
   = -- | Established, and here is where from.
     Resolved Fixity Provenance
-  | -- | Not established. The listed modules could not be read, and the
-    -- answer may be in one of them.
+  | -- | Not established. Each chain is an import that could not be read,
+    -- down to the module that actually stopped us, and the answer may be in
+    -- any of them.
     --
     -- A printer that receives this must not restructure the operator chain:
     -- it has to lay it out as the input had it. Rearranging on a guess is
     -- exactly what this type exists to prevent.
-    Unresolved (NonEmpty Text)
+    Unresolved (NonEmpty ModuleChain)
   deriving (Eq, Show)
 
 -- | The fixity of an operator as this module sees it.
@@ -783,10 +809,11 @@ unreadFor ::
   Maybe Text ->
   -- | Operator being resolved
   OpName ->
-  -- | The modules that could hold the answer
-  [Text]
+  -- | The imports that could hold the answer, each down to the module that
+  -- actually stopped us
+  [ModuleChain]
 unreadFor scope qualifier op =
-  [ importModule (unreadImport u)
+  [ ModuleChain (importModule (unreadImport u) :| unreadBelow u)
   | u <- scopeUnread scope,
     reaches (unreadImport u),
     brings u,
@@ -811,9 +838,10 @@ unreadFor scope qualifier op =
 
 -- | Why an operator's fixity could not be settled.
 data Unknown
-  = -- | These modules in scope could not be read, and the declaration the
-    -- answer depends on may be in any of them.
-    NotRead (NonEmpty Text)
+  = -- | These imports could not be read, each given down to the module that
+    -- actually stopped us, and the declaration the answer depends on may be
+    -- in any of them.
+    NotRead (NonEmpty ModuleChain)
   | -- | Two modules in scope bring it in with different fixities, so which
     -- one applies cannot be read off the imports alone.
     Ambiguous
@@ -868,18 +896,19 @@ unknownOperators scope hsModule =
 operatorSpelling :: Maybe Text -> OpName -> Text
 operatorSpelling qualifier (OpName op) = maybe "" (<> ".") qualifier <> op
 
--- | Spell out the modules an unsettled operator may have come from, and the
--- fact that this run could not read any of them.
+-- | Spell out where an unsettled operator may have come from, and the fact
+-- that this run could not read any of it.
 spellUnreadIn ::
   -- | Whether there is anybody there to see color
   Palette ->
-  -- | The modules, as 'Unresolved' gives them
-  NonEmpty Text ->
+  -- | The chains, as 'Unresolved' gives them
+  NonEmpty ModuleChain ->
   Text
 spellUnreadIn palette missing =
-  T.intercalate " or " (map named (toList missing)) <> ", " <> ofThose
+  T.intercalate " or " (map (spellModuleChain palette) (toList missing))
+    <> ", "
+    <> ofThose
   where
-    named = paint palette Place
     ofThose = case toList missing of
       [_] -> "which this run could not read"
       [_, _] -> "neither of which this run could read"
@@ -899,7 +928,15 @@ data Established
     Declares Fixities
   | -- | It could not be read. The expensive answer of the two, because
     -- reaching it means exhausting every way of reading the module.
-    Unreadable
+    --
+    -- The name is the module below this one that stopped us, where the
+    -- failure was not this module's own. One hop only: the module named
+    -- carries its own, and following them is how a whole chain is got back.
+    -- It is kept because it has to outlive the run that found it — a
+    -- verdict of unreadable is cached, and a reason that were not cached
+    -- with it would leave the second run with a worse account than the
+    -- first.
+    Unreadable (Maybe Text)
   deriving (Eq, Show)
 
 -- | What reading a module established about its export list.

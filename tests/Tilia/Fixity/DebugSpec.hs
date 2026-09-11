@@ -23,6 +23,7 @@ import Tilia.Fixity
 import Tilia.Fixity.Debug (fixityNotes, renderFixityNotes)
 import Tilia.Palette (Palette (Plain))
 import Tilia.Parser (defaultParserConfig, describeParseError, parseModule, pmModule)
+import Tilia.Utils (lineWidth, visibleLength)
 
 spec :: Spec
 spec = do
@@ -91,7 +92,41 @@ spec = do
       told <- notesFor [("Prelude", Just [])] "f a b c = a <?> b <?> c <?> a\n"
       length (filter (T.isInfixOf "<?>") told) `shouldBe` 1
 
+  describe "how far reading an import got" $ do
+    it "names the module that stopped it rather than the import above it" $
+      throughHspec
+        >>= ( `mentions`
+                "may be declared in Test.Hspec → Test.Hspec.Core.Spec \
+                \→ Test.QuickCheck.Property, which this run could not read"
+            )
+
+    it "says what an import that could not be read was reached through" $
+      throughHspec
+        >>= ( `mentions`
+                "Test.Hspec: could not be read, through Test.Hspec.Core.Spec \
+                \→ Test.QuickCheck.Property"
+            )
+
+    it "adds nothing for an import unread on its own account" $
+      notesFor [("Prelude", Just [])] "import Criterion.Main\nf a b = a <?> b\n"
+        >>= (`shouldContain'` "· Criterion.Main: could not be read")
+
   describe "the shape of it" $ do
+    it "keeps every line it prints inside the width" $ do
+      told <- throughHspec
+      filter ((> lineWidth) . visibleLength) told `shouldBe` []
+
+    it "sets a line it had to break further in than the entry it belongs to" $ do
+      told <- throughHspec
+      let indentOf = T.length . T.takeWhile (== ' ')
+          opens l = "·" `T.isPrefixOf` T.stripStart l
+      case break (T.isInfixOf "Test.QuickCheck.Property") told of
+        (above, broken : _)
+          | not (opens broken),
+            (entry : _) <- filter opens (reverse above) ->
+              indentOf broken `shouldSatisfy` (> indentOf entry)
+        _ -> expectationFailure (show told)
+
     it "sets out under headings" $ do
       told <- notesFor [("Prelude", Just [("+", infixl' 6)])] "f a b = a + b\n"
       map T.stripStart told `shouldContain` ["· imports"]
@@ -127,12 +162,26 @@ spec = do
 -- A module named in the world is readable and exports what is listed; a
 -- module absent from it is one the resolver could not read at all.
 notesFor :: [(Text, Maybe [(Text, Fixity)])] -> Text -> IO [Text]
-notesFor world source =
+notesFor = notesThrough []
+
+-- | The same, told how far reading got below each import it could not read.
+notesThrough ::
+  -- | What lies below an import, ending at the module that stopped it
+  [(Text, [Text])] ->
+  [(Text, Maybe [(Text, Fixity)])] ->
+  Text ->
+  IO [Text]
+notesThrough chains world source =
   renderFixityNotes Plain . Map.singleton "M.hs"
-    <$> fixityNotes (Is #implicitPrelude) (pure . exportsOf) scope hsModule
+    <$> fixityNotes (Is #implicitPrelude) (pure . exportsOf) chainOf scope hsModule
   where
     scope =
-      resolveScope (Is #implicitPrelude) nothingKnown {knownFixities = exportsOf} hsModule
+      resolveScope
+        (Is #implicitPrelude)
+        nothingKnown {knownFixities = exportsOf, knownChain = chainFor}
+        hsModule
+    chainFor m = maybe [] id (lookup m chains)
+    chainOf = pure . chainFor
     hsModule = pmModule parsed
     parsed = case parseModule defaultParserConfig "M.hs" ("module M where\n" <> source) of
       Left problem -> error (T.unpack (describeParseError problem))
@@ -145,11 +194,34 @@ notesFor world source =
 infixl' :: Int -> Fixity
 infixl' = Fixity LeftAssoc
 
+-- | A module whose one import could not be read, and whose reading stopped
+-- two modules further down. The real shape, and long enough to have to be
+-- broken to fit the width.
+throughHspec :: IO [Text]
+throughHspec =
+  notesThrough
+    [("Test.Hspec", ["Test.Hspec.Core.Spec", "Test.QuickCheck.Property"])]
+    [("Prelude", Just [])]
+    "import Test.Hspec\nf a b = a <?> b\n"
+
 -- | Is this line among them, whatever it was indented by?
 shouldContain' :: [Text] -> Text -> Expectation
 shouldContain' told wanted =
-  map T.stripStart told `shouldContain` [wanted]
+  map T.stripStart (rejoined told) `shouldContain` [wanted]
 
 -- | Does some line say this much, whatever else it goes on to say?
 mentions :: [Text] -> Text -> Expectation
-mentions told wanted = told `shouldSatisfy` any (T.isInfixOf wanted)
+mentions told wanted = rejoined told `shouldSatisfy` any (T.isInfixOf wanted)
+
+-- | The entries as they read before they were broken to fit the width.
+rejoined :: [Text] -> [Text]
+rejoined = foldl add []
+  where
+    add seen l
+      | null seen || "·" `T.isPrefixOf` T.stripStart l = seen <> [l]
+      | otherwise = case unsnoc seen of
+          Just (earlier, one) -> earlier <> [one <> " " <> T.stripStart l]
+          Nothing -> [l]
+    unsnoc xs = case reverse xs of
+      [] -> Nothing
+      (x : rest) -> Just (reverse rest, x)

@@ -39,7 +39,7 @@ import Tilia.Fixity
     spellUnreadIn,
   )
 import Tilia.Palette (Color (Operator, Place), Palette, paint)
-import Tilia.Utils (indent)
+import Tilia.Utils (indent, lineWidth, wrapTo)
 
 -- | Everything that decided one module's fixities.
 data FixityNotes = FixityNotes
@@ -63,7 +63,11 @@ data ImportNote = ImportNote
     noteQualified :: Bool,
     -- | How many operators it was read for, or 'Nothing' when it could not
     -- be read at all.
-    noteBrought :: Maybe Int
+    noteBrought :: Maybe Int,
+    -- | Where reading it went before giving up, ending at the module that
+    -- actually stopped it. Empty for an import that was read, and for one
+    -- unread on its own account.
+    noteChain :: [Text]
   }
   deriving (Eq, Show)
 
@@ -85,12 +89,15 @@ fixityNotes ::
   Choice "implicitPrelude" ->
   -- | What each module in scope exports, as the resolver answers it
   (Text -> IO (Maybe (Fixities))) ->
+  -- | Where reading a module went before giving up, asked only of the ones
+  -- the line above gave up on
+  (Text -> IO [Text]) ->
   -- | The scope the module was formatted under
   Scope ->
   -- | The module
   HsModule GhcPs ->
   IO FixityNotes
-fixityNotes implicitPrelude resolve scope hsModule = do
+fixityNotes implicitPrelude resolve chainOf scope hsModule = do
   brought <- traverse alongside (moduleImports implicitPrelude hsModule)
   pure
     FixityNotes
@@ -101,6 +108,9 @@ fixityNotes implicitPrelude resolve scope hsModule = do
   where
     alongside i = do
       answer <- resolve (importModule i)
+      below <- case answer of
+        Just _ -> pure []
+        Nothing -> chainOf (importModule i)
       pure
         ImportNote
           { noteModule = importModule i,
@@ -109,7 +119,8 @@ fixityNotes implicitPrelude resolve scope hsModule = do
                 then Nothing
                 else Just (importAlias i),
             noteQualified = importQualified i,
-            noteBrought = Set.size . Set.fromList . map snd . Map.keys <$> answer
+            noteBrought = Set.size . Set.fromList . map snd . Map.keys <$> answer,
+            noteChain = below
           }
 
     used =
@@ -157,17 +168,24 @@ aboutFile palette notes =
   where
     section what render items
       | null items = []
-      | otherwise = heading what : map (entry . render) items
+      | otherwise = heading what : concatMap (entry . render) items
     heading what = indent 2 <> "· " <> what
-    entry line = indent 3 <> "· " <> line
+
+    entry line = case wrapTo (lineWidth - 8) line of
+      [] -> []
+      (opening : rest) -> (indent 3 <> "· " <> opening) : map (indent 4 <>) rest
 
     fromImport i =
       named (noteModule i)
         <> qualification i
         <> ": "
         <> case noteBrought i of
-          Nothing -> "could not be read"
+          Nothing -> "could not be read" <> through (noteChain i)
           Just n -> operators n
+
+    through = \case
+      [] -> ""
+      below -> ", through " <> T.intercalate " → " (map named below)
 
     qualification i = case (noteQualified i, noteAlias i) of
       (True, Just alias) -> " qualified as " <> named alias

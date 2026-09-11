@@ -57,24 +57,37 @@ spec = do
         cachedFixities cache "thing-1.0" "Quiet" `shouldReturn` Just (Declares Map.empty)
 
       it "remembers that a module could not be read" $ \cache -> do
-        storeFixities cache "thing-1.0" "Opaque" Unreadable
-        cachedFixities cache "thing-1.0" "Opaque" `shouldReturn` Just Unreadable
+        storeFixities cache "thing-1.0" "Opaque" (Unreadable Nothing)
+        cachedFixities cache "thing-1.0" "Opaque" `shouldReturn` Just (Unreadable Nothing)
+
+      it "remembers which module below it stopped the reading" $ \cache -> do
+        storeFixities cache "thing-1.0" "Opaque" (Unreadable (Just "Deep.Down"))
+        cachedFixities cache "thing-1.0" "Opaque"
+          `shouldReturn` Just (Unreadable (Just "Deep.Down"))
+
+      it "tells one stopped below it from one stopped on its own account" $ \cache -> do
+        storeFixities cache "thing-1.0" "Blamed" (Unreadable (Just "Deep.Down"))
+        storeFixities cache "thing-1.0" "Itself" (Unreadable Nothing)
+        blamed <- cachedFixities cache "thing-1.0" "Blamed"
+        itself <- cachedFixities cache "thing-1.0" "Itself"
+        (blamed, itself)
+          `shouldBe` (Just (Unreadable (Just "Deep.Down")), Just (Unreadable Nothing))
 
       it "tells an unread module from one it was never told about" $ \cache -> do
-        storeFixities cache "thing-1.0" "Opaque" Unreadable
+        storeFixities cache "thing-1.0" "Opaque" (Unreadable Nothing)
         unread <- cachedFixities cache "thing-1.0" "Opaque"
         never <- cachedFixities cache "thing-1.0" "Absent"
-        (unread, never) `shouldBe` (Just Unreadable, Nothing)
+        (unread, never) `shouldBe` (Just (Unreadable Nothing), Nothing)
 
       it "tells an unread module from one that declares nothing" $ \cache -> do
-        storeFixities cache "thing-1.0" "Opaque" Unreadable
+        storeFixities cache "thing-1.0" "Opaque" (Unreadable Nothing)
         storeFixities cache "thing-1.0" "Quiet" (Declares Map.empty)
         opaque <- cachedFixities cache "thing-1.0" "Opaque"
         quiet <- cachedFixities cache "thing-1.0" "Quiet"
-        (opaque, quiet) `shouldBe` (Just Unreadable, Just (Declares Map.empty))
+        (opaque, quiet) `shouldBe` (Just (Unreadable Nothing), Just (Declares Map.empty))
 
       it "replaces an unread answer once the module can be read" $ \cache -> do
-        storeFixities cache "thing-1.0" "M" Unreadable
+        storeFixities cache "thing-1.0" "M" (Unreadable Nothing)
         storeFixities cache "thing-1.0" "M" (Declares (Map.fromList [((InTerms, OpName "!"), Fixity LeftAssoc 9)]))
         cachedFixities cache "thing-1.0" "M"
           `shouldReturn` Just (Declares (Map.fromList [((InTerms, OpName "!"), Fixity LeftAssoc 9)]))
@@ -129,9 +142,9 @@ spec = do
           `shouldReturn` Just (Exports (Set.singleton (OpName "<+>")))
 
       it "keeps them apart from the fixities of the same module" $ \cache -> do
-        storeFixities cache "thing-1.0" "M" Unreadable
+        storeFixities cache "thing-1.0" "M" (Unreadable Nothing)
         storeExportNames cache "thing-1.0" "M" (Exports (Set.singleton (OpName "<+>")))
-        cachedFixities cache "thing-1.0" "M" `shouldReturn` Just Unreadable
+        cachedFixities cache "thing-1.0" "M" `shouldReturn` Just (Unreadable Nothing)
         cachedExportNames cache "thing-1.0" "M"
           `shouldReturn` Just (Exports (Set.singleton (OpName "<+>")))
 
@@ -265,15 +278,15 @@ tokens :: Spec
 tokens = around withIsolatedDirectory $ do
   it "does not offer an unread answer written under another token" $ \dir -> do
     before' <- open dir (PlanToken "one")
-    storeFixities before' "thing-1.0" "M" Unreadable
+    storeFixities before' "thing-1.0" "M" (Unreadable Nothing)
     after' <- open dir (PlanToken "two")
     cachedFixities after' "thing-1.0" "M" `shouldReturn` Nothing
 
   it "still offers one written under the same token" $ \dir -> do
     before' <- open dir (PlanToken "one")
-    storeFixities before' "thing-1.0" "M" Unreadable
+    storeFixities before' "thing-1.0" "M" (Unreadable Nothing)
     again <- open dir (PlanToken "one")
-    cachedFixities again "thing-1.0" "M" `shouldReturn` Just Unreadable
+    cachedFixities again "thing-1.0" "M" `shouldReturn` Just (Unreadable Nothing)
 
   it "keeps an answer that was read, whatever the token" $ \dir -> do
     let fixities = Map.fromList [((InTerms, OpName "<+>"), Fixity RightAssoc 6)]

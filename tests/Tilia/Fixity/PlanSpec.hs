@@ -365,7 +365,9 @@ chased :: Text -> IO (Maybe Fixity)
 chased source = do
   answer <-
     withReexports (Is #implicitPrelude) reach carries Set.empty "M" (pmModule parsed)
-  pure (Map.lookup (InTerms, OpName "<+>") =<< answer)
+  pure $ case answer of
+    Declares fixities -> Map.lookup (InTerms, OpName "<+>") fixities
+    Unreadable _ -> Nothing
   where
     carries m =
       pure $ case m of
@@ -790,7 +792,22 @@ withPlan plan = do
           let m = parse "module M where\nimport Opaque\n"
           scope <- scopeFor rs (Is #implicitPrelude) (pmModule m)
           lookupFixity scope InTerms Nothing (OpName "<+>")
-            `shouldBe` Unresolved ("Opaque" :| [])
+            `shouldBe` Unresolved (ModuleChain ("Opaque" :| ["No.Such.Module"]) :| [])
+
+    it "names the module that stopped it rather than the import above it" $
+      withFakeProject [("src/Opaque.hs", opaqueSource)] $
+        \rs -> askChain rs "Opaque" `shouldReturn` ["No.Such.Module"]
+
+    it "follows the reasons down more than one module"
+      $ withFakeProject
+        [ ("src/Near.hs", "module Near ((<+>)) where\nimport Middle\n"),
+          ("src/Middle.hs", "module Middle ((<+>)) where\nimport No.Such.Module\n")
+        ]
+      $ \rs -> askChain rs "Near" `shouldReturn` ["Middle", "No.Such.Module"]
+
+    it "has nothing to say about a module that could be read" $
+      withFakeProject [("src/Opaque.hs", opaqueSource)] $
+        \rs -> askChain rs "Prelude" `shouldReturn` []
 
   describe "the whole pipeline, from source text to a fixity" $ do
     it "resolves an operator through a real import" $
@@ -829,7 +846,7 @@ withPlan plan = do
     it "refuses to conclude anything when an import could not be read" $
       endToEnd resolver "module M where\nimport No.Such.Module\n" $ \scope ->
         lookupFixity scope InTerms Nothing (OpName "<!@#>")
-          `shouldBe` Unresolved ("No.Such.Module" :| [])
+          `shouldBe` Unresolved (unreadOnly "No.Such.Module")
 
     it "still answers for what it did find, despite an unreadable import" $
       endToEnd resolver "module M where\nimport Prettyprinter\nimport No.Such.Module\n" $ \scope ->
@@ -1164,6 +1181,11 @@ withEnvironment vars act = bracket set restore (const act)
       setEnv key value
       pure (key, was)
     restore = traverse_ (\(key, was) -> maybe (unsetEnv key) (setEnv key) was)
+
+-- | The one import blamed for an operator, unread on its own account and so
+-- with nothing below it.
+unreadOnly :: Text -> NonEmpty ModuleChain
+unreadOnly m = ModuleChain (m :| []) :| []
 
 -- | Say why nothing could be tested, once, instead of failing repeatedly.
 unavailable :: String -> Spec

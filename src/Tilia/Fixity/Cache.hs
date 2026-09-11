@@ -120,7 +120,11 @@ cachedFixities cache@(Cache _ (PlanToken token)) package modName =
   fmap join . readIfPresent (fixitiesPath cache package modName) $ \contents ->
     case T.lines contents of
       ("read" : entries) -> Declares . Map.fromList <$> traverse parseEntry entries
-      [unread] | unread == "unread\t" <> token -> Just Unreadable
+      [unread] | Just rest <- T.stripPrefix ("unread\t" <> token) unread ->
+        case T.uncons rest of
+          Nothing -> Just (Unreadable Nothing)
+          Just ('\t', below) | not (T.null below) -> Just (Unreadable (Just below))
+          _ -> Nothing
       _ -> Nothing
 
 -- | Remember what reading a module established.
@@ -138,7 +142,8 @@ storeFixities cache package modName answer = do
   quietly () (createDirectoryIfMissing True (packageDir cache package))
   writeAtomically (fixitiesPath cache package modName) $
     case answer of
-      Unreadable -> T.unlines ["unread\t" <> token]
+      Unreadable below ->
+        T.unlines ["unread\t" <> token <> foldMap ("\t" <>) below]
       Declares fixities ->
         T.unlines ("read" : map renderEntry (Map.toList fixities))
   where

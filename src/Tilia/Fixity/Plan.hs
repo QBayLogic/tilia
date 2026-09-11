@@ -42,6 +42,7 @@ where
 
 import Codec.Archive.Tar qualified as Tar
 import Codec.Compression.GZip qualified as GZip
+import Control.Applicative ((<|>))
 import Control.Monad (filterM, foldM, join)
 import Crypto.Hash.SHA256 qualified as SHA256
 import Data.Aeson (FromJSON (..), Value, eitherDecodeFileStrict, withObject, (.:), (.:?))
@@ -659,7 +660,12 @@ data Resolver = Resolver
     -- | The operators an unread module's export list names, asked only of
     -- the modules 'askFixities' gave up on, and what keeps a module that
     -- plainly has no such operator from being blamed for one.
-    askExportNames :: Text -> IO (Maybe (Set OpName))
+    askExportNames :: Text -> IO (Maybe (Set OpName)),
+    -- | The modules reading a module went through before giving up, the one
+    -- it gave up on last. Asked only of the modules 'askFixities' gave up
+    -- on, and only so that a message can name the module really in the way
+    -- rather than the import that happens to sit above it.
+    askChain :: Text -> IO [Text]
   }
 
 -- | Build the answers to what "Tilia.Fixity" asks.
@@ -724,16 +730,26 @@ newResolverVia routes plan = do
             wkExtensionsOf = extensionsOf,
             wkMacros = macrosOf plan
           }
+      resolved visiting modName = do
+        known <- readIORef memo
+        case Map.lookup modName known of
+          Just answer -> pure answer
+          Nothing -> do
+            answer <- resolveModule workings visiting modName
+            atomicModifyIORef' memo (\m -> (Map.insert modName answer m, ()))
+            pure answer
       reach visiting modName
         | modName `Set.member` visiting = pure Nothing
-        | otherwise = do
-            known <- readIORef memo
-            case Map.lookup modName known of
-              Just answer -> pure answer
-              Nothing -> do
-                answer <- resolveModule workings visiting modName
-                atomicModifyIORef' memo (\m -> (Map.insert modName answer m, ()))
-                pure answer
+        | otherwise = fixitiesEstablished <$> resolved visiting modName
+      chain visiting = go Set.empty
+        where
+          go seen modName
+            | modName `Set.member` seen = pure []
+            | otherwise =
+                resolved visiting modName >>= \case
+                  Unreadable (Just below) ->
+                    (below :) <$> go (Set.insert modName seen) below
+                  _ -> pure []
       exports visiting modName
         | modName `Set.member` visiting = pure Nothing
         | otherwise = do
@@ -774,7 +790,8 @@ newResolverVia routes plan = do
     Resolver
       { askFixities = reach Set.empty,
         askChildren = children Set.empty,
-        askExportNames = exports Set.empty
+        askExportNames = exports Set.empty,
+        askChain = chain Set.empty
       }
 
 -- | The operators a module's export list names, where that list can be
@@ -926,6 +943,7 @@ scopeFor resolver implicitPrelude hsModule = do
   let table = Map.fromList answers
       unread = [m | (m, Nothing) <- answers]
   names <- Map.fromList <$> traverse (\m -> (m,) <$> askExportNames resolver m) unread
+  chains <- Map.fromList <$> traverse (\m -> (m,) <$> askChain resolver m) unread
   kept <-
     Map.fromList
       <$> traverse
@@ -937,7 +955,8 @@ scopeFor resolver implicitPrelude hsModule = do
       Known
         { knownFixities = \m -> Map.findWithDefault Nothing m table,
           knownChildren = \m -> Map.findWithDefault Map.empty m kept,
-          knownExportNames = \m -> Map.findWithDefault Nothing m names
+          knownExportNames = \m -> Map.findWithDefault Nothing m names,
+          knownChain = \m -> Map.findWithDefault [] m chains
         }
       hsModule
   where
@@ -1001,9 +1020,9 @@ resolveModule ::
   Set Text ->
   -- | The module to resolve.
   Text ->
-  -- | Its operator fixities, or 'Nothing' if they could not be
-  -- established.
-  IO (Maybe (Fixities))
+  -- | Its operator fixities, or, where they could not be established, the
+  -- module below it that stopped us if there was one.
+  IO Established
 resolveModule
   Workings
     { wkRoutes,
@@ -1019,13 +1038,13 @@ resolveModule
     }
   visiting
   modName
-    | Just builtin <- Map.lookup modName builtinFixities = pure (Just builtin)
+    | Just builtin <- Map.lookup modName builtinFixities = pure (Declares builtin)
     | Just path <- Map.lookup modName wkLocal,
       writtenForHsc path =
-        pure (Just (fixitiesDeclared (hscDeclares modName)))
+        pure (hscDeclares modName)
     | Just path <- Map.lookup modName wkLocal =
         readFileText path >>= \case
-          Nothing -> pure Nothing
+          Nothing -> pure (Unreadable Nothing)
           Just source -> do
             extensions <- wkExtensionsOf modName
             fromText
@@ -1044,11 +1063,14 @@ resolveModule
         FromInterface -> viaInterface
         FromSource -> viaArchive
 
-      firstAnswer [] = pure Unreadable
-      firstAnswer (route : rest) =
-        route >>= \case
-          Just (Declares fixities) -> pure (Declares fixities)
-          _ -> firstAnswer rest
+      firstAnswer = go Nothing
+        where
+          go blamed [] = pure (Unreadable blamed)
+          go blamed (route : rest) =
+            route >>= \case
+              Just (Declares fixities) -> pure (Declares fixities)
+              Just (Unreadable below) -> go (blamed <|> below) rest
+              Nothing -> go blamed rest
 
       viaInterface = case Map.lookup modName wkInterfaces of
         Nothing -> pure Nothing
@@ -1082,8 +1104,8 @@ resolveModule
                     pure (Just established)
 
       answered = \case
-        Declares fixities -> Just fixities
-        Unreadable -> byHand modName
+        Declares fixities -> Declares fixities
+        Unreadable below -> maybe (Unreadable below) Declares (byHand modName)
       byHand = fmap inBothNamespaces . (`Map.lookup` byHandFixities)
       cachedFor package = case wkCache of
         Nothing -> pure Nothing
@@ -1167,12 +1189,12 @@ fromInterface ::
   IO Established
 fromInterface interfaceOf modName =
   interfaceOf modName >>= \case
-    Nothing -> pure Unreadable
+    Nothing -> pure (Unreadable Nothing)
     Just iface -> do
       declarers <- traverse asked (distinct (map fst (interfacePassedOn iface)))
-      pure $ case traverse snd declarers of
-        Nothing -> Unreadable
-        Just _ ->
+      pure $ case [m | (m, Nothing) <- declarers] of
+        (m : _) -> Unreadable (Just m)
+        [] ->
           Declares . Map.union (interfaceDeclares iface) . Map.unions $
             [ Map.filterWithKey (\(_, o) _ -> o == op) (interfaceDeclares declarer)
             | (m, op) <- interfacePassedOn iface,
@@ -1273,10 +1295,10 @@ fromSource macros extensions reach reachChildren visiting tarball modName =
     False -> pure NoArchive
     True ->
       readModule tarball modName >>= \case
-        Nothing -> pure (FromArchive Unreadable)
+        Nothing -> pure (FromArchive (Unreadable Nothing))
         Just ForHsc -> pure (FromArchive (hscDeclares modName))
         Just (Haskell source) ->
-          FromArchive . maybe Unreadable Declares
+          FromArchive
             <$> fromText macros extensions reach reachChildren visiting source modName
 
 -- | What came of looking for a module in an archive.
@@ -1307,10 +1329,10 @@ fromText ::
   Text ->
   -- | Its name.
   Text ->
-  IO (Maybe (Fixities))
+  IO Established
 fromText macros extensions reach reachChildren visiting source modName =
   case configurationsOf macros (Just extensions) modName source of
-    Nothing -> pure Nothing
+    Nothing -> pure (Unreadable Nothing)
     Just modules ->
       agreeing <$> traverse readOne modules
   where
@@ -1341,11 +1363,15 @@ fromText macros extensions reach reachChildren visiting source modName =
 --
 -- Every configuration unresolvable is still no answer. There is nothing
 -- left to agree, and saying the module declares nothing would be a guess
--- rather than the silence it deserves.
-agreeing :: NonEmpty (Maybe (Fixities)) -> Maybe (Fixities)
-agreeing answers = case catMaybes (toList answers) of
-  [] -> Nothing
-  readable -> foldM together Map.empty readable
+-- rather than the silence it deserves. What is passed on then is the first
+-- reason any configuration gave, which is as good as any: they are branches
+-- of one module, and whichever of them is reported the reader is being sent
+-- to a real module that really could not be read.
+agreeing :: NonEmpty Established -> Established
+agreeing answers = case [fixities | Declares fixities <- toList answers] of
+  [] -> Unreadable (listToMaybe (catMaybes [below | Unreadable below <- toList answers]))
+  readable ->
+    maybe (Unreadable Nothing) Declares (foldM together Map.empty readable)
   where
     together settled found
       | and (Map.intersectionWith (==) settled found) = Just (Map.union settled found)
@@ -1417,37 +1443,42 @@ withReexports ::
   Text ->
   -- | The module, already parsed.
   HsModule GhcPs ->
-  -- | What it declares together with what it re-exports, or 'Nothing' if a
-  -- module it passes names on from could not be read.
-  IO (Maybe (Fixities))
+  -- | What it declares together with what it re-exports, or the module it
+  -- passes names on from that could not be read.
+  IO Established
 withReexports implicitPrelude reach reachChildren visiting modName hsModule =
   case moduleExports hsModule of
-    Nothing -> pure (Just own)
+    Nothing -> pure (Declares own)
     Just items -> do
       carried <- carriedNames implicitPrelude reachChildren hsModule items
       let wanted = wantedNames items <> fromCarried carried
       visible <-
         if null wanted
-          then pure (Just [])
+          then pure []
           else
-            sequence
-              <$> traverse
-                (\i -> fmap ((,) i) <$> fromModule (importModule i))
-                (moduleImports implicitPrelude hsModule)
+            traverse
+              (\i -> (,) i <$> fromModule (importModule i))
+              (moduleImports implicitPrelude hsModule)
       let handedOnWhole =
             wantedModules implicitPrelude modName hsModule items
-      wholeModules <- sequence <$> traverse fromModule handedOnWhole
-      pure $ do
-        seen <- visible
-        whole <- wholeModules
-        let passedOn =
-              Map.unions
-                [ found
-                | (qualifier, op) <- wanted,
-                  found <- take 1 (from qualifier op seen)
-                ]
-        pure (Map.unions (own : passedOn : whole))
+      wholeModules <- traverse (\m -> (,) m <$> fromModule m) handedOnWhole
+      pure $ case stoppedAt visible wholeModules of
+        Just below -> Unreadable (Just below)
+        Nothing ->
+          let seen = [(i, exported) | (i, Just exported) <- visible]
+              whole = [exported | (_, Just exported) <- wholeModules]
+              passedOn =
+                Map.unions
+                  [ found
+                  | (qualifier, op) <- wanted,
+                    found <- take 1 (from qualifier op seen)
+                  ]
+           in Declares (Map.unions (own : passedOn : whole))
   where
+    stoppedAt visible wholeModules =
+      listToMaybe $
+        [importModule i | (i, Nothing) <- visible]
+          <> [m | (m, Nothing) <- wholeModules]
     own = declaredFixities hsModule
     defined = declaredNames hsModule
     wantedNames items =
@@ -1716,10 +1747,10 @@ hscDeclares modName =
   Declares (maybe Map.empty inBothNamespaces (Map.lookup modName hscFixities))
 
 -- | The fixities an 'Established' holds, where it holds any.
-fixitiesDeclared :: Established -> Fixities
-fixitiesDeclared = \case
-  Declares fixities -> fixities
-  Unreadable -> Map.empty
+fixitiesEstablished :: Established -> Maybe (Fixities)
+fixitiesEstablished = \case
+  Declares fixities -> Just fixities
+  Unreadable _ -> Nothing
 
 -- | The operators an @.hsc@ module can supply, on the same reasoning.
 hscSupplies :: Text -> Set OpName

@@ -16,7 +16,7 @@ import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 import Test.Hspec
 import Tilia.Cpp (CppError (..))
-import Tilia.Fixity (OpName (..), Unknown (..))
+import Tilia.Fixity (ModuleChain (..), OpName (..), Unknown (..))
 import Tilia.Format (FormatError (..), formatErrorExitCode, refused)
 import Tilia.Package (PackageProblem (..))
 import Tilia.Palette (Color (Bad), Palette (..))
@@ -155,6 +155,32 @@ spec = do
       flattened (inplaceReport Plain [("A.hs", missingIn ["Criterion.Main", "Test.Tasty"])])
         `shouldSatisfy` T.isInfixOf
           "may be declared in Criterion.Main or Test.Tasty, neither of which this run could read"
+
+    it "names the module reading stopped at, not only the import above it" $
+      flattened
+        (inplaceReport Plain [("A.hs", missingThrough [ModuleChain ("Test.Hspec" :| ["Test.QuickCheck.Property"])])])
+        `shouldSatisfy` T.isInfixOf
+          "may be declared in Test.Hspec → Test.QuickCheck.Property, which this run could not read"
+
+    it "gives one answer once however many operators share it" $
+      flattened (inplaceReport Plain [("A.hs", missingTwice "Criterion.Main")])
+        `shouldSatisfy` T.isInfixOf
+          "the fixities of <|> and <+> may be declared in Criterion.Main, which this run could not read"
+
+    it "puts a comma before the and once there are three of them" $
+      flattened (inplaceReport Plain [("A.hs", missingAll ["<|>", "<+>", "<*>"] "Criterion.Main")])
+        `shouldSatisfy` T.isInfixOf "the fixities of <|>, <+>, and <*> may be declared in"
+
+    it "leaves a pair without one" $
+      flattened (inplaceReport Plain [("A.hs", missingAll ["<|>", "<+>"] "Criterion.Main")])
+        `shouldSatisfy` T.isInfixOf "the fixities of <|> and <+> may be declared in"
+
+    it "counts each answer's operators rather than the file's" $
+      flattened (inplaceReport Plain [("A.hs", twoAnswers)])
+        `shouldSatisfy` T.isInfixOf
+          "the fixity of <|> may be declared in Criterion.Main, which this run \
+          \could not read, and the fixity of <+> is declared differently by two \
+          \modules in scope"
 
     it "keeps all of it off the stream the summary goes to" $
       reportOut (inplaceReport Plain mixed) `shouldBe` []
@@ -361,12 +387,43 @@ missing modName = missingIn [modName]
 
 -- | The same, where more than one module could have declared it.
 missingIn :: [Text] -> Outcome
-missingIn modNames =
+missingIn = missingThrough . map (ModuleChain . (:| []))
+
+-- | Two operators with the one answer between them, which is said once.
+missingTwice :: Text -> Outcome
+missingTwice = missingAll ["<|>", "<+>"]
+
+-- | Two operators with an answer each, so neither is a plurality.
+twoAnswers :: Outcome
+twoAnswers =
+  Declined
+    ( UnknownFixity
+        "A.hs"
+        [ ((Nothing, OpName "<|>"), NotRead (ModuleChain ("Criterion.Main" :| []) :| [])),
+          ((Nothing, OpName "<+>"), Ambiguous)
+        ]
+    )
+
+-- | Any number of them, all with the one answer between them.
+missingAll :: [Text] -> Text -> Outcome
+missingAll ops modName =
+  Declined
+    ( UnknownFixity
+        "A.hs"
+        [((Nothing, OpName op), NotRead names) | op <- ops]
+    )
+  where
+    names = ModuleChain (modName :| []) :| []
+
+-- | The same again, where each import is given down to the module that
+-- actually stopped the reading.
+missingThrough :: [ModuleChain] -> Outcome
+missingThrough chains =
   Declined (UnknownFixity "A.hs" [((Nothing, OpName "<|>"), NotRead names)])
   where
-    names = case modNames of
+    names = case chains of
       [] -> error "an operator has to be missing from somewhere"
-      m : ms -> m :| ms
+      c : cs -> c :| cs
 
 -- | A report as one piece of text, with the breaks it was wrapped at undone.
 flattened :: Report -> Text

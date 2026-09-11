@@ -187,11 +187,11 @@ spec = do
 
     it "blames one whose export list names it" $
       lookupFixity (scopeKnowing [("Opaque", ["<??>"])] usesUnknown) InTerms Nothing (OpName "<??>")
-        `shouldBe` Unresolved ("Opaque" :| [])
+        `shouldBe` Unresolved (unreadOnly "Opaque")
 
     it "blames one that will not say what it exports" $
       lookupFixity (scopeKnowing [] usesUnknown) InTerms Nothing (OpName "<??>")
-        `shouldBe` Unresolved ("Opaque" :| [])
+        `shouldBe` Unresolved (unreadOnly "Opaque")
 
     it "still passes over an import list that does not name it" $
       lookupFixity
@@ -207,11 +207,11 @@ spec = do
         InTerms
         Nothing
         (OpName "<??>")
-        `shouldBe` Unresolved ("Other.Opaque" :| [])
+        `shouldBe` Unresolved (unreadOnly "Other.Opaque")
 
     it "settles nothing on its own account when told nothing" $
       lookupFixity (fullScope usesUnknown) InTerms Nothing (OpName "<??>")
-        `shouldBe` Unresolved ("Opaque" :| [])
+        `shouldBe` Unresolved (unreadOnly "Opaque")
 
     it "passes over one whose import list carries no such operator" $
       lookupFixity
@@ -227,7 +227,7 @@ spec = do
         InTerms
         Nothing
         (OpName "<??>")
-        `shouldBe` Unresolved ("Opaque" :| [])
+        `shouldBe` Unresolved (unreadOnly "Opaque")
 
     it "blames one whose (..) nothing is known about" $
       lookupFixity
@@ -235,7 +235,7 @@ spec = do
         InTerms
         Nothing
         (OpName "<??>")
-        `shouldBe` Unresolved ("Opaque" :| [])
+        `shouldBe` Unresolved (unreadOnly "Opaque")
 
     it "passes over one that hides the operator along with its type" $
       lookupFixity
@@ -456,7 +456,7 @@ spec = do
     it "refuses to conclude anything when a module could not be read" $
       let s = fullScope "module M where\nimport Data.Map\nimport Opaque\n"
        in lookupFixity s InTerms Nothing (OpName "<??>")
-            `shouldBe` Unresolved ("Opaque" :| [])
+            `shouldBe` Unresolved (unreadOnly "Opaque")
 
     it "still answers for an operator it did find, despite an unread module" $
       let s = fullScope "module M where\nimport Data.Map\nimport Opaque\n"
@@ -507,18 +507,18 @@ spec = do
     it "refuses to conclude when the qualifier reaches an unread import" $
       let s = fullScope "module M where\nimport qualified Opaque as O\n"
        in lookupFixity s InTerms (Just "O") (OpName "<??>")
-            `shouldBe` Unresolved ("Opaque" :| [])
+            `shouldBe` Unresolved (unreadOnly "Opaque")
 
   describe "what could not be settled" $ do
     it "says which qualifier the unsettled use was written under" $
       unsettledIn "module M where\nimport qualified Opaque as O\nf a b = a O.<+> b\n"
-        `shouldBe` [((Just "O", OpName "<+>"), NotRead ("Opaque" :| []))]
+        `shouldBe` [((Just "O", OpName "<+>"), NotRead (unreadOnly "Opaque"))]
 
     it "keeps a qualified use apart from an unqualified one" $
       unsettledIn
         "module M where\nimport Opaque\nimport qualified Opaque as O\nf a b = a <+> b\ng a b = a O.<+> b\n"
-        `shouldBe` [ ((Nothing, OpName "<+>"), NotRead ("Opaque" :| [])),
-                     ((Just "O", OpName "<+>"), NotRead ("Opaque" :| []))
+        `shouldBe` [ ((Nothing, OpName "<+>"), NotRead (unreadOnly "Opaque")),
+                     ((Just "O", OpName "<+>"), NotRead (unreadOnly "Opaque"))
                    ]
 
     it "leaves a settled qualified use out, unread imports notwithstanding" $
@@ -609,6 +609,12 @@ fullScope =
 -- | What is known in a world made of 'exportsOf' alone.
 knowingExports :: Known
 knowingExports = nothingKnown {knownFixities = exportsOf}
+
+-- | The one import blamed for an operator, unread on its own account and so
+-- with nothing below it. What every answer here was before a chain could be
+-- reported at all.
+unreadOnly :: Text -> NonEmpty ModuleChain
+unreadOnly m = ModuleChain (m :| []) :| []
 
 -- | A module that uses an operator nothing in scope declares, alongside an
 -- import that could not be read.
