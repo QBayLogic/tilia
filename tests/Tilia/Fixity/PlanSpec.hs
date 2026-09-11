@@ -50,6 +50,7 @@ spec = do
   tokens
   reexports
   hscModules
+  generatedModuleSpec
   plan <- runIO (readBuildPlan (planPathFor "."))
   case plan of
     Left _ -> unavailable "no build plan; run cabal build first"
@@ -332,6 +333,42 @@ hscModules = describe "a module written for hsc2hs" $ do
       askFixities rs "Cursed" `shouldReturn` Just Map.empty
       askExportNames rs "System.Posix.Signals"
         `shouldReturn` Just (Set.fromList [OpName "addSignal", OpName "deleteSignal"])
+
+-- | The modules @cabal@ writes, which no package carries a file for.
+generatedModuleSpec :: Spec
+generatedModuleSpec = describe "a module cabal generates" $ do
+  it "declares nothing, rather than being one we could not read" $
+    withFakeProject [("src/M.hs", "module M where\nimport Paths_fake\n")] $
+      \rs -> askFixities rs "Paths_fake" `shouldReturn` Just Map.empty
+
+  it "answers for the newer one cabal writes beside it" $
+    withFakeProject [("src/M.hs", "module M where\n")] $
+      \rs -> askFixities rs "PackageInfo_fake" `shouldReturn` Just Map.empty
+
+  it "says nothing about a package the plan does not hold" $
+    withFakeProject [("src/M.hs", "module M where\n")] $
+      \rs -> askFixities rs "Paths_not_a_package" `shouldReturn` Nothing
+
+  it "lets a module that imports one be read"
+    $ withFakeProject
+      [ ( "src/Facade.hs",
+          "module Facade ((<+>)) where\nimport Paths_fake\nimport Inner\n"
+        ),
+        ("src/Inner.hs", "module Inner ((<+>)) where\ninfixr 5 <+>\na <+> b = a\n")
+      ]
+    $ \rs ->
+      askFixities rs "Facade"
+        >>= (`shouldBe` Just (Map.singleton (InTerms, OpName "<+>") (Fixity RightAssoc 5)))
+
+  it "reads one somebody wrote by hand rather than assuming"
+    $ withFakeProject
+      [ ( "src/Paths_fake.hs",
+          "module Paths_fake ((<+>)) where\ninfixr 5 <+>\na <+> b = a\n"
+        )
+      ]
+    $ \rs ->
+      askFixities rs "Paths_fake"
+        >>= (`shouldBe` Just (Map.singleton (InTerms, OpName "<+>") (Fixity RightAssoc 5)))
 
 -- | A module of the kind @hsc2hs@ takes, declaring an operator nothing can
 -- get at.

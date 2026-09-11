@@ -272,7 +272,7 @@ macrosOf plan =
   Macros
     { macroVersions =
         Map.fromList
-          ( [ ("MIN_VERSION_" <> T.map underscore name, version)
+          ( [ ("MIN_VERSION_" <> underscored name, version)
             | (name, [version]) <- Map.toList (Map.map Set.toList versions)
             ]
               <> [("MIN_VERSION_GLASGOW_HASKELL", v) | v <- toList compiler]
@@ -303,7 +303,22 @@ macrosOf plan =
         _ : _ : _ -> Just (take 4 (parts <> repeat 0))
         _ -> Nothing
     nth i xs = if i < length xs then xs !! i else 0
-    underscore c = if c == '-' then '_' else c
+
+-- | The modules @cabal@ writes itself for a plan's packages, and which are
+-- therefore in nobody's sources.
+generatedModules :: BuildPlan -> Set Text
+generatedModules plan =
+  Set.fromList
+    [ prefix <> underscored (ppName p)
+    | p <- bpPackages plan,
+      prefix <- ["Paths_", "PackageInfo_"]
+    ]
+
+-- | A package's name as a module name spells it, which is with the hyphens
+-- turned into underscores. @cabal@ does this for the version macros and for
+-- the modules it generates alike.
+underscored :: Text -> Text
+underscored = T.map (\c -> if c == '-' then '_' else c)
 
 -- | A version as its numbers, or 'Nothing' where any of them is not one.
 numberedVersion :: Text -> Maybe [Integer]
@@ -728,7 +743,8 @@ newResolverVia routes plan = do
             wkReachChildren = children,
             wkReachExports = exports,
             wkExtensionsOf = extensionsOf,
-            wkMacros = macrosOf plan
+            wkMacros = macrosOf plan,
+            wkGenerated = generatedModules plan
           }
       resolved visiting modName = do
         known <- readIORef memo
@@ -1005,7 +1021,10 @@ data Workings = Workings
     -- | What the plan settles about the questions a module's conditionals
     -- ask, so that a branch written for another version of a dependency is
     -- not read as part of it.
-    wkMacros :: Macros
+    wkMacros :: Macros,
+    -- | The modules @cabal@ writes itself, which are therefore in no
+    -- package's sources. See 'generatedModules'.
+    wkGenerated :: Set Text
   }
 
 -- | Where a module's fixities come from, in order of cost.
@@ -1034,7 +1053,8 @@ resolveModule
       wkReach,
       wkReachChildren,
       wkExtensionsOf,
-      wkMacros
+      wkMacros,
+      wkGenerated
     }
   visiting
   modName
@@ -1105,7 +1125,9 @@ resolveModule
 
       answered = \case
         Declares fixities -> Declares fixities
-        Unreadable below -> maybe (Unreadable below) Declares (byHand modName)
+        Unreadable below
+          | Set.member modName wkGenerated -> Declares Map.empty
+          | otherwise -> maybe (Unreadable below) Declares (byHand modName)
       byHand = fmap inBothNamespaces . (`Map.lookup` byHandFixities)
       cachedFor package = case wkCache of
         Nothing -> pure Nothing
