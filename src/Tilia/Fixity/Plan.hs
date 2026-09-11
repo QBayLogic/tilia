@@ -77,7 +77,7 @@ import System.Directory
   )
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
-import System.FilePath ((</>))
+import System.FilePath (takeDirectory, (</>))
 import System.IO (hFlush, stderr)
 import System.Process
   ( StdStream (Inherit, UseHandle),
@@ -147,19 +147,50 @@ data PackageSource
   | -- | A directory on this machine—the project being formatted, or a
     -- sibling of it in the same repository.
     LocalPackage FilePath
-  | -- | Fetched from Hackage as a tarball, with the SHA-256 the plan
-    -- expects it to have.
+  | -- | Fetched from a repository as a tarball, with the SHA-256 the plan
+    -- expects it to have and where it was fetched from.
     --
-    -- The hash is optional only because a plan is not obliged to record
-    -- one; every entry in a plan @cabal@ writes for a secure repository
-    -- does.
-    HackagePackage (Maybe Text)
+    -- Hackage is one such repository and not a special one. A company that
+    -- runs its own has packages here exactly as Hackage does, and the only
+    -- difference that reaches us is where the tarball landed.
+    RepoPackage (Maybe Text) Repository
+  | -- | A @source-repository-package@ we have not found the sources of.
+    --
+    -- The plan says where the repository is, which is of no use: what is
+    -- wanted is where @cabal@ put the clone, and the plan does not say. A
+    -- package that stays this way is one nothing can be read from, which is
+    -- what every one of them was before 'checkedOutIn' went looking.
+    SourceRepo
+  | -- | The same, found unpacked under the project's own @dist-newstyle@.
+    --
+    -- A directory of sources like 'LocalPackage', and read the same way.
+    -- Kept apart from it because a dependency is not one of the project's
+    -- own packages: its components are not components a run formats, and
+    -- its @.cabal@ file being newer than the plan says nothing about
+    -- whether the plan is stale.
+    CheckedOut FilePath
+  deriving (Eq, Show)
+
+-- | Which repository a package was fetched from, as far as it bears on
+-- finding the tarball afterwards.
+data Repository
+  = -- | One @cabal@ downloads from, named by its URI. The tarball goes into
+    -- the package cache, in a directory named after the repository as the
+    -- configuration spells it.
+    Downloaded Text
+  | -- | A directory of tarballs, named by @file+noindex@. Nothing is
+    -- downloaded and nothing is cached: the tarball is already sitting
+    -- there, beside the index @cabal@ wrote for it.
+    ADirectory FilePath
+  | -- | A plan that does not say. Older @cabal@ wrote nothing here, and
+    -- Hackage is the only guess worth making.
+    Unsaid
   deriving (Eq, Show)
 
 -- | Is there a tarball to go and read?
 isFetchable :: PlanPackage -> Bool
 isFetchable p = case ppSource p of
-  HackagePackage _ -> True
+  RepoPackage _ _ -> True
   _ -> False
 
 -- | Every package the compiler can see.
@@ -203,7 +234,7 @@ planToken environment plan =
 -- | The SHA-256 the plan expects this package's tarball to have.
 sourceHashOf :: PlanPackage -> Maybe Text
 sourceHashOf p = case ppSource p of
-  HackagePackage hash -> hash
+  RepoPackage hash _ -> hash
   _ -> Nothing
 
 -- | A resolved build plan.
@@ -227,6 +258,10 @@ instance FromJSON PlanPackage where
     sourceKind <- o .:? "pkg-src" >>= traverse (.: "type")
     sourcePath <- o .:? "pkg-src" >>= traverse (.:? "path")
     sourceHash <- o .:? "pkg-src-sha256"
+    repo <- o .:? "pkg-src" >>= traverse (.:? "repo")
+    repoKind <- traverse (traverse (.:? "type")) repo
+    repoUri <- traverse (traverse (.:? "uri")) repo
+    repoPath <- traverse (traverse (.:? "path")) repo
     named <- o .:? "component-name"
     whole <- o .:? "components"
     pure
@@ -236,8 +271,16 @@ instance FromJSON PlanPackage where
           ppComponents = componentsOf named whole,
           ppSource = case (kind :: Maybe Text, sourceKind :: Maybe Text) of
             (Just "pre-existing", _) -> PreExisting
-            (_, Just "repo-tar") -> HackagePackage sourceHash
+            (_, Just "repo-tar") ->
+              RepoPackage
+                sourceHash
+                ( case (join (join repoKind) :: Maybe Text, join (join repoPath), join (join repoUri)) of
+                    (Just "local-repo-no-index", Just dir, _) -> ADirectory (T.unpack dir)
+                    (_, _, Just uri) -> Downloaded uri
+                    _ -> Unsaid
+                )
             (_, Just "local") -> LocalPackage (maybe "" T.unpack (join sourcePath))
+            (_, Just "source-repo") -> SourceRepo
             -- Anything else is treated as already present.
             _ -> PreExisting
         }
@@ -264,7 +307,40 @@ readBuildPlan :: FilePath -> IO (Either Text BuildPlan)
 readBuildPlan path =
   doesFileExist path >>= \case
     False -> pure (Left ("no build plan at " <> T.pack path))
-    True -> either (Left . T.pack) Right <$> eitherDecodeFileStrict path
+    True ->
+      eitherDecodeFileStrict path >>= \case
+        Left why -> pure (Left (T.pack why))
+        Right plan -> Right <$> checkedOutIn (takeDirectory (takeDirectory path)) plan
+
+-- | Find where @cabal@ unpacked each @source-repository-package@.
+checkedOutIn :: FilePath -> BuildPlan -> IO BuildPlan
+checkedOutIn distDir plan = do
+  packages <- traverse locate (bpPackages plan)
+  pure plan {bpPackages = packages}
+  where
+    locate p = case ppSource p of
+      SourceRepo ->
+        clonesOf p >>= \case
+          (dir : _) -> pure p {ppSource = CheckedOut dir}
+          [] -> pure p
+      _ -> pure p
+    clonesOf p = quietly [] $ do
+      entries <- listDirectory (distDir </> "src")
+      filterM
+        (isThePackage p)
+        [ distDir </> "src" </> e
+        | e <- Data.List.sort entries,
+          (ppName p <> "-") `T.isPrefixOf` T.pack e
+        ]
+    isThePackage p dir = quietly False $ do
+      contents <- readFileText (dir </> T.unpack (ppName p) <> ".cabal")
+      pure (maybe False (describes p) contents)
+    describes p text =
+      any (names "name:" (ppName p)) (T.lines text)
+        && any (names "version:" (ppVersion p)) (T.lines text)
+    names field value line = case T.stripPrefix field (T.toLower (T.strip line)) of
+      Just rest -> T.strip rest == T.toLower value
+      Nothing -> False
 
 -- | The version macros a plan settles.
 macrosOf :: BuildPlan -> Macros
@@ -615,38 +691,70 @@ loadPlan wanted projectDir = do
 -- Local packages are excluded: they are directories, not archives.
 plannedTarballs :: BuildPlan -> IO [(PlanPackage, FilePath)]
 plannedTarballs plan = do
-  cacheDir <- packageCacheDir
-  pure
-    [ (p, tarballFor cacheDir p)
-    | p <- bpPackages plan,
-      not (isLocal p)
-    ]
+  cacheRoot <- packageCacheRoot
+  -- Listed once rather than once per package: a plan holds hundreds of
+  -- these and the answer is the same for every one of them.
+  repos <- quietly [] (Data.List.sort <$> listDirectory cacheRoot)
+  traverse
+    (\p -> (,) p <$> tarballFor cacheRoot repos p)
+    [p | p <- bpPackages plan, not (isLocal p)]
   where
     isLocal p = case ppSource p of
       LocalPackage _ -> True
+      CheckedOut _ -> True
       _ -> False
 
--- | Where @cabal@ keeps downloaded package sources.
-packageCacheDir :: IO FilePath
-packageCacheDir =
+-- | Where @cabal@ keeps downloaded package sources, one directory per
+-- repository it downloads from.
+packageCacheRoot :: IO FilePath
+packageCacheRoot =
   lookupEnv "CABAL_DIR" >>= \case
-    Just dir -> pure (dir </> "packages" </> hackage)
+    Just dir -> pure (dir </> "packages")
     Nothing -> do
       home <- getHomeDirectory
-      let xdg = home </> ".cache" </> "cabal" </> "packages" </> hackage
-          legacy = home </> ".cabal" </> "packages" </> hackage
-      exists <- doesFileExist (xdg </> "01-index.tar")
+      let xdg = home </> ".cache" </> "cabal" </> "packages"
+          legacy = home </> ".cabal" </> "packages"
+      exists <- doesFileExist (xdg </> hackage </> "01-index.tar")
       pure (if exists then xdg else legacy)
   where
     hackage = "hackage.haskell.org"
 
--- | Where a package's source tarball should be.
-tarballFor :: FilePath -> PlanPackage -> FilePath
-tarballFor cacheDir p =
-  cacheDir
-    </> T.unpack (ppName p)
-    </> T.unpack (ppVersion p)
-    </> T.unpack (ppName p <> "-" <> ppVersion p <> ".tar.gz")
+-- | The repository @cabal@ would have kept a package's sources under.
+hackageByDefault :: FilePath
+hackageByDefault = "hackage.haskell.org"
+
+-- | Where a package's source tarball is, or where fetching would put it.
+tarballFor :: FilePath -> [FilePath] -> PlanPackage -> IO FilePath
+tarballFor cacheRoot repos p = case repositoryOf p of
+  ADirectory dir -> pure (dir </> flat)
+  Downloaded uri -> searched (hostOf uri)
+  Unsaid -> searched Nothing
+  where
+    flat = T.unpack (ppName p <> "-" <> ppVersion p <> ".tar.gz")
+    under repo =
+      cacheRoot </> repo </> T.unpack (ppName p) </> T.unpack (ppVersion p) </> flat
+    searched preferred = do
+      let first' = fromMaybe hackageByDefault preferred
+          rest = filter (/= first') repos
+      found <- filterM doesFileExist (map under (first' : rest))
+      pure (fromMaybe (under first') (listToMaybe found))
+
+-- | Which repository a package came from, where it came from one.
+repositoryOf :: PlanPackage -> Repository
+repositoryOf p = case ppSource p of
+  RepoPackage _ repo -> repo
+  _ -> Unsaid
+
+-- | The host a URI names, which is what @cabal@ conventionally calls the
+-- repository that lives there.
+hostOf :: Text -> Maybe FilePath
+hostOf uri = case T.breakOn "//" uri of
+  (_, rest)
+    | not (T.null rest),
+      host <- T.takeWhile (/= '/') (T.drop 2 rest),
+      not (T.null host) ->
+        Just (T.unpack host)
+  _ -> Nothing
 
 ----------------------------------------------------------------------------
 -- Resolving
@@ -1404,16 +1512,15 @@ agreeing answers = case [fixities | Declares fixities <- toList answers] of
       | and (Map.intersectionWith (==) settled found) = Just (Map.union settled found)
       | otherwise = Nothing
 
--- | Where each module of the project's own packages lives.
---
--- A local package is a directory rather than an archive, so its modules are
--- found by putting the @hs-source-dirs@ of its @.cabal@ file together with
--- the module names it exposes. Nothing is unpacked and nothing is cached:
--- these are the files being worked on.
+-- | Where each module that lives in a directory rather than an archive is.
 localModules :: BuildPlan -> IO (Map Text FilePath)
 localModules plan =
-  Map.unions <$> traverse forPackage [d | LocalPackage d <- map ppSource (bpPackages plan)]
+  Map.unions <$> traverse forPackage (concatMap directoryOf (bpPackages plan))
   where
+    directoryOf p = case ppSource p of
+      LocalPackage dir -> [dir]
+      CheckedOut dir -> [dir]
+      _ -> []
     forPackage dir = quietly Map.empty $ do
       entries <- listDirectory dir
       case filter (".cabal" `isSuffixOf`) entries of

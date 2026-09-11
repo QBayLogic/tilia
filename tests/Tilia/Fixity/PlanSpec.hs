@@ -51,6 +51,8 @@ spec = do
   reexports
   hscModules
   generatedModuleSpec
+  gitDependencies
+  repositories
   plan <- runIO (readBuildPlan (planPathFor "."))
   case plan of
     Left _ -> unavailable "no build plan; run cabal build first"
@@ -358,6 +360,190 @@ hscModules = describe "a module written for hsc2hs" $ do
       askFixities rs "Cursed" `shouldReturn` Just Map.empty
       askExportNames rs "System.Posix.Signals"
         `shouldReturn` Just (Set.fromList [OpName "addSignal", OpName "deleteSignal"])
+
+-- | Where a package fetched from a repository is looked for.
+repositories :: Spec
+repositories = describe "a package fetched from a repository" $ do
+  it "finds one Hackage downloaded"
+    $ withCache
+      [("hackage.haskell.org", "thing", "1.0")]
+      (fromRepository "{\"type\":\"secure-repo\",\"uri\":\"http://hackage.haskell.org/\"}")
+    $ \found -> found `shouldSatisfy` isUnder "hackage.haskell.org"
+
+  it "finds one a private repository downloaded, named after its host"
+    $ withCache
+      [("packages.example.com", "thing", "1.0")]
+      (fromRepository "{\"type\":\"secure-repo\",\"uri\":\"https://packages.example.com/\"}")
+    $ \found -> found `shouldSatisfy` isUnder "packages.example.com"
+
+  it "finds one whose directory is not named after its host"
+    $ withCache
+      [("my-company", "thing", "1.0")]
+      (fromRepository "{\"type\":\"secure-repo\",\"uri\":\"https://packages.example.com/\"}")
+    $ \found -> found `shouldSatisfy` isUnder "my-company"
+
+  it "leaves a file+noindex repository's tarballs where they are" $
+    withSystemTempDirectory "tilia-noindex" $ \repo -> do
+      T.writeFile (repo </> "thing-1.0.tar.gz") "not really a tarball"
+      withCache
+        []
+        (fromRepository ("{\"type\":\"local-repo-no-index\",\"path\":\"" <> T.pack repo <> "\"}"))
+        $ \found -> found `shouldBe` (repo </> "thing-1.0.tar.gz")
+
+  it "says where its own repository would put one nothing has downloaded" $
+    withCache [] (fromRepository "{\"type\":\"secure-repo\",\"uri\":\"https://packages.example.com/\"}") $
+      \found -> found `shouldSatisfy` isUnder "packages.example.com"
+
+  it "falls back on Hackage for a plan that names no repository at all" $
+    withCache [("hackage.haskell.org", "thing", "1.0")] planWithoutARepository $
+      \found -> found `shouldSatisfy` isUnder "hackage.haskell.org"
+
+-- | Is the tarball under this repository's directory of the cache?
+isUnder :: FilePath -> FilePath -> Bool
+isUnder repo path = ("/" <> repo <> "/") `Data.List.isInfixOf` path
+
+-- | Run something on where @plannedTarballs@ looked, against a package
+-- cache holding the entries given.
+withCache ::
+  -- | Repository directory, package, version — one per cached tarball
+  [(FilePath, Text, Text)] ->
+  -- | The plan to read it against
+  Text ->
+  (FilePath -> Expectation) ->
+  Expectation
+withCache cached planText act =
+  withSystemTempDirectory "tilia-cabal" $ \cabalDir -> do
+    traverse_ (put cabalDir) cached
+    createDirectoryIfMissing True (cabalDir </> "packages")
+    withEnvironment [("CABAL_DIR", cabalDir)] $
+      withSystemTempDirectory "tilia-repo-plan" $ \dir -> do
+        createDirectoryIfMissing True (takeDirectory (planPathFor dir))
+        T.writeFile (planPathFor dir) planText
+        readBuildPlan (planPathFor dir) >>= \case
+          Left why -> expectationFailure (T.unpack why)
+          Right plan ->
+            plannedTarballs plan >>= \case
+              [(_, found)] -> act found
+              other -> expectationFailure (show (map snd other))
+  where
+    put cabalDir (repo, held, version) = do
+      let at =
+            cabalDir
+              </> "packages"
+              </> repo
+              </> T.unpack held
+              </> T.unpack version
+      createDirectoryIfMissing True at
+      T.writeFile
+        (at </> T.unpack (held <> "-" <> version <> ".tar.gz"))
+        "not really a tarball"
+
+-- | A plan naming one package fetched from the repository described.
+fromRepository :: Text -> Text
+fromRepository repo =
+  "{\"compiler-id\":\"ghc-0.0\",\"install-plan\":\
+  \[{\"pkg-name\":\"thing\",\"pkg-version\":\"1.0\",\
+  \\"pkg-src\":{\"type\":\"repo-tar\",\"repo\":"
+    <> repo
+    <> "}}]}"
+
+-- | The same, as an older @cabal@ wrote it: a tarball and no more.
+planWithoutARepository :: Text
+planWithoutARepository =
+  "{\"compiler-id\":\"ghc-0.0\",\"install-plan\":\
+  \[{\"pkg-name\":\"thing\",\"pkg-version\":\"1.0\",\
+  \\"pkg-src\":{\"type\":\"repo-tar\"}}]}"
+
+-- | A dependency that arrived as a @source-repository-package@.
+--
+-- @cabal@ clones one into the project's own @dist-newstyle@ and says
+-- nothing in the plan about where, so the whole question is whether the
+-- clone is found. Once it is, it is a directory of sources like any other
+-- and nothing below here is new.
+gitDependencies :: Spec
+gitDependencies = describe "a dependency that arrived as a git checkout" $ do
+  it "finds where cabal unpacked it" $
+    withFakeCheckout [("thing-2a9f", "1.0")] $ \dir ->
+      sourcesOf dir
+        `shouldReturn` [CheckedOut (dir </> "dist-newstyle" </> "src" </> "thing-2a9f")]
+
+  it "leaves one alone that cabal has not unpacked yet" $
+    withFakeCheckout [] $
+      \dir -> sourcesOf dir `shouldReturn` [SourceRepo]
+
+  it "passes over the clone of a revision that has been moved on from" $
+    withFakeCheckout [("thing-0000", "0.9"), ("thing-ffff", "1.0")] $ \dir ->
+      sourcesOf dir
+        `shouldReturn` [CheckedOut (dir </> "dist-newstyle" </> "src" </> "thing-ffff")]
+
+  it "passes over a directory named for another package" $
+    withFakeCheckout [("other-2a9f", "1.0")] $ \dir ->
+      sourcesOf dir `shouldReturn` [SourceRepo]
+
+  it "reads a module out of it, fixity and all" $
+    withFakeCheckout [("thing-2a9f", "1.0")] $ \dir -> do
+      plan <- readBuildPlan (planPathFor dir)
+      case plan of
+        Left why -> expectationFailure (T.unpack why)
+        Right p -> do
+          rs <- newResolver p
+          askFixities rs "Private.Ops"
+            >>= (`shouldBe` Just (Map.singleton (InTerms, OpName "<+>") (Fixity RightAssoc 3)))
+
+-- | What the plan says each of its packages came from.
+sourcesOf :: FilePath -> IO [PackageSource]
+sourcesOf dir =
+  readBuildPlan (planPathFor dir) >>= \case
+    Left why -> error (T.unpack why)
+    Right plan -> pure (map ppSource (bpPackages plan))
+
+-- | A project whose one dependency is a @source-repository-package@, with
+-- the clones given unpacked where @cabal@ unpacks them.
+--
+-- Each clone is a directory name and the version its @.cabal@ file claims,
+-- because telling one clone from another is the whole of the work.
+withFakeCheckout :: [(FilePath, Text)] -> (FilePath -> IO a) -> IO a
+withFakeCheckout clones act =
+  withSystemTempDirectory "tilia-checkout" $ \dir -> do
+    createDirectoryIfMissing True (takeDirectory (planPathFor dir))
+    T.writeFile (planPathFor dir) fromAGitRepository
+    traverse_ (unpack dir) clones
+    act dir
+  where
+    unpack dir (named, version) = do
+      let at = dir </> "dist-newstyle" </> "src" </> named
+          belongsTo = takeWhile (/= '-') named
+      createDirectoryIfMissing True (at </> "src" </> "Private")
+      T.writeFile (at </> belongsTo <> ".cabal") (describing (T.pack belongsTo) version)
+      T.writeFile (at </> "src" </> "Private" </> "Ops.hs") privateOps
+    describing named' version =
+      T.unlines
+        [ "cabal-version: 2.4",
+          "name: " <> named',
+          "version: " <> version,
+          "library",
+          "  exposed-modules: Private.Ops",
+          "  hs-source-dirs: src",
+          "  default-language: Haskell2010"
+        ]
+
+-- | A plan naming one package that came out of a git repository.
+fromAGitRepository :: Text
+fromAGitRepository =
+  "{\"compiler-id\":\"ghc-0.0\",\"install-plan\":\
+  \[{\"pkg-name\":\"thing\",\"pkg-version\":\"1.0\",\
+  \\"pkg-src\":{\"type\":\"source-repo\",\
+  \\"source-repo\":{\"type\":\"git\",\"location\":\"git://example/thing\"}}}]}"
+
+-- | A module of that package, declaring something worth resolving.
+privateOps :: Text
+privateOps =
+  T.unlines
+    [ "module Private.Ops ((<+>)) where",
+      "infixr 3 <+>",
+      "(<+>) :: Int -> Int -> Int",
+      "a <+> b = a + b"
+    ]
 
 -- | The modules @cabal@ writes, which no package carries a file for.
 generatedModuleSpec :: Spec
