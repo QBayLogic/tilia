@@ -78,7 +78,7 @@ import Tilia.Fixity
     lookupFixity,
   )
 import Tilia.Render.Layout (Bracing (..))
-import Tilia.Source (Source, SourceType (..), blankAt)
+import Tilia.Source (Source, SourceType (..), blankAt, sourceLines)
 import Tilia.Span
 import Tilia.Span.Ghc
 
@@ -257,7 +257,7 @@ separatedByBlank _ _ _ = False
 -- emptied to make one configuration does not read as one the author left
 -- blank.
 writtenBlank :: Ctx -> Int -> Bool
-writtenBlank ctx n = blankAt n (ctxSource ctx)
+writtenBlank ctx n = blankAt n (sourceLines (ctxSource ctx))
 
 ----------------------------------------------------------------------------
 -- Entering the tree

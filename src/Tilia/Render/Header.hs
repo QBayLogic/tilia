@@ -40,7 +40,7 @@ import Tilia.Render.Haddock
 import Tilia.Render.Layout
 import Tilia.Render.Name
 import Tilia.Render.Pragma (warningTxt)
-import Tilia.Source (Source, directiveAt)
+import Tilia.Source (Source, directiveAt, sourceLines)
 import Tilia.Span
 import Tilia.Span.Ghc
 
@@ -113,7 +113,7 @@ takeHeaderPragmas src headerEnd comments = (pragmas, plain)
       ]
     rightAbovePragma c =
       Set.member (below (spanEndLine (commentSpan c) + 1)) pragmaStarts
-    below n = if directiveAt n src then below (n + 1) else n
+    below n = if directiveAt n (sourceLines src) then below (n + 1) else n
     pragmaStarts =
       Set.fromList [spanStartLine (commentSpan c) | (c, Just _) <- recognised]
     airless c = c {commentGapAbove = False, commentGapBelow = False}
@@ -206,7 +206,7 @@ namesAnEdition t = any spelledTheSame [minBound .. maxBound]
 -- | A whole module.
 hsModule :: Ctx -> [HeaderPragma] -> HsModule GhcPs -> Doc
 hsModule ctx pragmas HsModule {hsmodExt = XModulePs {..}, ..} =
-  layoutFrom ctx headerSpan . brokenIfDocumentedExports exports $
+  headerLayout $
     pragmaBlock pragmas
       <> hardBreak
       <> moduleLine
@@ -217,6 +217,10 @@ hsModule ctx pragmas HsModule {hsmodExt = XModulePs {..}, ..} =
   where
     exports = maybe [] unLoc hsmodExports
     headerSpan = foldMap spanOf hsmodDeprecMessage <> foldMap spanOf hsmodExports
+
+    headerLayout
+      | any (isDocEntry . unLoc) exports = broken
+      | otherwise = layoutFrom ctx headerSpan
 
     moduleLine = case hsmodName of
       Nothing -> mempty
@@ -240,8 +244,12 @@ hsModule ctx pragmas HsModule {hsmodExt = XModulePs {..}, ..} =
 -- | The parenthesised list after a module name.
 exportList :: Ctx -> Maybe Span -> [LIE GhcPs] -> Doc
 exportList ctx enclosing xs =
-  brokenIfDocumentedExports xs . parens . insideBrackets enclosing $
+  layoutHere . parens . insideBrackets enclosing $
     importExportItems ctx xs
+  where
+    layoutHere
+      | any (isDocEntry . unLoc) xs = broken
+      | otherwise = layoutFrom ctx enclosing
 
 -- | The items of an import or export list.
 --
@@ -341,18 +349,16 @@ itemDoc = \case
   IEThingWith _ _ _ _ doc -> doc
   _ -> Nothing
 
--- | A list holding a documentation entry cannot go on one line: the entry
--- would swallow the rest of it, closing bracket and all.
-brokenIfDocumentedExports :: [LIE GhcPs] -> Doc -> Doc
-brokenIfDocumentedExports xs
-  | any (isDocEntry . unLoc) xs = broken
-  | otherwise = id
-  where
-    isDocEntry = \case
-      IEDoc {} -> True
-      IEGroup {} -> True
-      IEDocNamed {} -> True
-      _ -> False
+-- | Does this export list entry carry documentation?
+--
+-- A list holding one cannot go on one line: the entry would swallow the rest
+-- of it, closing bracket and all.
+isDocEntry :: IE GhcPs -> Bool
+isDocEntry = \case
+  IEDoc {} -> True
+  IEGroup {} -> True
+  IEDocNamed {} -> True
+  _ -> False
 
 ----------------------------------------------------------------------------
 -- Imports

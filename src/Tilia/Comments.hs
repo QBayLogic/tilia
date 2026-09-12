@@ -36,6 +36,7 @@ import GHC.Hs (HsModule)
 import GHC.Hs.Extension (GhcPs)
 import GHC.Parser.Annotation qualified as GHC
 import GHC.Types.SrcLoc qualified as GHC
+import Tilia.Source.Lines (Lines, blankAt, lineAt, lineTexts)
 import Tilia.Span (Span, endPoint, startPoint)
 import Tilia.Span.Ghc (spanOfReal)
 
@@ -91,7 +92,7 @@ data Above
 -- | Every comment in a module, in source order.
 commentsOf ::
   -- | The module's lines, which every comment is read against
-  [Text] ->
+  Lines ->
   -- | Comments the tree does not carry
   --
   -- Everything above a signature's @signature@ keyword: the parser leaves
@@ -100,8 +101,8 @@ commentsOf ::
   -- | Parsed module
   HsModule GhcPs ->
   [Comment]
-commentsOf sourceLines loose hsModule =
-  map (uncurry (mkComment sourceLines))
+commentsOf ls loose hsModule =
+  map (uncurry (mkComment ls))
     . dedupeOnSpan
     . sortOn (GHC.realSrcSpanStart . fst)
     . mapMaybe located
@@ -121,8 +122,8 @@ commentsOf sourceLines loose hsModule =
       _ -> Nothing
 
 -- | Build a comment from a token and the span it occupied.
-mkComment :: [Text] -> GHC.RealSrcSpan -> GHC.EpaCommentTok -> Comment
-mkComment sourceLines spn tok =
+mkComment :: Lines -> GHC.RealSrcSpan -> GHC.EpaCommentTok -> Comment
+mkComment ls spn tok =
   Comment
     { commentSpan = spanOfReal spn,
       commentBody = normalizeBody startColumn style raw,
@@ -131,26 +132,23 @@ mkComment sourceLines spn tok =
       commentCodeBeforeStopsAt = codeBeforeStopsAt,
       commentFollowed = followed,
       commentGapAbove = above == BlankLine,
-      commentGapBelow = gapBelow
+      commentGapBelow = blankAt (GHC.srcSpanEndLine spn + 1) ls
     }
   where
     (style, raw) = case tok of
       GHC.EpaLineComment s -> (LineComment, T.pack s)
       GHC.EpaBlockComment s -> (BlockComment, T.pack s)
-      GHC.EpaDocComment _ -> (DocComment, sliceSpan sourceLines spn)
+      GHC.EpaDocComment _ -> (DocComment, sliceSpan (lineTexts ls) spn)
       GHC.EpaDocOptions s -> (LineComment, T.pack s)
 
     -- The lines the answers are read off, and where on the opening one the
     -- comment starts. Indentation is how many characters precede, which is
     -- not the column: see 'offsetOf'.
     startColumn = maybe 0 (`offsetOf` GHC.srcSpanStartCol spn) openingLine
-    openingLine = lineAt (GHC.srcSpanStartLine spn)
+    openingLine = lineAt (GHC.srcSpanStartLine spn) ls
     lineAbove
       | GHC.srcSpanStartLine spn <= 1 = Nothing
-      | otherwise = lineAt (GHC.srcSpanStartLine spn - 1)
-    lineAt n = case drop (n - 1) sourceLines of
-      (l : _) -> Just l
-      [] -> Nothing
+      | otherwise = lineAt (GHC.srcSpanStartLine spn - 1) ls
 
     -- The rest in the order the fields are declared in.
     above = case lineAbove of
@@ -162,11 +160,8 @@ mkComment sourceLines spn tok =
       l <- openingLine
       let before' = T.stripEnd (T.take startColumn l)
       if T.null before' then Nothing else Just (columnOf l (T.length before'))
-    followed = case lineAt (GHC.srcSpanEndLine spn) of
+    followed = case lineAt (GHC.srcSpanEndLine spn) ls of
       Just l -> not (T.all isSpace (T.drop (offsetOf l (GHC.srcSpanEndCol spn)) l))
-      Nothing -> False
-    gapBelow = case lineAt (GHC.srcSpanEndLine spn + 1) of
-      Just l -> T.all isSpace l
       Nothing -> False
 
 -- | Apply the normalizations, in the only order that works: dedent before

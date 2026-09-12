@@ -35,7 +35,7 @@ import GHC.Unit.Module.Warnings (emptyWarningCategorySet)
 import GHC.Utils.Error qualified as GHC
 import GHC.Utils.Outputable qualified as GHC
 import Tilia.Pragma (effectiveExtensions)
-import Tilia.Source (Source, SourceType (..), Written (..), sourceOf)
+import Tilia.Source (Lines, Source, SourceType (..), Written (..), lineTexts, linesOf, sourceOf)
 import Tilia.Span (Span (..))
 import Tilia.Span.Ghc (spanOfReal)
 
@@ -73,7 +73,7 @@ parseModule ::
   Text ->
   Either ParseError ParsedModule
 parseModule config path source =
-  parseConfiguration config path (Written source) source
+  parseConfiguration config path (linesOf (Written source)) source
 
 -- | Parse one configuration of a module.
 --
@@ -85,12 +85,13 @@ parseConfiguration ::
   ParserConfig ->
   -- | Path, used only in positions reported back
   FilePath ->
-  -- | The module as written
-  Written ->
+  -- | The lines of the module as written, except for the lines that do not
+  -- belong to this configuration
+  Lines ->
   -- | The configuration of it to parse
   Text ->
   Either ParseError ParsedModule
-parseConfiguration config path written@(Written writtenText) source =
+parseConfiguration config path written source =
   case GHC.unP entryPoint initialState of
     GHC.PFailed pstate -> Left (whyNot pstate)
     GHC.POk pstate (GHC.L _ hsModule)
@@ -102,7 +103,7 @@ parseConfiguration config path written@(Written writtenText) source =
               { pmModule = hsModule,
                 pmSource = sourceOf written (headerComments pstate) hsModule,
                 pmSourceType = sourceType,
-                pmPrologue = prologueOf writtenText,
+                pmPrologue = prologueOf (lineTexts written),
                 pmHeaderEnd = headerEndOf hsModule
               }
   where
@@ -188,8 +189,8 @@ quietDiagnostics =
 -- At most one empty line is taken: the rest would only be collapsed
 -- wherever they were reproduced, so keeping them would be keeping a
 -- distinction that cannot survive.
-prologueOf :: Text -> [Text]
-prologueOf source = case span isShebang (T.lines source) of
+prologueOf :: [Text] -> [Text]
+prologueOf ls = case span isShebang ls of
   ([], _) -> []
   (shebangs, rest) -> shebangs <> filter T.null (take 1 rest)
   where

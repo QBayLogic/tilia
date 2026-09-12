@@ -28,10 +28,11 @@ module Tilia.Cpp
 where
 
 import Data.Char (isAsciiLower)
-import Data.List (isPrefixOf, sortOn, transpose, unsnoc)
+import Data.List (maximumBy, sortOn, transpose, unsnoc)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust, listToMaybe, maybeToList)
+import Data.Ord (comparing)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.LanguageExtensions.Type (Extension (..))
@@ -46,8 +47,8 @@ import Tilia.Parser
     parseConfiguration,
   )
 import Tilia.Render (RenderConfig (..), renderModule)
-import Tilia.Source (Written (..))
-import Tilia.Span (Span, covers, meets, spanEndLine, spanStartLine)
+import Tilia.Source (Lines, Written (..), blankAt, blankBelow, dropping, linesOf)
+import Tilia.Span (Span, covers, meets, mkSpan, spanEndLine, spanStartLine)
 
 ----------------------------------------------------------------------------
 -- Formatting
@@ -107,7 +108,12 @@ formatAllConfigs parser render path reached budget source = case variations sour
             path
             reached
             left
-        (,budget - 1) <$> replacing (reachedAnswers reached) opaque document
+        (,budget - 1)
+          <$> replacing
+              (reachedLines reached)
+              (reachedAnswers reached)
+              opaque
+              document
     where
       opaque = opaqueDirectives source
       left = withoutOpaque source
@@ -145,6 +151,8 @@ data Linearly
 data Variation = Variation
   { -- | Every question answered with its first branch.
     vaBaseline :: Text,
+    -- | The branches that answer left out. See 'Tilia.Source.dropping'.
+    vaBaselineDropped :: [(Int, Int)],
     -- | One question varied, with all the others held at the baseline.
     vaGroups :: [Configurations]
   }
@@ -157,18 +165,24 @@ variations source = do
   case [[gs] | gs <- specs] of
     [] -> Nothing
     dimensions ->
-      let held at =
-            blanking
-              (concat [blankingFor g (at k) | (k, dim) <- zip [0 :: Int ..] dimensions, g <- dim])
-              source
+      let blanked at =
+            concat [blankingFor g (at k) | (k, dim) <- zip [0 :: Int ..] dimensions, g <- dim]
+          gone at =
+            concat [droppedFor g (at k) | (k, dim) <- zip [0 :: Int ..] dimensions, g <- dim]
+          held at = blanking (blanked at) source
        in Just
             Variation
               { vaBaseline = held (const 0),
+                vaBaselineDropped = gone (const 0),
                 vaGroups =
                   [ Configurations
                       { cfgGuards = gsGuards gs,
                         cfgTexts =
                           [ held (\j -> if j == k then i else 0)
+                          | i <- [0 .. gsCount gs - 1]
+                          ],
+                        cfgDropped =
+                          [ gone (\j -> if j == k then i else 0)
                           | i <- [0 .. gsCount gs - 1]
                           ],
                         cfgWholes = Varied (map gsWhole dim)
@@ -194,7 +208,14 @@ separately ::
   Variation ->
   Either CppError (Doc, [Doc], Int)
 separately parser render path reached budget v = do
-  (baseDoc, spent) <- formatAllConfigs parser render path reached budget (vaBaseline v)
+  (baseDoc, spent) <-
+    formatAllConfigs
+      parser
+      render
+      path
+      (without (vaBaselineDropped v) reached)
+      budget
+      (vaBaseline v)
   (merged, left) <- eachGroup baseDoc spent (vaGroups v)
   pure (baseDoc, merged, left)
   where
@@ -253,7 +274,7 @@ formatSingleConfig ::
   Text ->
   Either CppError Doc
 formatSingleConfig parser render path reached text =
-  case parseConfiguration parser path (Written (reachedWritten reached)) text of
+  case parseConfiguration parser path (reachedLines reached) text of
     Left e -> Left (ConfigurationNotParsed (reachedAnswers reached) e)
     Right parsed -> Right (renderModule render parsed)
 
@@ -261,21 +282,33 @@ formatSingleConfig parser render path reached text =
 data Reached = Reached
   { -- | Which branch each question was answered with, outermost first.
     reachedAnswers :: [([Guard], Int)],
-    -- | The module as it was written, before any branch was taken out of
-    -- it, which is what every question about the source is answered
-    -- against. See "Tilia.Source".
-    reachedWritten :: Text
+    -- | Every line the author wrote, except for those written inside a
+    -- branch this configuration did not take.
+    reachedLines :: Lines
   }
 
 -- | The configuration nothing has been decided about yet.
 noAnswers :: Text -> Reached
 noAnswers source =
-  Reached {reachedAnswers = [], reachedWritten = source}
+  Reached
+    { reachedAnswers = [],
+      reachedLines = linesOf (Written source)
+    }
 
 -- | Answer one group's question with the branch at the given index.
 answering :: Configurations -> Int -> Reached -> Reached
 answering c i reached =
-  reached {reachedAnswers = reachedAnswers reached <> [(cfgGuards c, i)]}
+  reached
+    { reachedAnswers = reachedAnswers reached <> [(cfgGuards c, i)],
+      reachedLines = dropping (concat (take 1 (drop i (cfgDropped c)))) (reachedLines reached)
+    }
+
+-- | Leave out the branches a baseline does not take, without answering
+-- anything: the baseline is every question taken at its first branch, and
+-- which question is being varied is not settled until 'answering'.
+without :: [(Int, Int)] -> Reached -> Reached
+without gone reached =
+  reached {reachedLines = dropping gone (reachedLines reached)}
 
 -- | How many whole formattings of a module one call may spend.
 configurationBudget :: Int
@@ -288,17 +321,18 @@ configurationsWorthTrying = 4096
 
 -- | Put the directives that do not introduce new configurations back where
 -- they were written.
-replacing :: [([Guard], Int)] -> [Opaque] -> Doc -> Either CppError Doc
-replacing answers opaque doc = foldl step (Right doc) opaque
+replacing :: Lines -> [([Guard], Int)] -> [Opaque] -> Doc -> Either CppError Doc
+replacing written answers opaque doc = foldl step (Right doc) opaque
   where
-    step acc (Opaque n _ t gap)
+    step acc d
       | reproducedAt n doc = Left (DirectiveInQuotedText answers (keyword t))
       | otherwise =
           acc
             >>= maybe (Left (DirectiveUnplaceable answers (keyword t))) Right
-              . place n written
+              . place d
       where
-        written = DCppDirective t <> if gap then Doc.blankLine else mempty
+        n = opLine d
+        t = opText d
     keyword = T.takeWhile (/= ' ')
     reproducedAt n = any inside . located
       where
@@ -324,8 +358,14 @@ replacing answers opaque doc = foldl step (Right doc) opaque
       DCat a b -> reproduced a || reproduced b
       _ -> False
 
-    place n written = go
+    place directive = go
       where
+        n = opLine directive
+
+        body =
+          DCppDirective (opSpan directive) (opText directive)
+            <> if gapUnder written directive then Doc.blankLine else mempty
+
         go d = case d of
           DNest k x -> DNest k <$> go x
           DAlign x -> DAlign <$> go x
@@ -341,12 +381,20 @@ replacing answers opaque doc = foldl step (Right doc) opaque
             | Just (earlier, holder, spacing) <- holding before,
               maybe False (>= n) (endOf holder) ->
                 (\x -> mconcat (earlier <> [x] <> spacing <> after)) <$> go holder
-            | otherwise -> Just (mconcat (before <> [written] <> after))
+            | Just (printed, anchor, spacing) <- tight before,
+              Just from <- endOf anchor,
+              not (gapWritten written (from + 1) (n - 1)) ->
+                Just (mconcat (printed <> [anchor, body] <> spacing <> after))
+            | otherwise -> Just (mconcat (before <> [body] <> after))
           where
             startsAfter x = maybe False (>= n) (startOf x)
 
         holding ds = case break (isJust . endOf) (reverse ds) of
           (spacing, holder : earlier) -> Just (reverse earlier, holder, reverse spacing)
+          _ -> Nothing
+
+        tight ds = case break (isJust . endOf) (reverse ds) of
+          (spacing, anchor : earlier) -> Just (reverse earlier, anchor, reverse spacing)
           _ -> Nothing
 
     startOf = fmap fst . boundsOf
@@ -356,6 +404,7 @@ replacing answers opaque doc = foldl step (Right doc) opaque
     boundsOf = \case
       DLocated s _ -> Just (spanStartLine s, spanEndLine s)
       DFence s _ -> Just (spanStartLine s, spanEndLine s)
+      DCppDirective s _ -> Just (spanStartLine s, spanEndLine s)
       DNest _ x -> boundsOf x
       DAlign x -> boundsOf x
       DGroup _ x -> boundsOf x
@@ -463,7 +512,7 @@ merge guards varied = go Broken
     varying layout ss =
       let (opening, ss1) = sharedStart layout ss
           (ss2, closing) = sharedEnd layout ss1
-          (lead, ss3, trail) = hoisted ss2
+          (lead, ss3, trail) = hoisted layout ss2
        in mconcat opening
             <> mconcat lead
             <> middle layout ss3
@@ -532,29 +581,19 @@ merge guards varied = go Broken
     alike layout xs ys =
       length xs == length ys && and (zipWith (agree varied layout) xs ys)
 
-    hoisted ss = case map peel (filter (not . null) ss) of
-      peeled@(_ : _)
-        | Just lead <- agreed (map (\(l, _, _) -> l) peeled),
-          Just trail <- agreedEnding (map (\(_, _, r) -> r) peeled) ->
-            (lead, map (trimmed (length lead) (length trail)) ss, trail)
-      _ -> ([], ss, [])
+    hoisted layout ss = case filter (not . null . middleOf) peeled of
+      [] -> (widest [l <> m <> r | (l, m, r) <- peeled], map (const []) ss, [])
+      speaking ->
+        ( widest [l | (l, _, _) <- speaking],
+          map middleOf peeled,
+          widest [r | (_, _, r) <- speaking]
+        )
       where
-        trimmed opening closing s
-          | null s = []
-          | otherwise =
-              let (l, m, r) = peel s
-               in drop (min opening (length l)) l
-                    <> m
-                    <> take (length r - min closing (length r)) r
-
-        -- The longest of them, if every one of the others is a prefix of it.
-        agreed ls = case sortOn (negate . length) ls of
-          [] -> Just []
-          (longest : rest)
-            | all (`isPrefixOf` longest) rest -> Just longest
-            | otherwise -> Nothing
-
-        agreedEnding = fmap reverse . agreed . map reverse
+        peeled = map peel ss
+        middleOf (_, m, _) = m
+        widest = \case
+          [] -> []
+          runs -> maximumBy (comparing (spaceOf layout)) runs
 
     peel ds =
       let (l, rest) = span spacing ds
@@ -578,11 +617,27 @@ merge guards varied = go Broken
 
 -- | Would these two documents print the same, laid out like this?
 agree :: Varied -> Layout -> Doc -> Doc -> Bool
-agree varied layout a b = alike (spineAt layout a) (spineAt layout b)
+agree varied layout a b = alike (chunked (spineAt layout a)) (chunked (spineAt layout b))
   where
+    alike (Left s : xs) (Left t : ys) = s == t && alike xs ys
+    alike (Right x : xs) (Right y : ys) = here x y && alike xs ys
     alike [] [] = True
-    alike (x : xs) (y : ys) = here x y && alike xs ys
     alike _ _ = False
+
+    chunked ds =
+      let (space, rest) = span isSpace' ds
+       in Left (spaceOf layout space) : case rest of
+            [] -> []
+            x : more -> Right x : chunked more
+
+    isSpace' = \case
+      DEmpty -> True
+      DSpace -> True
+      DBreak -> True
+      DSoftBreak -> True
+      DHardBreak -> True
+      DCloseLine -> True
+      _ -> False
 
     inside x y = agree varied layout x y
 
@@ -598,7 +653,7 @@ agree varied layout a b = alike (spineAt layout a) (spineAt layout b)
           && and [g == h && inside p q | ((g, p), (h, q)) <- zip bs cs]
           && inside x' y'
       (DText s, DText t) -> s == t
-      (DCppDirective s, DCppDirective t) -> s == t
+      (DCppDirective s u, DCppDirective t v) -> s == t && u == v
       (DHoldBack s, DHoldBack t) -> s == t
       (DVerbatimBreak r, DVerbatimBreak q) -> r == q
       (DSpace, DSpace) -> True
@@ -607,6 +662,41 @@ agree varied layout a b = alike (spineAt layout a) (spineAt layout b)
       (DHardBreak, DHardBreak) -> True
       (DCloseLine, DCloseLine) -> True
       _ -> False
+
+-- | What a run of space comes to on the page.
+--
+-- How many lines it ends, which is all that can be told of it afterwards
+-- since the printer never writes two empty lines in a row, and whether it
+-- holds the text either side of it apart on a line it did not end.
+--
+-- The 'Ord' instance is how much space it is, which is why the fields are in
+-- that order: nothing, then a space, then a line ended, then two.
+data Space = Space !Int !Bool
+  deriving (Eq, Ord)
+
+-- | Read a run of space, the way 'Tilia.Doc.Internal.breakLine' does.
+spaceOf :: Layout -> [Doc] -> Space
+spaceOf layout = go 0 False False
+  where
+    go ended closed apart = \case
+      [] -> Space (min 2 ended) (apart && ended == 0)
+      d : ds -> case d of
+        DSpace -> go ended closed True ds
+        DCloseLine
+          | closed -> go ended closed apart ds
+          | otherwise -> go (ended + 1) True apart ds
+        DHardBreak -> broke ds
+        DBreak
+          | layout == Broken -> broke ds
+          | otherwise -> go ended closed True ds
+        DSoftBreak
+          | layout == Broken -> broke ds
+          | otherwise -> go ended closed apart ds
+        _ -> go ended closed apart ds
+        where
+          broke rest
+            | closed = go ended False apart rest
+            | otherwise = go (ended + 1) False apart rest
 
 -- | The lines one conditional could have printed differently.
 newtype Varied = Varied {variedLines :: [(Int, Int)]}
@@ -832,7 +922,7 @@ weigh layout = go
       DFence _ d -> go d
       DCppChoice bs e -> sum (map (go . snd) bs) + go e
       DText t -> T.length t
-      DCppDirective t -> T.length t
+      DCppDirective _ t -> T.length t
       DHoldBack t -> T.length t
       _ -> 0
 
@@ -1027,6 +1117,8 @@ data Configurations = Configurations
     -- | One module text per branch, in the same order as the directives, and
     -- then one more for the @#else@.
     cfgTexts :: [Text],
+    -- | What each of those branches leaves out, in the same order.
+    cfgDropped :: [[(Int, Int)]],
     -- | From each tied group's @#if@ to its @#endif@, inclusive.
     --
     -- Everything a branch of this conditional can be responsible for lies
@@ -1051,6 +1143,8 @@ configurations source = do
           [ blanking (concatMap (`blankingFor` i) tied) source
           | i <- [0 .. gsCount gs - 1]
           ],
+        cfgDropped =
+          [concatMap (`droppedFor` i) tied | i <- [0 .. gsCount gs - 1]],
         cfgWholes = Varied (map gsWhole tied)
       }
 
@@ -1095,6 +1189,13 @@ blankingFor gs i
       [(n, n) | n <- gsOwnLines gs]
         <> [r | (k, r) <- zip [0 :: Int ..] (gsBranches gs), k /= i]
   | otherwise = [gsWhole gs]
+
+-- | The lines a configuration of a group is not including.
+droppedFor :: GroupSpec -> Int -> [(Int, Int)]
+droppedFor gs i
+  | i < length (gsGuards gs) || gsHasElse gs =
+      [r | (k, r) <- zip [0 :: Int ..] (gsBranches gs), k /= i]
+  | otherwise = gsBranches gs
 
 -- | Every conditional in a module, at whatever depth it sits.
 allGroups :: [Directive] -> [[Directive]]
@@ -1181,8 +1282,7 @@ opaqueDirectives source =
   [ Opaque
       { opLine = n,
         opLastLine = end n,
-        opText = T.stripEnd (T.intercalate "\n" (body : map lineOf below)),
-        opGapBelow = blankAfter (end n) || blank (lineOf (end n))
+        opText = T.stripEnd (T.intercalate "\n" (body : map lineOf below))
       }
   | (n, l) <- numbered,
     isDirective l,
@@ -1192,15 +1292,17 @@ opaqueDirectives source =
   ]
   where
     numbered = zip [1 ..] (T.lines source)
-    lineAt = Map.fromList numbered
-    lineOf n = Map.findWithDefault "" n lineAt
-    blank = T.null . T.strip
-    blankAfter n = maybe False blank (Map.lookup (n + 1) lineAt)
+    byLine = Map.fromList numbered
+    lineOf n = Map.findWithDefault "" n byLine
     end n = last (n : continuing n)
     continuing n
-      | maybe False runsOn (Map.lookup n lineAt) = n + 1 : continuing (n + 1)
+      | maybe False runsOn (Map.lookup n byLine) = n + 1 : continuing (n + 1)
       | otherwise = []
     runsOn = T.isSuffixOf "\\" . T.stripEnd
+
+-- | Did the author leave an empty line anywhere between these two lines?
+gapWritten :: Lines -> Int -> Int -> Bool
+gapWritten written from to = any (`blankAt` written) [from .. to]
 
 -- | One directive that asks nothing, and what is known about it.
 data Opaque = Opaque
@@ -1210,11 +1312,20 @@ data Opaque = Opaque
     -- across several with backslashes.
     opLastLine :: Int,
     -- | What follows its hash, kept whole and never read.
-    opText :: Text,
-    -- | Whether a blank line was written under it.
-    opGapBelow :: Bool
+    opText :: Text
   }
   deriving (Eq, Show)
+
+-- | The lines a directive was written on, as a span, which is what the
+-- document carries so that two directives written the same can be told
+-- apart.
+opSpan :: Opaque -> Span
+opSpan d = mkSpan (opLine d, 1) (opLastLine d, 1)
+
+-- | Did the author leave an empty line under this directive?
+gapUnder :: Lines -> Opaque -> Bool
+gapUnder written d =
+  blankAt (opLastLine d) written || blankBelow (opLastLine d) written
 
 -- | Replace the given line ranges with empty lines, keeping every other line
 -- where it was.

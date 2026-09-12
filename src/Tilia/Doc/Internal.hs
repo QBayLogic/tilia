@@ -137,8 +137,11 @@ data Doc
   | -- | Alternatives the preprocessor chooses between, and the condition it
     -- chooses on.
     DCppChoice ![(Text, Doc)] !Doc
-  | -- | A preprocessor line that is not a conditional, reproduced.
-    DCppDirective !Text
+  | -- | A preprocessor line that is not a conditional, reproduced, and the
+    -- region of the input it was written in.
+    --
+    -- The span is included so that two directives can be told apart.
+    DCppDirective !Span !Text
   deriving (Eq, Show)
 
 -- | Documents concatenate. @'DEmpty'@ is the unit, so a document is a
@@ -291,7 +294,7 @@ go env = \case
       ]
         <> [[atMargin "#else", go env fallback] | fallback /= DEmpty]
         <> [[atMargin "#endif"]]
-  DCppDirective t -> atMargin ("#" <> t)
+  DCppDirective _ t -> atMargin ("#" <> t)
 
 -- | Put a line of text at the margin, on a line of its own.
 --

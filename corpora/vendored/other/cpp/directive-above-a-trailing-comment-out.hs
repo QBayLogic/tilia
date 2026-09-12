@@ -4,7 +4,6 @@ module Terminal.Size where
 
 #ifndef NO_CALLSTACK
 import GHC.Stack
-
 #define TRACED(ty) HasCallStack => ty
 #endif
 

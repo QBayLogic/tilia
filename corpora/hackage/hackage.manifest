@@ -467,7 +467,7 @@ formatted       b394fbd4debb  QuickCheck-2.18.0.0/src/Test/QuickCheck/Compat.hs
 partly-checked  3d21b9292db3  QuickCheck-2.18.0.0/src/Test/QuickCheck/Exception.hs
 formatted       682aa52bce46  QuickCheck-2.18.0.0/src/Test/QuickCheck/Features.hs
 declined        -             QuickCheck-2.18.0.0/src/Test/QuickCheck/Function.hs
-formatted       99731d6530d2  QuickCheck-2.18.0.0/src/Test/QuickCheck/Gen.hs
+formatted       cbfdaf0e027a  QuickCheck-2.18.0.0/src/Test/QuickCheck/Gen.hs
 formatted       8a4d0c1281d4  QuickCheck-2.18.0.0/src/Test/QuickCheck/Gen/Unsafe.hs
 declined        -             QuickCheck-2.18.0.0/src/Test/QuickCheck/Modifiers.hs
 declined        -             QuickCheck-2.18.0.0/src/Test/QuickCheck/Monadic.hs
@@ -2585,7 +2585,7 @@ formatted       ad44f3bb30b2  hspec-core-2.11.17/test/Test/Hspec/Core/TreeSpec.h
 formatted       a46fa24d2bd0  hspec-core-2.11.17/test/Test/Hspec/Core/UtilSpec.hs
 formatted       47b3f474a58b  hspec-core-2.11.17/vendor/Data/Algorithm/Diff.hs
 partly-checked  e9193e28a899  hspec-core-2.11.17/vendor/async-2.2.5/Control/Concurrent/Async.hs
-formatted       9961aa07afb7  hspec-core-2.11.17/vendor/stm-2.5.0.1/Control/Concurrent/STM/TMVar.hs
+formatted       0a7ec68ccd86  hspec-core-2.11.17/vendor/stm-2.5.0.1/Control/Concurrent/STM/TMVar.hs
 formatted       4b70560a046e  http-client-0.7.19/Data/KeyedPool.hs
 formatted       ee21d51c58b7  http-client-0.7.19/Network/HTTP/Client.hs
 formatted       78f4e79070b8  http-client-0.7.19/Network/HTTP/Client/Body.hs
@@ -2816,7 +2816,7 @@ formatted       21c053af24d4  leksah-0.16.2.2/src/IDE/Preferences.hs
 formatted       2f0f2284081d  leksah-0.16.2.2/src/IDE/Session.hs
 formatted       277f211ae71b  leksah-0.16.2.2/src/IDE/SourceCandy.hs
 formatted       95169d9d3f63  leksah-0.16.2.2/src/IDE/Statusbar.hs
-formatted       b43743038e89  leksah-0.16.2.2/src/IDE/SymbolNavigation.hs
+formatted       70eb7c99746e  leksah-0.16.2.2/src/IDE/SymbolNavigation.hs
 formatted       265b135c829e  leksah-0.16.2.2/src/IDE/TextEditor.hs
 formatted       b345661c1e07  leksah-0.16.2.2/src/IDE/TextEditor/Class.hs
 formatted       9ef1071cba91  leksah-0.16.2.2/src/IDE/TextEditor/CodeMirror.hs
@@ -2870,7 +2870,7 @@ formatted       a9257a233659  lens-5.3.6/src/Control/Lens/Internal/Iso.hs
 formatted       6790556bd514  lens-5.3.6/src/Control/Lens/Internal/Level.hs
 formatted       929b3db19b16  lens-5.3.6/src/Control/Lens/Internal/List.hs
 formatted       eae79aadfa29  lens-5.3.6/src/Control/Lens/Internal/Magma.hs
-formatted       0bead388f468  lens-5.3.6/src/Control/Lens/Internal/Prelude.hs
+formatted       e8fad9977f5a  lens-5.3.6/src/Control/Lens/Internal/Prelude.hs
 formatted       d033545bb0fa  lens-5.3.6/src/Control/Lens/Internal/Prism.hs
 formatted       4dffbb5256da  lens-5.3.6/src/Control/Lens/Internal/PrismTH.hs
 formatted       a529e2b12e5a  lens-5.3.6/src/Control/Lens/Internal/Profunctor.hs
@@ -3349,7 +3349,7 @@ formatted       fb93375da519  pandoc-types-1.23.1.2/src/Text/Pandoc/Builder.hs
 formatted       041d27bf9170  pandoc-types-1.23.1.2/src/Text/Pandoc/Definition.hs
 formatted       42a13347f367  pandoc-types-1.23.1.2/src/Text/Pandoc/Generic.hs
 formatted       8fad29f2adc4  pandoc-types-1.23.1.2/src/Text/Pandoc/JSON.hs
-formatted       c427e4246fcf  pandoc-types-1.23.1.2/src/Text/Pandoc/Walk.hs
+formatted       3e061e7b176e  pandoc-types-1.23.1.2/src/Text/Pandoc/Walk.hs
 formatted       dcf10d45e788  pandoc-types-1.23.1.2/test/Data/String/QQ.hs
 formatted       25a6ff086c83  pandoc-types-1.23.1.2/test/test-pandoc-types.hs
 formatted       7474b7e1d4f5  parsec3-1.0.1.8/Setup.hs
@@ -3821,7 +3821,7 @@ formatted       5113d120fe4d  raaz-0.3.11/core/Raaz/Core/Transfer/Unsafe.hs
 formatted       03cf11da4658  raaz-0.3.11/core/Raaz/Core/Types.hs
 formatted       2efdce977481  raaz-0.3.11/core/Raaz/Core/Types/Copying.hs
 formatted       da6a05924170  raaz-0.3.11/core/Raaz/Core/Types/Endian.hs
-formatted       bcf538efcaf0  raaz-0.3.11/core/Raaz/Core/Types/Equality.hs
+formatted       49cc9654b3b0  raaz-0.3.11/core/Raaz/Core/Types/Equality.hs
 formatted       72aa730843b9  raaz-0.3.11/core/Raaz/Core/Types/Internal.hs
 formatted       87409be71259  raaz-0.3.11/core/Raaz/Core/Types/Pointer.hs
 formatted       e89e04794868  raaz-0.3.11/core/Raaz/Core/Types/Tuple.hs
@@ -3943,7 +3943,7 @@ formatted       0ec37f362849  recursion-schemes-5.2.3/src/Data/Functor/Base.hs
 formatted       3ca7a5ae5fb0  recursion-schemes-5.2.3/src/Data/Functor/Foldable.hs
 formatted       db17ac3b1e40  recursion-schemes-5.2.3/src/Data/Functor/Foldable/TH.hs
 formatted       1581398eb1b5  resourcet-1.3.0/Control/Monad/Trans/Resource.hs
-formatted       ac7c28e8d3a4  resourcet-1.3.0/Control/Monad/Trans/Resource/Internal.hs
+formatted       59e778a4e7f3  resourcet-1.3.0/Control/Monad/Trans/Resource/Internal.hs
 formatted       22ba33396e6e  resourcet-1.3.0/Data/Acquire.hs
 formatted       4a9defd159ee  resourcet-1.3.0/Data/Acquire/Internal.hs
 formatted       27565132aa25  resourcet-1.3.0/UnliftIO/Resource.hs
@@ -3955,7 +3955,7 @@ formatted       94b4a78445b3  retry-0.9.3.1/test/Main.hs
 formatted       08af947c789a  retry-0.9.3.1/test/Tests/Control/Retry.hs
 formatted       0b770fc83ef2  retry-0.9.3.1/test/Tests/UnliftIO/Retry.hs
 formatted       e865ae48f11b  safe-exceptions-0.1.7.4/Setup.hs
-formatted       aa0f4ceb0f34  safe-exceptions-0.1.7.4/src/Control/Exception/Safe.hs
+formatted       9dd8a8e1a75f  safe-exceptions-0.1.7.4/src/Control/Exception/Safe.hs
 formatted       c34af7148814  safe-exceptions-0.1.7.4/test/Control/Exception/SafeSpec.hs
 formatted       2fbd14b119a4  safe-exceptions-0.1.7.4/test/Spec.hs
 formatted       e865ae48f11b  scientific-0.3.8.1/Setup.hs
@@ -4287,7 +4287,7 @@ formatted       d8f8b074a086  stack-9.9.9/src/Stack/Types/GhcPkgId.hs
 formatted       bd4be7dcc823  stack-9.9.9/src/Stack/Types/Internal.hs
 formatted       6f80f79fae7e  stack-9.9.9/src/Stack/Types/PackageIdentifier.hs
 formatted       88a4f8bd73e5  stack-9.9.9/src/Stack/Types/PackageName.hs
-formatted       ba20b7f0d8ad  stack-9.9.9/src/Stack/Types/StackT.hs
+formatted       bcc9e5fa699d  stack-9.9.9/src/Stack/Types/StackT.hs
 formatted       403717ac1cf2  stack-9.9.9/src/Stack/Types/Version.hs
 formatted       2f4855580908  stack-9.9.9/src/Stack/Upgrade.hs
 formatted       e1e4da453112  stack-9.9.9/src/Stack/Upload.hs
@@ -4382,8 +4382,8 @@ formatted       f0e3d45c9159  statistics-0.16.5.0/tests/tests.hs
 formatted       2c4811cee336  stm-2.5.3.1/Control/Concurrent/STM.hs
 formatted       b312f2682040  stm-2.5.3.1/Control/Concurrent/STM/TArray.hs
 formatted       87af236e7376  stm-2.5.3.1/Control/Concurrent/STM/TBQueue.hs
-formatted       ec81ee22f760  stm-2.5.3.1/Control/Concurrent/STM/TChan.hs
-formatted       7c160a32f991  stm-2.5.3.1/Control/Concurrent/STM/TMVar.hs
+formatted       b8e5b6668264  stm-2.5.3.1/Control/Concurrent/STM/TChan.hs
+formatted       5500816cddea  stm-2.5.3.1/Control/Concurrent/STM/TMVar.hs
 formatted       2711977ac292  stm-2.5.3.1/Control/Concurrent/STM/TQueue.hs
 formatted       0167cfd0c06a  stm-2.5.3.1/Control/Concurrent/STM/TSem.hs
 formatted       c660277f0724  stm-2.5.3.1/Control/Concurrent/STM/TVar.hs
@@ -4450,7 +4450,7 @@ formatted       1e9dd494aa0d  tasty-1.5.4/Test/Tasty/Providers/ConsoleFormat.hs
 formatted       00b00e15f6b6  tasty-1.5.4/Test/Tasty/Run.hs
 formatted       cb5862c8ea8c  tasty-1.5.4/Test/Tasty/Runners.hs
 formatted       2b0086f6772b  tasty-1.5.4/Test/Tasty/Runners/Reducers.hs
-formatted       64a9b7c40739  tasty-1.5.4/Test/Tasty/Runners/Utils.hs
+formatted       b1a27c0f0bde  tasty-1.5.4/Test/Tasty/Runners/Utils.hs
 formatted       e865ae48f11b  tensorflow-0.2.0.1/Setup.hs
 formatted       1f1f98c9417e  tensorflow-0.2.0.1/src/TensorFlow/Build.hs
 formatted       6a8867b44ef1  tensorflow-0.2.0.1/src/TensorFlow/BuildOp.hs
@@ -4960,7 +4960,7 @@ formatted       a7c93d247f1d  vector-algorithms-0.9.1.0/src/Data/Vector/Algorith
 formatted       385f1aecc6ac  vector-algorithms-0.9.1.0/src/Data/Vector/Algorithms/Insertion.hs
 formatted       eaaf49335045  vector-algorithms-0.9.1.0/src/Data/Vector/Algorithms/Intro.hs
 formatted       4a50f751547a  vector-algorithms-0.9.1.0/src/Data/Vector/Algorithms/Merge.hs
-formatted       d4af1569a9ea  vector-algorithms-0.9.1.0/src/Data/Vector/Algorithms/Optimal.hs
+formatted       9a4c2dc71a47  vector-algorithms-0.9.1.0/src/Data/Vector/Algorithms/Optimal.hs
 formatted       b7b0f718deb2  vector-algorithms-0.9.1.0/src/Data/Vector/Algorithms/Radix.hs
 formatted       47f1d28b6145  vector-algorithms-0.9.1.0/src/Data/Vector/Algorithms/Search.hs
 formatted       0a376532e9cb  vector-algorithms-0.9.1.0/src/Data/Vector/Algorithms/Tim.hs
@@ -5060,7 +5060,7 @@ formatted       810a9b2932db  yesod-core-1.7.0.0/src/Yesod/Core.hs
 formatted       76a91abab9c7  yesod-core-1.7.0.0/src/Yesod/Core/Class/Breadcrumbs.hs
 formatted       5eb301cd4009  yesod-core-1.7.0.0/src/Yesod/Core/Class/Dispatch.hs
 formatted       4e0e4c27884b  yesod-core-1.7.0.0/src/Yesod/Core/Class/Dispatch/ToParentRoute.hs
-formatted       c828e326655c  yesod-core-1.7.0.0/src/Yesod/Core/Class/Handler.hs
+formatted       f5e77d45ac7f  yesod-core-1.7.0.0/src/Yesod/Core/Class/Handler.hs
 formatted       b609ce0ae4aa  yesod-core-1.7.0.0/src/Yesod/Core/Class/Yesod.hs
 formatted       7b7185683c72  yesod-core-1.7.0.0/src/Yesod/Core/Content.hs
 formatted       8f8e6e5fb762  yesod-core-1.7.0.0/src/Yesod/Core/Dispatch.hs

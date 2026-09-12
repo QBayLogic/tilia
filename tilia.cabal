@@ -81,6 +81,7 @@ library
     Tilia.Render.Type
     Tilia.Run
     Tilia.Source
+    Tilia.Source.Lines
     Tilia.Span
     Tilia.Span.Ghc
     Tilia.Target
