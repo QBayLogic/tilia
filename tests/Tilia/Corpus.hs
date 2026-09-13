@@ -29,6 +29,7 @@ import Control.Monad (forM)
 import Data.ByteString.Lazy qualified as BL
 import Data.List (isPrefixOf, isSuffixOf, sort, stripPrefix)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe, maybeToList)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.LanguageExtensions.Type (Extension)
@@ -58,8 +59,7 @@ data Reference
     -- checked.
     NoReference
   | -- | It does, in a file whose name is the input's with the given mark
-    -- put before the extension. A file already carrying that mark is its
-    -- own reference: it is what the formatter is supposed to settle on.
+    -- put before the extension.
     ReferenceMarked String
   deriving (Eq, Show)
 
@@ -957,19 +957,24 @@ examplesIn :: Corpus -> FilePath -> IO [Example]
 examplesIn corpus root = do
   found <- sort <$> haskellFilesIn root
   reader <- packageReaderFor corpus
-  let files = filter (not . skipped) found
+  let present = Set.fromList found
+      files = filter (not . skipped) found
       example f reference = Example (nameOf f) f reference <$> reader f
   case corpusReference corpus of
     NoReference -> traverse (`example` Nothing) files
-    ReferenceMarked mark -> forM files $ \f ->
-      if mark `isSuffixOf` stemOf f
-        then example f (Just f)
-        else do
-          let reference = stemOf f <> mark <> extensionOf f
-          there <- doesFileExist reference
-          example f (if there then Just reference else Nothing)
+    ReferenceMarked mark ->
+      forM (filter (not . answerTo mark present) files) $ \f ->
+        if mark `isSuffixOf` stemOf f
+          then example f (Just f)
+          else do
+            let reference = stemOf f <> mark <> extensionOf f
+            there <- doesFileExist reference
+            example f (if there then Just reference else Nothing)
   where
     nameOf f = fromMaybe f (stripPrefix (root <> "/") f)
+    answerTo mark present f = case withoutSuffix mark (stemOf f) of
+      Just stem -> Set.member (stem <> extensionOf f) present
+      Nothing -> False
     skipped f = any listed (nameOf f : maybeToList (inputFor (nameOf f)))
     listed name = any covers skips
       where
