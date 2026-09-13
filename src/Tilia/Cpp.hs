@@ -986,7 +986,7 @@ data CppError
 describeCppError :: CppError -> Text
 describeCppError = \case
   UnhandledDirective k -> "a #" <> k <> " directive, which we do not handle"
-  UnsplittableConditional -> "a conditional this prototype cannot split"
+  UnsplittableConditional -> "conditionals that do not nest, or an #else out of place"
   TooManyConfigurations -> "too many configurations to format"
   ConfigurationNotParsed c e -> describeParseError e <> inConfiguration c
   DirectiveUnplaceable c k -> "nowhere to put the #" <> k <> inConfiguration c

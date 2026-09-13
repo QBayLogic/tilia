@@ -191,6 +191,6 @@ optsParser =
           ]
     targetArgument =
       (strArgument . mconcat)
-        [ metavar "TARGET",
+        [ metavar "COMPONENT",
           help "Component to format: all (the default) or a package/component name"
         ]
