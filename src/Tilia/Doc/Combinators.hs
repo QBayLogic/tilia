@@ -182,8 +182,9 @@ cppChoice ::
   -- | What holds when none of them applies
   Doc ->
   Doc
-cppChoice branches fallback =
-  DCppChoice branches (if silent fallback then DEmpty else fallback)
+cppChoice branches fallback
+  | all (silent . snd) branches && silent fallback = DEmpty
+  | otherwise = DCppChoice branches (if silent fallback then DEmpty else fallback)
 
 -- | Does this document put nothing at all on the page?
 silent :: Doc -> Bool

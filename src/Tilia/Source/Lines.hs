@@ -19,6 +19,7 @@ module Tilia.Source.Lines
     blankAt,
     directiveAt,
     blankBelow,
+    closesABranch,
   )
 where
 
@@ -100,6 +101,20 @@ blankBelow start ls = go (start + 1)
     leadsOut n = case lineAt n ls of
       Just l | directiveAt n ls -> keywordOf l `elem` leavingKeywords
       _ -> False
+    keywordOf l = T.takeWhile isAsciiLower (T.stripStart (T.drop 1 (T.stripStart l)))
+
+-- | Does the empty line under this one stand at the end of a branch?
+closesABranch :: Int -> Lines -> Bool
+closesABranch n ls = go False (n + 1)
+  where
+    go crossed k
+      | k > IntMap.size (lnWritten ls) = False
+      | otherwise = case lineAt k ls of
+          Nothing -> go crossed (k + 1)
+          Just l
+            | T.null (T.strip l) -> go True (k + 1)
+            | directiveAt k ls -> crossed && keywordOf l `elem` leavingKeywords
+            | otherwise -> False
     keywordOf l = T.takeWhile isAsciiLower (T.stripStart (T.drop 1 (T.stripStart l)))
 
 -- | The directives that lead out of the region the line below them is in,

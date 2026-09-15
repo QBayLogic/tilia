@@ -3,10 +3,10 @@ Why every example of this corpus that is not `formatted` is not.
 Generated beside the manifest, and compared against nothing: this
 file is the work list, and it is free to say as much as it likes.
 
-5202 examples, 5135 formatted.
+5202 examples, 5137 formatted.
 
 ==========================================================================
-broken (9)
+broken (7)
 ==========================================================================
 
 Agda-2.8.0/src/full/Agda/TypeChecking/Conversion.hs
@@ -237,7 +237,7 @@ lens-5.3.6/src/Control/Exception/Lens.hs
     comments, in one configuration: `{-\n$setup\n>>> :set -XNoOverloadedStrings\n>>> :set -XScopedTypeVariables\n>>> import Control.Lens\n>>> import Control.Applicative\n>>> :m + Control.Exception Control.Monad Data.List Prelude\n\n>>> :m + Control.Exception.Context\n\n-}` became `{-\n$setup\n>>> :set -XNoOverloadedStrings\n>>> :set -XScopedTypeVariables\n>>> import Control.Lens\n>>> import Control.Applicative\n>>> :m + Control.Exception Control.Monad Data.List Prelude\n\n\n>>> :m + Control.Exception.Context\n\n\n\n\n\n\n-}`
     --- input
     +++ output
-    @@ -1,19 +1,19 @@
+    @@ -1,12 +1,11 @@
      {-# LANGUAGE CPP #-}
     -{-# LANGUAGE Rank2Types #-}
      {-# LANGUAGE FlexibleInstances #-}
@@ -245,16 +245,15 @@ lens-5.3.6/src/Control/Exception/Lens.hs
      {-# LANGUAGE MultiParamTypeClasses #-}
     -{-# LANGUAGE NoMonomorphismRestriction #-}
      {-# LANGUAGE PatternSynonyms #-}
-    -{-# LANGUAGE ViewPatterns #-}
-    -
     +{-# LANGUAGE Rank2Types #-}
     +{-# LANGUAGE ScopedTypeVariables #-}
+     {-# LANGUAGE ViewPatterns #-}
+    -
+    +{-# LANGUAGE NoMonomorphismRestriction #-}
      #ifdef TRUSTWORTHY
      {-# LANGUAGE Trustworthy #-}
      #endif
-    +{-# LANGUAGE ViewPatterns #-}
-    +{-# LANGUAGE NoMonomorphismRestriction #-}
-     
+    @@ -14,6 +13,7 @@
      #include "lens-common.h"
      
      -----------------------------------------------------------------------------
@@ -290,139 +289,7 @@ lens-5.3.6/src/Control/Exception/Lens.hs
     -  -- ** IOExceptions
     -  , AsIOException(..)
     -  , pattern IOException_
-    -  -- ** Arith
-
-lens-5.3.6/src/Control/Lens/Internal/FieldTH.hs
-    formatting changed how many configurations there are, from 6 to 8
-    --- input
-    +++ output
-    @@ -1,19 +1,24 @@
-     {-# LANGUAGE CPP #-}
-     {-# LANGUAGE PatternGuards #-}
-    +#ifdef TRUSTWORTHY
-    +#if MIN_VERSION_template_haskell(2,12,0)
-    +{-# LANGUAGE Safe #-}
-    +#endif
-    +#endif
-     #if __GLASGOW_HASKELL__ >= 800
-     {-# LANGUAGE TemplateHaskellQuotes #-}
-     #else
-     {-# LANGUAGE TemplateHaskell #-}
-     #endif
-     #ifdef TRUSTWORTHY
-    -# if MIN_VERSION_template_haskell(2,12,0)
-    -{-# LANGUAGE Safe #-}
-    -# else
-    +#if MIN_VERSION_template_haskell(2,12,0)
-    +#else
-     {-# LANGUAGE Trustworthy #-}
-    -# endif
-     #endif
-    +#endif
-     
-     -----------------------------------------------------------------------------
-    +
-     -- |
-     -- Module      :  Control.Lens.Internal.FieldTH
-     -- Copyright   :  (C) 2014-2016 Edward Kmett, (C) 2014 Eric Mertens
-    @@ -22,55 +27,55 @@
-     -- Stability   :  experimental
-     -- Portability :  non-portable
-     --
-    +
-     -----------------------------------------------------------------------------
-     
-     module Control.Lens.Internal.FieldTH
-    -  ( LensRules(..)
-    -  , FieldNamer
-    -  , DefName(..)
-    -  , ClassyNamer
-    -  , makeFieldOptics
-    -  , makeFieldOpticsForDec
-    -  , makeFieldOpticsForDec'
-    -  , HasFieldClasses
-    -  ) where
-    -
-    -import Prelude ()
-    +  ( LensRules (..),
-    +    FieldNamer,
-    +    DefName (..),
-    +    ClassyNamer,
-    +    makeFieldOptics,
-    +    makeFieldOpticsForDec,
-    +    makeFieldOpticsForDec',
-    +    HasFieldClasses,
-    +  )
-    +where
-     
-     import Control.Lens.At
-    … and 1002 more lines
-
-lens-5.3.6/src/Control/Lens/Internal/TH.hs
-    formatting changed how many configurations there are, from 48 to 64
-    --- input
-    +++ output
-    @@ -1,16 +1,21 @@
-     {-# LANGUAGE CPP #-}
-    -{-# LANGUAGE TemplateHaskellQuotes #-}
-     #ifdef TRUSTWORTHY
-    -# if MIN_VERSION_template_haskell(2,12,0)
-    +#if MIN_VERSION_template_haskell(2,12,0)
-     {-# LANGUAGE Safe #-}
-    -# else
-    +#endif
-    +#endif
-    +{-# LANGUAGE TemplateHaskellQuotes #-}
-    +#ifdef TRUSTWORTHY
-    +#if MIN_VERSION_template_haskell(2,12,0)
-    +#else
-     {-# LANGUAGE Trustworthy #-}
-    -# endif
-     #endif
-    +#endif
-     
-     #include "lens-common.h"
-     
-     -----------------------------------------------------------------------------
-    +
-     -- |
-     -- Module      :  Control.Lens.Internal.TH
-     -- Copyright   :  (C) 2013-2016 Edward Kmett and Eric Mertens
-    @@ -19,14 +24,16 @@
-     -- Stability   :  experimental
-     -- Portability :  non-portable
-     --
-    +
-     ----------------------------------------------------------------------------
-     module Control.Lens.Internal.TH
-    -  ( module Control.Lens.Internal.TH
-    +  ( module Control.Lens.Internal.TH,
-     #if MIN_VERSION_template_haskell(2,21,0) || MIN_VERSION_th_abstraction(0,6,0)
-    -  , D.TyVarBndrVis
-    -  , D.bndrReq
-    +    D.TyVarBndrVis,
-    +    D.bndrReq,
-     #endif
-    -  ) where
-    +  )
-    +where
-     
-     import Control.Lens.Iso
-     import Control.Lens.Prism
-    @@ -34,8 +41,8 @@
-     import Control.Lens.Type
-     import Control.Lens.Wrapped
-     import Data.Functor.Contravariant
-    -import qualified Data.Set as Set
-     import Data.Set (Set)
-    +import qualified Data.Set as Set
-     import Language.Haskell.TH
-     import qualified Language.Haskell.TH.Datatype as D
-     import qualified Language.Haskell.TH.Datatype.TyVarBndr as D
-    @@ -68,8 +75,13 @@
-     conAppsT conName = foldl AppT (ConT conName)
-     
-    … and 236 more lines
+    -  -- ** Arithmetic Exception
 
 ==========================================================================
 does-not-parse (2)

@@ -22,6 +22,7 @@ module Tilia.Source
     lineAt,
     blankAt,
     blankBelow,
+    closesABranch,
     directiveAt,
 
     -- * Its comments

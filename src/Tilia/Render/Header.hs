@@ -51,6 +51,8 @@ import Tilia.Span.Ghc
 data HeaderPragma = HeaderPragma
   { -- | The region it was written in.
     hpSpan :: Span,
+    -- | How many preprocessor directives the header has above it.
+    hpRun :: Int,
     -- | Where it sorts.
     hpOrder :: PragmaOrder,
     -- | @LANGUAGE@, @OPTIONS_GHC@ or @OPTIONS_HADDOCK@.
@@ -117,9 +119,12 @@ takeHeaderPragmas src headerEnd comments = (pragmas, plain)
     pragmaStarts =
       Set.fromList [spanStartLine (commentSpan c) | (c, Just _) <- recognised]
     airless c = c {commentGapAbove = False, commentGapBelow = False}
+    directivesAbove n =
+      length [k | k <- [1 .. n - 1], directiveAt k (sourceLines src)]
     entry c p =
       HeaderPragma
         { hpSpan = commentSpan c,
+          hpRun = directivesAbove (spanStartLine (commentSpan c)),
           hpOrder = orderOf p,
           hpName = pragmaName p,
           hpBody = pragmaBody p
@@ -166,7 +171,7 @@ takeStackHeader headerEnd = \case
 pragmaBlock :: [HeaderPragma] -> Doc
 pragmaBlock = foldMap render . dedupe . sortOn key . concatMap split
   where
-    key p = (hpOrder p, hpBody p)
+    key p = (hpRun p, hpOrder p, hpBody p)
     dedupe = map NE.head . NE.groupBy ((==) `on` key)
     split p
       | hpName p == "LANGUAGE" =

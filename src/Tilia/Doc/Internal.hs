@@ -6,8 +6,10 @@
 -- Printing code should not import this module; import
 -- "Tilia.Doc.Combinators" instead, which exposes 'Doc' abstractly along
 -- with the vocabulary for building one. What needs the constructors is the
--- engine below, the pass that walks a finished document to put the comments
--- into it ("Tilia.Comments.Attach"), and tests that look inside a document.
+-- engine below, the passes that walk a finished document rather than build
+-- one — comment attachment in "Tilia.Comments.Attach", and the merge in
+-- "Tilia.Cpp", which takes the documents of several configurations apart and
+-- puts one back together — and tests that look inside a document.
 -- Those three take a document apart rather than build one, which is the
 -- thing the vocabulary cannot express.
 --

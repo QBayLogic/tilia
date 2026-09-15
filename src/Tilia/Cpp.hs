@@ -47,7 +47,16 @@ import Tilia.Parser
     parseConfiguration,
   )
 import Tilia.Render (RenderConfig (..), renderModule)
-import Tilia.Source (Lines, Written (..), blankAt, blankBelow, dropping, linesOf)
+import Tilia.Source
+  ( Lines,
+    Written (..),
+    blankAt,
+    blankBelow,
+    closesABranch,
+    dropping,
+    lineTexts,
+    linesOf,
+  )
 import Tilia.Span (Span, covers, meets, mkSpan, spanEndLine, spanStartLine)
 
 ----------------------------------------------------------------------------
@@ -110,10 +119,10 @@ formatAllConfigs parser render path reached budget source = case variations sour
             left
         (,budget - 1)
           <$> replacing
-              (reachedLines reached)
-              (reachedAnswers reached)
-              opaque
-              document
+            (reachedLines reached)
+            (reachedAnswers reached)
+            opaque
+            document
     where
       opaque = opaqueDirectives source
       left = withoutOpaque source
@@ -219,11 +228,13 @@ separately parser render path reached budget v = do
   (merged, left) <- eachGroup baseDoc spent (vaGroups v)
   pure (baseDoc, merged, left)
   where
+    free = freeOf reached
+
     eachGroup _ b [] = Right ([], b)
     eachGroup baseDoc b (c : cs) = do
       (docs, b') <- eachBranch c baseDoc b (zip [0 ..] (cfgTexts c))
       (rest, b'') <- eachGroup baseDoc b' cs
-      pure (merge (cfgGuards c) (cfgWholes c) docs : rest, b'')
+      pure (merge free (cfgGuards c) (cfgWholes c) docs : rest, b'')
 
     eachBranch _ _ b [] = Right ([], b)
     eachBranch c baseDoc b ((i, t) : ts) = do
@@ -251,7 +262,7 @@ together ::
   Either CppError (Doc, Int)
 together parser render path reached budget c = do
   (docs, budget') <- eachBranch budget (zip [0 ..] (cfgTexts c))
-  pure (merge (cfgGuards c) (cfgWholes c) docs, budget')
+  pure (merge (freeOf reached) (cfgGuards c) (cfgWholes c) docs, budget')
   where
     inside = reached
     eachBranch b [] = Right ([], b)
@@ -428,8 +439,8 @@ withoutOpaque source =
 --
 -- A structural walk that keeps what they all agree on and puts a choice
 -- where they part.
-merge :: [Guard] -> Varied -> [Doc] -> Doc
-merge guards varied = go Broken
+merge :: [(Span, Text)] -> [Guard] -> Varied -> [Doc] -> Doc
+merge free guards varied = go Broken
   where
     go _ [] = mempty
     go layout ds@(d : rest)
@@ -499,11 +510,15 @@ merge guards varied = go Broken
         _ -> False
 
     factored layout ss =
-      let plain = agree varied layout
-          same = anchored plain
-          shared = foldl1 (lcs plain) ss
-          stretches = transpose (map (segments same shared) ss)
-       in mconcat (woven layout stretches shared)
+      let exposed = map (exposing (filter split' (sharedDirectives ss))) ss
+          split' d = d `elem` free && any (holds d) ss && not (all (holds d) ss)
+          holds d = any (isNamed d)
+          lining = alignable varied layout
+          shared = foldl1 (lcs lining) exposed
+          cut = map (segments (anchored lining) shared) exposed
+          stretches = transpose (map fst cut)
+          anchors = transpose (map snd cut)
+       in mconcat (woven layout stretches (map (go layout) anchors))
 
     woven layout (s : ss) (c : cs) = varying layout s : c : woven layout ss cs
     woven layout ss [] = map (varying layout) ss
@@ -582,7 +597,11 @@ merge guards varied = go Broken
       length xs == length ys && and (zipWith (agree varied layout) xs ys)
 
     hoisted layout ss = case filter (not . null . middleOf) peeled of
-      [] -> (widest [l <> m <> r | (l, m, r) <- peeled], map (const []) ss, [])
+      [] ->
+        ( widest [l | (l, _, _) <- peeled],
+          map (const []) ss,
+          widest [r | (_, _, r) <- peeled]
+        )
       speaking ->
         ( widest [l | (l, _, _) <- speaking],
           map middleOf peeled,
@@ -614,6 +633,97 @@ merge guards varied = go Broken
 
     only [d] = Just d
     only _ = Nothing
+
+-- | 'freeDirectives' of the module as its author wrote it.
+freeOf :: Reached -> [(Span, Text)]
+freeOf = freeDirectives . T.unlines . lineTexts . reachedLines
+
+-- | The opaque directives written outside every conditional.
+freeDirectives :: Text -> [(Span, Text)]
+freeDirectives source =
+  [ (opSpan d, opText d)
+  | d <- opaqueDirectives source,
+    Map.findWithDefault 0 (opLine d) depths == (0 :: Int)
+  ]
+  where
+    depths = Map.fromList (zip [1 ..] (scanl step 0 (T.lines source)))
+    step depth l
+      | not (isDirective l) = depth
+      | keyword `elem` ["if", "ifdef", "ifndef"] = depth + 1
+      | keyword == "endif" = max 0 (depth - 1)
+      | otherwise = depth
+      where
+        keyword = T.takeWhile isAsciiLower (T.stripStart (T.drop 1 (T.stripStart l)))
+
+-- | Is this spine element the named directive itself, bare?
+isNamed :: (Span, Text) -> Doc -> Bool
+isNamed (s, t) = \case
+  DCppDirective u v -> u == s && v == t
+  _ -> False
+
+-- | The directives every one of these spines holds.
+sharedDirectives :: [[Doc]] -> [(Span, Text)]
+sharedDirectives = \case
+  [] -> []
+  s : ss -> foldl (\acc t -> filter (`elem` namesIn t) acc) (namesIn s) ss
+  where
+    namesIn = concatMap named
+
+-- | The directives a document holds, as far down as one may be brought out
+-- from.
+named :: Doc -> [(Span, Text)]
+named = \case
+  DCppDirective s t -> [(s, t)]
+  DCat a b -> named a <> named b
+  DNest _ x -> named x
+  DAlign x -> named x
+  DGroup _ x -> named x
+  DVariant _ b -> named b
+  _ -> []
+
+-- | Bring the given directives out to the top of the spine.
+exposing :: [(Span, Text)] -> [Doc] -> [Doc]
+exposing wanted
+  | null wanted = id
+  | otherwise = concatMap out
+  where
+    out d
+      | not (any here (named d)) = [d]
+      | otherwise = case d of
+          DCat a b -> out a <> out b
+          DNest k x -> split (DNest k) (out x)
+          DAlign x -> split DAlign (out x)
+          DGroup l x -> split (DGroup l) (out x)
+          DVariant a b -> varied (out a) (out b)
+          _ -> [d]
+
+    here (s, t) = (s, t) `elem` wanted
+
+    bare = \case
+      DCppDirective s t -> here (s, t)
+      _ -> False
+
+    split w ps = case break bare ps of
+      (before, []) -> [w (mconcat before) | not (null before)]
+      (before, x : rest) ->
+        [w (mconcat before) | not (null before)] <> [x] <> split w rest
+
+    varied as bs =
+      let (xs, ds) = chunk as
+          (ys, es) = chunk bs
+       in if ds == es && length xs == length ys
+            then interleave xs ys ds
+            else [DVariant (mconcat as) (mconcat bs)]
+
+    chunk ps = case break bare ps of
+      (before, []) -> ([mconcat before], [])
+      (before, x : rest) ->
+        let (cs, ds) = chunk rest in (mconcat before : cs, x : ds)
+
+    interleave (x : xs) (y : ys) ds = case ds of
+      [] -> [DVariant x y]
+      z : zs -> DVariant x y : z : interleave xs ys zs
+    interleave _ _ _ = []
 
 -- | Would these two documents print the same, laid out like this?
 agree :: Varied -> Layout -> Doc -> Doc -> Bool
@@ -752,7 +862,14 @@ combine layout base ds = case filter (\(v, d) -> not (agree v layout base d)) ds
         traverse
           (cluster bs)
           ( overlapping
-              (sortOn chFrom (concat [changesAgainst v (agree v layout) bs s | (v, s) <- ss]))
+              ( sortOn
+                  chFrom
+                  ( concat
+                      [ changesAgainst v (alignable v layout) (agree v layout) bs s
+                      | (v, s) <- ss
+                      ]
+                  )
+              )
           )
       pure (mconcat (applied bs clustered))
 
@@ -799,17 +916,32 @@ data Change = Change
 
 -- | What one document changed about the baseline, as the stretches it
 -- replaced and what it put in each of their places.
-changesAgainst :: Varied -> (Doc -> Doc -> Bool) -> [Doc] -> [Doc] -> [Change]
-changesAgainst varied same bs xs = go 0 bs xs (lcs same bs xs)
+changesAgainst ::
+  Varied ->
+  -- | Whether two elements stand for the same thing, which lines the spines up
+  (Doc -> Doc -> Bool) ->
+  -- | Whether two elements print the same, which says nothing changed
+  (Doc -> Doc -> Bool) ->
+  [Doc] ->
+  [Doc] ->
+  [Change]
+changesAgainst varied lining plain bs xs = go 0 bs xs (lcs lining bs xs)
   where
-    anchor = anchored same
+    anchor = anchored lining
 
     go i b x [] = between i b x
     go i b x (c : cs) =
       let (b', b'') = break (anchor c) b
           (x', x'') = break (anchor c) x
+          j = i + length b'
        in between i b' x'
-            <> go (i + length b' + 1) (drop 1 b'') (drop 1 x'') cs
+            <> held j (listToMaybe b'') (listToMaybe x'')
+            <> go (j + 1) (drop 1 b'') (drop 1 x'') cs
+
+    held j (Just b') (Just x')
+      | not (plain b' x') =
+          [Change {chFrom = j, chTo = j + 1, chWith = [x'], chVaried = varied}]
+    held _ _ _ = []
 
     between i b x =
       [ Change
@@ -821,8 +953,8 @@ changesAgainst varied same bs xs = go 0 bs xs (lcs same bs xs)
       | not (null b' && null x')
       ]
       where
-        shared = length (takeWhile id (zipWith same b x))
-        atEnd = length (takeWhile id (zipWith same (reverse b) (reverse x)))
+        shared = length (takeWhile id (zipWith plain b x))
+        atEnd = length (takeWhile id (zipWith plain (reverse b) (reverse x)))
         kept = min atEnd (min (length b) (length x) - shared)
         b' = take (length b - kept - shared) (drop shared b)
         x' = take (length x - kept - shared) (drop shared x)
@@ -898,6 +1030,8 @@ opensWithBreak layout d = case dropWhile quiet (spineAt layout d) of
     DCloseLine -> True
     DBreak -> layout == Broken
     DSoftBreak -> layout == Broken
+    DCppDirective _ _ -> True
+    DCppChoice _ _ -> True
     _ -> False
   [] -> False
   where
@@ -974,6 +1108,10 @@ lcs same xs ys =
                   | n >= an -> cells n acc more
                   | otherwise -> cells an as' more
 
+-- | Do these two documents stand for the same thing?
+alignable :: Varied -> Layout -> Doc -> Doc -> Bool
+alignable = agree
+
 -- | Only let something that was printed line two spines up.
 anchored :: (Doc -> Doc -> Bool) -> Doc -> Doc -> Bool
 anchored same a b = anchoring a && same a b
@@ -991,18 +1129,25 @@ anchoring = \case
   _ -> True
 
 -- | A spine cut at the elements it shares with the others: one stretch
--- before each of them, and one after the last.
+-- before each of them, and one after the last, and the elements themselves.
 --
 -- Always one more stretch than there are shared elements, either end of
 -- which may be empty. Leftmost matching is enough to find each of them,
 -- since what is being matched is a subsequence of this spine to begin with.
-segments :: (Doc -> Doc -> Bool) -> [Doc] -> [Doc] -> [[Doc]]
+--
+-- The matched elements come back rather than being dropped because the
+-- caller cannot assume they are interchangeable: what lined them up is
+-- 'alignable', and only 'agree' would say they print the same.
+segments :: (Doc -> Doc -> Bool) -> [Doc] -> [Doc] -> ([[Doc]], [Doc])
 segments same = go
   where
-    go [] s = [s]
-    go (c : cs) s =
-      let (before', rest) = break (same c) s
-       in before' : go cs (drop 1 rest)
+    go [] s = ([s], [])
+    go (c : cs) s = case break (same c) s of
+      (before', matched : rest) -> keeping before' matched (go cs rest)
+      (before', []) -> keeping before' c (go cs [])
+      where
+        keeping before' matched (stretches, anchors) =
+          (before' : stretches, matched : anchors)
 
 -- | Would the preprocessor be run over this module, and find anything to
 -- do?
@@ -1183,12 +1328,12 @@ gsCount :: GroupSpec -> Int
 gsCount gs = length (gsGuards gs) + 1
 
 -- | The lines to blank so that configuration @i@ of a group is what is left.
+--
+-- The branches this configuration does not take, and the directives
+-- themselves: a directive belongs to no configuration, which is the whole of
+-- what separates this from 'droppedFor'.
 blankingFor :: GroupSpec -> Int -> [(Int, Int)]
-blankingFor gs i
-  | i < length (gsGuards gs) || gsHasElse gs =
-      [(n, n) | n <- gsOwnLines gs]
-        <> [r | (k, r) <- zip [0 :: Int ..] (gsBranches gs), k /= i]
-  | otherwise = [gsWhole gs]
+blankingFor gs i = droppedFor gs i <> [(n, n) | n <- gsOwnLines gs]
 
 -- | The lines a configuration of a group is not including.
 droppedFor :: GroupSpec -> Int -> [(Int, Int)]
@@ -1323,9 +1468,13 @@ opSpan :: Opaque -> Span
 opSpan d = mkSpan (opLine d, 1) (opLastLine d, 1)
 
 -- | Did the author leave an empty line under this directive?
+--
+-- Not one that stands at the end of a branch: see 'closesABranch'.
 gapUnder :: Lines -> Opaque -> Bool
 gapUnder written d =
-  blankAt (opLastLine d) written || blankBelow (opLastLine d) written
+  (blankAt n written || blankBelow n written) && not (closesABranch n written)
+  where
+    n = opLastLine d
 
 -- | Replace the given line ranges with empty lines, keeping every other line
 -- where it was.
