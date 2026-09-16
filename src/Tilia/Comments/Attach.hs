@@ -23,10 +23,16 @@ import Tilia.Span
 
 -- | Put every comment into the document.
 attachComments :: [Comment] -> Doc -> Doc
-attachComments cs doc = written <> foldMap atEnd (unplaced left)
+attachComments cs doc = written <> afterEverything (unplaced left)
   where
     (written, left) = walk (placeComments regions fences cs) doc
     (regions, fences) = markedSpans doc
+
+-- | The comments nothing came to collect, written after everything.
+afterEverything :: [Comment] -> Doc
+afterEverything = \case
+  [] -> mempty
+  (opening : rest) -> atEnd True opening <> foldMap (atEnd False) rest
 
 -- | The spans of every 'DLocated' in the document, and of every 'DFence',
 -- in that order.
@@ -135,9 +141,18 @@ writtenAs atTheEnd position c = commentDoc c $ case shapeOf position c of
     gapAbove = includeWhen (commentGapAbove c) (closeLine <> blankLine)
     gapBelow = includeWhen (commentGapBelow c && not atTheEnd) blankLine
 
--- | A comment nothing came to collect, written after everything.
-atEnd :: Comment -> Doc
-atEnd c = commentDoc c (closeLine <> blankLine <> commentText c <> closeLine)
+-- | Turn a 'Comment' that trails the document into a 'Doc'.
+atEnd ::
+  -- | Is this the first of them, and so the one held off the code above?
+  Bool ->
+  Comment ->
+  Doc
+atEnd opensTheRun c =
+  commentDoc c $
+    closeLine
+      <> includeWhen (opensTheRun || commentGapAbove c) blankLine
+      <> commentText c
+      <> closeLine
 
 -- | A comment, and the spacing that goes with it, as one region.
 --
