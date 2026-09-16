@@ -86,11 +86,6 @@ placeComments regions fences comments =
   where
     decided = [(against c, c) | c <- comments]
 
-    -- Which lines end in a comment that trails code, so that a comment
-    -- lined up under one of them can tell whether it is carrying a remark
-    -- on. Both halves of that are needed: a comment with the line to itself
-    -- begins a remark rather than continuing one, and a comment with code
-    -- after it does not end its line, so the line below is not under it.
     linesEndingInAComment =
       IntSet.fromList
         [ spanEndLine (commentSpan c)
@@ -98,6 +93,25 @@ placeComments regions fences comments =
           commentTrailing c,
           not (commentFollowed c)
         ]
+
+    ownLineComments =
+      IntMap.fromList
+        [ (spanStartLine s, (spanStartColumn s, commentAbove c))
+        | c <- comments,
+          not (commentTrailing c),
+          not (commentFollowed c),
+          let s = commentSpan c
+        ]
+
+    carriedOnFrom column = go
+      where
+        go line
+          | IntSet.member line linesEndingInAComment = Just line
+          | Just (col, above) <- IntMap.lookup line ownLineComments,
+            col == column,
+            above == ContentAt column =
+              go (line - 1)
+          | otherwise = Nothing
 
     regionsByEndLine =
       IntMap.fromListWith (<>) [(spanEndLine r, [r]) | r <- regions]
@@ -142,13 +156,10 @@ placeComments regions fences comments =
         continues
           | ContentAt column <- commentAbove c,
             column == spanStartColumn here,
-            runsOnFromAbove,
-            nothingBelowItLinesUp =
-              endingOn (spanStartLine here - 1)
+            nothingBelowItLinesUp,
+            Just anchor <- carriedOnFrom column (spanStartLine here - 1) =
+              endingOn anchor
           | otherwise = Nothing
-
-        runsOnFromAbove =
-          IntSet.member (spanStartLine here - 1) linesEndingInAComment
 
         nothingBelowItLinesUp =
           all (\r -> spanStartColumn r < spanStartColumn here) next
