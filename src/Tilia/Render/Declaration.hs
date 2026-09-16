@@ -125,6 +125,7 @@ groupDecls ctx isSignatureFile (d : ds)
       _ -> False
     belongs (previous, current) =
       (not isSignatureFile && isSignatureSeries ctx previous current)
+        || isDerivingSeries ctx previous current
         || relatedDecls d current
         || relatedDecls previous current
 
@@ -134,6 +135,13 @@ isSignatureSeries :: Ctx -> LHsDecl GhcPs -> LHsDecl GhcPs -> Bool
 isSignatureSeries ctx x@(L _ a) y@(L _ b) = case (a, b) of
   (SigD _ TypeSig {}, SigD _ TypeSig {}) ->
     not (commentBetween ctx (spanOf x) (spanOf y))
+  _ -> False
+
+-- | Two standalone @deriving@ declarations the author ran together.
+isDerivingSeries :: Ctx -> LHsDecl GhcPs -> LHsDecl GhcPs -> Bool
+isDerivingSeries ctx x@(L _ a) y@(L _ b) = case (a, b) of
+  (DerivD {}, DerivD {}) ->
+    not (separatedByBlank ctx (spanOf x) (spanOf y))
   _ -> False
 
 ----------------------------------------------------------------------------

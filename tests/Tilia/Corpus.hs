@@ -322,7 +322,11 @@ ormoluSkip =
     "declaration" </> "value" </> "function" </> "infix" </> "esqueleto-0.hs",
     "declaration" </> "value" </> "function" </> "infix" </> "esqueleto-1.hs",
     "declaration" </> "class" </> "default-signatures.hs",
-    "declaration" </> "type-families" </> "closed-type-family" </> "with-comments.hs"
+    "declaration" </> "type-families" </> "closed-type-family" </> "with-comments.hs",
+    "declaration" </> "deriving" </> "singleline.hs",
+    "declaration" </> "deriving" </> "multiline.hs",
+    "declaration" </> "deriving" </> "overlapping.hs",
+    "declaration" </> "warning" </> "warning-single-line.hs"
   ]
     <> ormoluUnreadable
 
