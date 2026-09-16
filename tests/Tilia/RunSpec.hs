@@ -5,10 +5,13 @@
 module Tilia.RunSpec (spec) where
 
 import Control.Concurrent (getNumCapabilities, threadDelay)
+import Data.ByteString qualified as BS
+import Data.Either (isLeft)
 import Data.IORef
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as T
 import Data.Text.IO qualified as T
 import GHC.Clock (getMonotonicTime)
 import System.Directory (getModificationTime)
@@ -301,11 +304,76 @@ spec = do
       map T.length (noted Plain ("✗", Bad) (T.replicate 40 "and more words "))
         `shouldSatisfy` all (<= lineWidth)
 
+  describe "reading a file" $ do
+    it "reads it as UTF-8" $
+      withBytes (T.encodeUtf8 "-- λ über ✓\n") $ \path ->
+        readAsUtf8 path `shouldReturn` Right "-- λ über ✓\n"
+
+    it "reads it as UTF-8 whatever the machine's locale is" $
+      withBytes (BS.pack [0xC3, 0xA9, 0x0A]) $ \path ->
+        readAsUtf8 path `shouldReturn` Right "é\n"
+
+    it "says so when it is not UTF-8 at all" $
+      withBytes (BS.pack [0x6D, 0xFF, 0xFE, 0x0A]) $ \path ->
+        readAsUtf8 path `shouldReturn` Left "it is not valid UTF-8"
+
+    it "says so when it is not there" $
+      withSystemTempDirectory "tilia-run" $ \directory ->
+        (isLeft <$> readAsUtf8 (directory </> "gone.hs"))
+          `shouldReturn` True
+
+    it "hands over the line endings it found, rather than the platform's" $
+      withBytes "module A where\r\n" $ \path ->
+        readAsUtf8 path `shouldReturn` Right "module A where\r\n"
+
+  describe "what would be written back" $ do
+    it "is unchanged when the formatter gave back what was there" $
+      differs (formattingOutcome "module A where\n" "module A where\n")
+        `shouldBe` False
+
+    it "is unchanged when a file with Windows endings formats to itself" $
+      differs (formattingOutcome "module A where\r\n" "module A where\n")
+        `shouldBe` False
+
+    it "puts the file's own endings back on what it writes" $
+      written (formattingOutcome "module A where\r\n" "module B where\n")
+        `shouldBe` Just "module B where\r\n"
+
+    it "leaves a file that ends its lines with newlines alone" $
+      written (formattingOutcome "module A where\n" "module B where\n")
+        `shouldBe` Just "module B where\n"
+
+    it "takes the endings from the first line, over a file of many" $
+      written (formattingOutcome "a\r\nb\r\nc\r\n" "a\nb\nd\n")
+        `shouldBe` Just "a\r\nb\r\nd\r\n"
+
+    it "counts a file whose endings disagree as one that would change" $
+      differs (formattingOutcome "a\r\nb\nc\r\n" "a\nb\nc\n") `shouldBe` True
+
+    it "says as much in the diff, having nothing else to show" $
+      T.unlines (reportOut (checkReport Plain [("A.hs", formattingOutcome "a\r\nb\nc\r\n" "a\nb\nc\n")]))
+        `shouldSatisfy` T.isInfixOf "differ only in how they end their lines"
+
+    it "leaves a carriage return that is not a line ending where it is" $
+      written (formattingOutcome "x = \"a\\\r b\"\r\n" "y = \"a\\\r b\"\n")
+        `shouldBe` Just "y = \"a\\\r b\"\r\n"
+
   describe "putting a file back" $ do
     it "writes one that changed" $
       withSource "module A where\n" $ \path -> do
         writeBack (path, Changed "module A where\n" "module B where\n")
         T.readFile path `shouldReturn` "module B where\n"
+
+    it "writes it as UTF-8, and as the bytes it was given" $
+      withSource "module A where\n" $ \path -> do
+        writeBack (path, Changed "module A where\n" "-- ✓ über\r\n")
+        BS.readFile path `shouldReturn` T.encodeUtf8 "-- ✓ über\r\n"
+
+    it "takes back exactly what it read, over a whole round trip" $
+      withBytes (T.encodeUtf8 "-- ü\r\nmodule A where\r\n") $ \path -> do
+        Right asItIs <- readAsUtf8 path
+        writeBack (path, formattingOutcome asItIs "-- ü\nmodule B where\n")
+        BS.readFile path `shouldReturn` T.encodeUtf8 "-- ü\r\nmodule B where\r\n"
 
     it "leaves one that did not alone, down to its modification time" $
       untouched Unchanged
@@ -357,6 +425,20 @@ withSource contents act =
     let path = directory </> "A.hs"
     T.writeFile path contents
     act path
+
+-- | The same, for a file that has to hold exactly these bytes.
+withBytes :: BS.ByteString -> (FilePath -> IO a) -> IO a
+withBytes contents act =
+  withSystemTempDirectory "tilia-run" $ \directory -> do
+    let path = directory </> "A.hs"
+    BS.writeFile path contents
+    act path
+
+-- | What writing this outcome back would put in the file.
+written :: Outcome -> Maybe Text
+written = \case
+  Changed _ wouldBe -> Just wouldBe
+  _ -> Nothing
 
 -- | Writing this outcome back should do nothing whatsoever.
 untouched :: Outcome -> Expectation

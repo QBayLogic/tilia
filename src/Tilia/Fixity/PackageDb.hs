@@ -32,9 +32,8 @@ import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import System.Directory (doesDirectoryExist, findExecutable)
-import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
-import System.Process (readProcessWithExitCode)
+import Tilia.Process (readProgramOutput)
 import Tilia.Utils (quietly)
 
 -- | A package the compiler can see.
@@ -70,18 +69,18 @@ data Installed = Installed
 -- them, though, so having asked once we need not ask again to find out
 -- whether the answer still holds.
 readInstalledPackages :: IO Installed
-readInstalledPackages = quietly (Installed [] []) $ do
-  (code, out, _) <- readProcessWithExitCode "ghc-pkg" ["dump", "--global", "--user"] ""
-  case code of
-    ExitSuccess -> do
-      let fields = map parseFields (records (T.pack out))
-      databases <- filterM doesDirectoryExist (databasesIn fields)
-      pure
-        Installed
-          { installedPackages = mapMaybe fromFields fields,
-            installedDatabases = databases
-          }
-    _ -> pure (Installed [] [])
+readInstalledPackages =
+  quietly (Installed [] []) $
+    readProgramOutput "ghc-pkg" ["dump", "--global", "--user"] >>= \case
+      Nothing -> pure (Installed [] [])
+      Just out -> do
+        let fields = map parseFields (records out)
+        databases <- filterM doesDirectoryExist (databasesIn fields)
+        pure
+          Installed
+            { installedPackages = mapMaybe fromFields fields,
+              installedDatabases = databases
+            }
 
 -- | What tells one compiler environment from another.
 --

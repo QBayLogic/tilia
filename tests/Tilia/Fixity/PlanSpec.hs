@@ -53,6 +53,7 @@ spec = do
   generatedModuleSpec
   gitDependencies
   repositories
+  packageCache
   plan <- runIO (readBuildPlan (planPathFor "."))
   case plan of
     Left _ -> unavailable "no build plan; run cabal build first"
@@ -401,6 +402,51 @@ repositories = describe "a package fetched from a repository" $ do
 -- | Is the tarball under this repository's directory of the cache?
 isUnder :: FilePath -> FilePath -> Bool
 isUnder repo path = ("/" <> repo <> "/") `Data.List.isInfixOf` path
+
+-- | Where the package cache is looked for.
+--
+-- @cabal@ answers this differently on each platform and has answered it two
+-- ways on this one, so the rule is to look everywhere it could be and take
+-- whichever place holds an index. These drive the search by moving the
+-- directories it derives from, which on Unix are these two variables.
+packageCache :: Spec
+packageCache = describe "where the package cache is looked for" $ do
+  it "is what CABAL_DIR says, above all else" $
+    withSystemTempDirectory "tilia-cabal-dir" $ \dir ->
+      withEnvironment [("CABAL_DIR", dir)] $
+        packageCacheRoot `shouldReturn` (dir </> "packages")
+
+  it "is the XDG cache where the index is there" $
+    withLayouts $ \xdg _ -> do
+      withIndexIn xdg
+      packageCacheRoot `shouldReturn` xdg
+
+  it "is still the old directory where the index is there instead" $
+    withLayouts $ \_ legacy -> do
+      withIndexIn legacy
+      packageCacheRoot `shouldReturn` legacy
+
+  it "is the platform's own default where there is no index anywhere" $
+    withLayouts $
+      \xdg _ -> packageCacheRoot `shouldReturn` xdg
+
+-- | Run something against a home and an XDG cache directory of its own,
+-- handing it both of the places a cache could then be in.
+withLayouts :: (FilePath -> FilePath -> Expectation) -> Expectation
+withLayouts act =
+  withSystemTempDirectory "tilia-home" $ \home ->
+    withSystemTempDirectory "tilia-xdg" $ \cache ->
+      withEnvironment [("HOME", home), ("XDG_CACHE_HOME", cache)] $
+        bracket
+          (lookupEnv "CABAL_DIR" <* unsetEnv "CABAL_DIR")
+          (traverse_ (setEnv "CABAL_DIR"))
+          (const (act (cache </> "cabal" </> "packages") (home </> ".cabal" </> "packages")))
+
+-- | Put a Hackage index where a cache directory would have one.
+withIndexIn :: FilePath -> IO ()
+withIndexIn root = do
+  createDirectoryIfMissing True (root </> "hackage.haskell.org")
+  T.writeFile (root </> "hackage.haskell.org" </> "01-index.tar") ""
 
 -- | Run something on where @plannedTarballs@ looked, against a package
 -- cache holding the entries given.

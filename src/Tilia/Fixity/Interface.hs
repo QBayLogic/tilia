@@ -18,9 +18,8 @@ import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Read qualified as T
-import System.Exit (ExitCode (..))
-import System.Process (readProcessWithExitCode)
 import Tilia.Fixity
+import Tilia.Process (readProgramOutput)
 import Tilia.Utils (quietly)
 
 -- | What an interface says about the operators a module offers.
@@ -52,11 +51,11 @@ readInterface ::
   -- | The file
   FilePath ->
   IO (Maybe Interface)
-readInterface modName path = quietly Nothing $ do
-  (code, out, _) <- readProcessWithExitCode "ghc" ["--show-iface", path] ""
-  pure $ case code of
-    ExitSuccess -> parseInterface modName (T.pack out)
-    _ -> Nothing
+readInterface modName path =
+  quietly Nothing $
+    readProgramOutput "ghc" ["--show-iface", path] >>= \case
+      Nothing -> pure Nothing
+      Just out -> pure (parseInterface modName out)
 
 -- | Read what @ghc --show-iface@ printed, if it is this module's interface.
 parseInterface :: Text -> Text -> Maybe Interface

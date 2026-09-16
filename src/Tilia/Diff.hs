@@ -9,6 +9,7 @@ module Tilia.Diff
 where
 
 import Data.Algorithm.Diff qualified as D
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Tilia.Palette (Color (..), Palette, paint)
@@ -67,6 +68,9 @@ unified ::
   Text ->
   Text
 unified palette limit above (beforeName, afterName) before after
+  | null hunks,
+    before /= after =
+      "(the two differ only in how they end their lines)"
   | null hunks =
       "(the two are identical as text, so the difference is in something\
       \ the text does not show)"
@@ -117,8 +121,8 @@ unified palette limit above (beforeName, afterName) before after
     changed = [i | (i, Line m _ _ _) <- zip [0 ..] lines', m /= Context]
     total = length lines'
     lines' = tag (D.getGroupedDiff (split before) (split after))
-
-    split = T.splitOn "\n"
+    split = map withoutReturn . T.splitOn "\n"
+    withoutReturn l = fromMaybe l (T.stripSuffix "\r" l)
 
 -- | How many unchanged lines to show either side of a change.
 margin :: Int

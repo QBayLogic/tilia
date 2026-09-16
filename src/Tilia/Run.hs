@@ -12,6 +12,8 @@ module Tilia.Run
 
     -- * Execution
     runOver,
+    readAsUtf8,
+    formattingOutcome,
     writeBack,
     inParallel,
 
@@ -25,13 +27,14 @@ where
 
 import Control.Concurrent (forkIO, getNumCapabilities, newEmptyMVar, putMVar, takeMVar)
 import Control.Monad (replicateM)
+import Data.ByteString qualified as BS
 import Data.Foldable (for_, traverse_)
 import Data.IORef
 import Data.List (sortOn)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.IO qualified as T
+import Data.Text.Encoding qualified as T
 import System.FilePath (takeExtension)
 import Tilia.Diff (diffInFull)
 import Tilia.Format
@@ -42,6 +45,7 @@ import Tilia.Format
     formatSource,
     refused,
   )
+import Tilia.Newline (NewlineStyle (Lf), getNewlineStyle, setNewlineStyle)
 import Tilia.Palette (Color (Bad, Good, Middling, Place), Palette, marker, paint)
 import Tilia.Utils (attempted, indent, lineWidth, wrapTo)
 
@@ -96,20 +100,41 @@ runOver :: Session -> [FilePath] -> IO [(FilePath, Outcome)]
 runOver session = inParallel one
   where
     one path = do
-      read' <- attempted (T.readFile path)
-      (,) path <$> case read' of
-        Left why -> pure (Failed (Unreadable path why))
-        Right before ->
-          formatSource session path before >>= \case
-            Left e -> pure (if refused e then Declined e else Failed e)
-            Right after
-              | after == before -> pure Unchanged
-              | otherwise -> pure (Changed before after)
+      !outcome <-
+        readAsUtf8 path >>= \case
+          Left why -> pure (Failed (Unreadable path why))
+          Right before ->
+            formatSource session path (setNewlineStyle Lf before) >>= \case
+              Left e -> pure (if refused e then Declined e else Failed e)
+              Right formatted -> pure (formattingOutcome before formatted)
+      pure (path, outcome)
+
+-- | Read a source file as UTF-8.
+readAsUtf8 :: FilePath -> IO (Either Text Text)
+readAsUtf8 path =
+  attempted (BS.readFile path) >>= \case
+    Left why -> pure (Left why)
+    Right bytes -> pure $ case T.decodeUtf8' bytes of
+      Right text -> Right text
+      Left _ -> Left "it is not valid UTF-8"
+
+-- | Formatting outcome for a file.
+formattingOutcome ::
+  -- | The file, as it is
+  Text ->
+  -- | Its formatted text, in newlines
+  Text ->
+  Outcome
+formattingOutcome before formatted
+  | after == before = Unchanged
+  | otherwise = Changed before after
+  where
+    after = setNewlineStyle (getNewlineStyle before) formatted
 
 -- | Put a formatted file back, and only if it changed.
 writeBack :: (FilePath, Outcome) -> IO ()
 writeBack (path, outcome) = case outcome of
-  Changed _ after -> T.writeFile path after
+  Changed _ after -> BS.writeFile path (T.encodeUtf8 after)
   _ -> pure ()
 
 -- | Run an action over every element at once, as far as the machine allows.

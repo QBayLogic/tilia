@@ -13,7 +13,7 @@ where
 
 import Data.ByteString qualified as BS
 import Data.IORef
-import Data.List (isPrefixOf, isSuffixOf, sortOn)
+import Data.List (isSuffixOf, sortOn)
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -37,7 +37,7 @@ import GHC.Driver.Session qualified as GHC
 import GHC.LanguageExtensions.Type (Extension)
 import Language.Haskell.Extension qualified as Cabal
 import System.Directory (canonicalizePath, doesDirectoryExist, listDirectory)
-import System.FilePath (takeDirectory, (</>))
+import System.FilePath (equalFilePath, splitDirectories, takeDirectory, (</>))
 import Tilia.Pragma (lookupExtension)
 import Tilia.Utils (attempted, quietly)
 
@@ -109,7 +109,15 @@ claiming file components =
   where
     covered = not . null . covering
     nearness = maximum . map length . covering
-    covering c = [d | d <- componentDirs c, (d <> "/") `isPrefixOf` file]
+    covering c = [d | d <- componentDirs c, d `covers` file]
+
+-- | Whether a file is somewhere under a directory.
+covers :: FilePath -> FilePath -> Bool
+covers directory file = go (splitDirectories directory) (splitDirectories file)
+  where
+    go [] (_ : _) = True
+    go (d : ds) (f : fs) = equalFilePath d f && go ds fs
+    go _ _ = False
 
 -- | The nearest @.cabal@ file at or above a directory.
 findCabalFile ::

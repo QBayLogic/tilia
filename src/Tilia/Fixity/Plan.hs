@@ -25,6 +25,7 @@ module Tilia.Fixity.Plan
     planPathFor,
     checkReadiness,
     plannedTarballs,
+    packageCacheRoot,
     Solves (..),
     forgetfulSolves,
     prepareWith,
@@ -54,7 +55,7 @@ import Data.Foldable (toList, traverse_)
 import Data.IORef
 import Data.List (isSuffixOf)
 import Data.List qualified
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NE
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -70,15 +71,18 @@ import GHC.Hs.Extension (GhcPs)
 import GHC.IO.Handle (hDuplicate)
 import GHC.LanguageExtensions.Type (Extension (ImplicitPrelude))
 import System.Directory
-  ( doesFileExist,
-    getHomeDirectory,
+  ( XdgDirectory (XdgCache),
+    doesFileExist,
+    getAppUserDataDirectory,
     getModificationTime,
+    getXdgDirectory,
     listDirectory,
   )
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
 import System.FilePath (takeDirectory, (</>))
 import System.IO (hFlush, stderr)
+import System.Info qualified
 import System.Process
   ( StdStream (Inherit, UseHandle),
     createProcess,
@@ -711,13 +715,28 @@ packageCacheRoot =
   lookupEnv "CABAL_DIR" >>= \case
     Just dir -> pure (dir </> "packages")
     Nothing -> do
-      home <- getHomeDirectory
-      let xdg = home </> ".cache" </> "cabal" </> "packages"
-          legacy = home </> ".cabal" </> "packages"
-      exists <- doesFileExist (xdg </> hackage </> "01-index.tar")
-      pure (if exists then xdg else legacy)
+      places <- cabalDirs
+      found <- filterM holdsAnIndex (toList places)
+      pure (fromMaybe (NE.head places) (listToMaybe found))
   where
+    holdsAnIndex dir =
+      quietly False (doesFileExist (dir </> hackage </> "01-index.tar"))
     hackage = "hackage.haskell.org"
+
+-- | Every directory @cabal@ could be keeping a package cache in, the
+-- platform's own default first.
+cabalDirs :: IO (NonEmpty FilePath)
+cabalDirs = do
+  appData <- getAppUserDataDirectory "cabal"
+  xdg <- quietly Nothing (Just <$> getXdgDirectory XdgCache "cabal")
+  pure . fmap (</> "packages") $ case xdg of
+    Just dir | not onWindows -> dir :| [appData]
+    Just dir -> appData :| [dir]
+    Nothing -> appData :| []
+
+-- | Whether this is a Windows build, for the places that differ there.
+onWindows :: Bool
+onWindows = System.Info.os == "mingw32"
 
 -- | The repository @cabal@ would have kept a package's sources under.
 hackageByDefault :: FilePath

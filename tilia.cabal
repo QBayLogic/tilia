@@ -57,10 +57,12 @@ library
     Tilia.Fixity.Plan
     Tilia.Format
     Tilia.Imports
+    Tilia.Newline
     Tilia.Package
     Tilia.Palette
     Tilia.Parser
     Tilia.Pragma
+    Tilia.Process
     Tilia.Project
     Tilia.Render
     Tilia.Render.Body
@@ -199,8 +201,10 @@ test-suite tests
     Tilia.Fixity.PlanSpec
     Tilia.FixitySpec
     Tilia.Gen
+    Tilia.NewlineSpec
     Tilia.PackageSpec
     Tilia.PragmaSpec
+    Tilia.ProcessSpec
     Tilia.ProjectSpec
     Tilia.Render.OperatorSpec
     Tilia.RenderSpec
