@@ -12,6 +12,10 @@ are:
 * Guarantee inference of operator fixity with absolute precision at all
   times.
 
+*If you are curious how Tilia works, see this [blog post][blog-post].*
+
+[blog-post]: https://markkarpov.com/post/announcing-tilia
+
 ## Getting started
 
 The two most useful (and only!) commands are `inplace` and `check`:
