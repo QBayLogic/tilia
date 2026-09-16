@@ -1,0 +1,287 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to rehearse, without the leading v. Publishes nothing.'
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GHC_VERSION: '9.10.3'
+  CABAL_VERSION: '3.18.1.0'
+
+jobs:
+  settle:
+    name: Settle what is being released
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.what.outputs.version }}
+      anchor: ${{ steps.what.outputs.anchor }}
+      publish: ${{ steps.what.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read the version and check the repository agrees
+        id: what
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          ASKED: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = workflow_dispatch ]; then
+            version=$ASKED
+            publish=false
+          else
+            version=${TAG#v}
+            publish=true
+          fi
+
+          if ! [[ $version =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::'$version' is not a version; expected digits and dots, as in 0.0.1.0" >&2
+            exit 1
+          fi
+
+          declared=$(sed -n 's/^version:[[:space:]]*//p' tilia.cabal | head -1)
+          if [ "$version" != "$declared" ]; then
+            echo "::error::tilia.cabal says $declared, this release says $version" >&2
+            exit 1
+          fi
+
+          heading="## Tilia $version"
+          if ! grep -qxF "$heading" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '$heading' for the notes to point at" >&2
+            exit 1
+          fi
+
+          # How GitHub names that heading in a URL: lowercased, spaces
+          # hyphenated, dots dropped. 'Tilia 0.0.1.0' becomes 'tilia-0010'.
+          anchor="tilia-${version//./}"
+
+          {
+            echo "version=$version"
+            echo "anchor=$anchor"
+            echo "publish=$publish"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing $version (publish: $publish), notes anchored at #$anchor"
+
+  build-linux:
+    name: Build x86_64-linux
+    needs: settle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - uses: cachix/cachix-action@v17
+        with:
+          name: tilia
+          authToken: '${{ secrets.CACHIX_TIILA_AUTH_TOKEN }}'
+      - name: Build
+        run: nix build -L .#release --out-link result
+      - name: Check nothing is left dynamic
+        run: |
+          set -euo pipefail
+          said=$(file -b result/bin/tilia)
+          echo "$said"
+          if ! grep -qE 'statically linked|static-pie linked' <<<"$said"; then
+            echo "::error::this binary is not static: $said" >&2
+            ldd result/bin/tilia >&2 || true
+            exit 1
+          fi
+      - name: Archive
+        env:
+          VERSION: ${{ needs.settle.outputs.version }}
+        run: |
+          set -euo pipefail
+          install -Dm755 result/bin/tilia staging/tilia
+          tar -C staging -czf "tilia-$VERSION-x86_64-linux.tar.gz" tilia
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tilia-x86_64-linux
+          path: tilia-*-x86_64-linux.tar.gz
+          if-no-files-found: error
+
+  build-native:
+    name: Build ${{ matrix.system }}
+    needs: settle
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            system: aarch64-darwin
+            archive: tar.gz
+          - os: macos-15-intel
+            system: x86_64-darwin
+            archive: tar.gz
+          - os: windows-2022
+            system: x86_64-windows
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: haskell-actions/setup@v2
+        id: haskell
+        with:
+          ghc-version: ${{ env.GHC_VERSION }}
+          cabal-version: ${{ env.CABAL_VERSION }}
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ${{ steps.haskell.outputs.cabal-store }}
+            dist-newstyle
+          key: release-${{ matrix.system }}-${{ env.GHC_VERSION }}-${{ hashFiles('cabal.project', 'tilia.cabal') }}
+          restore-keys: |
+            release-${{ matrix.system }}-${{ env.GHC_VERSION }}-
+      - name: Build
+        run: |
+          set -euo pipefail
+          cabal update
+          cabal build exe:tilia --enable-executable-stripping
+      - name: Archive
+        env:
+          VERSION: ${{ needs.settle.outputs.version }}
+          SYSTEM: ${{ matrix.system }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          set -euo pipefail
+          mkdir staging
+          cp "$(cabal list-bin exe:tilia)" staging/
+          cd staging
+          if [ "$ARCHIVE" = zip ]; then
+            7z a "../tilia-$VERSION-$SYSTEM.zip" .
+          else
+            tar -czf "../tilia-$VERSION-$SYSTEM.tar.gz" .
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tilia-${{ matrix.system }}
+          path: tilia-*-${{ matrix.system }}.*
+          if-no-files-found: error
+
+  smoke:
+    name: Smoke-test ${{ matrix.system }}
+    needs: [settle, build-linux, build-native]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            system: x86_64-linux
+          - os: macos-15
+            system: aarch64-darwin
+          - os: macos-15-intel
+            system: x86_64-darwin
+          - os: windows-2022
+            system: x86_64-windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: tilia-${{ matrix.system }}
+          path: downloaded
+      - name: Unpack
+        id: binary
+        run: |
+          set -euo pipefail
+          mkdir unpacked
+          case "$(ls downloaded)" in
+            *.zip) 7z x -ounpacked downloaded/*.zip ;;
+            *) tar -C unpacked -xzf downloaded/*.tar.gz ;;
+          esac
+          found=$(find unpacked -maxdepth 1 -type f -name 'tilia*' | head -1)
+          if [ -z "$found" ]; then
+            echo "::error::the archive held no tilia binary" >&2
+            ls -lR unpacked >&2
+            exit 1
+          fi
+          chmod +x "$found"
+          echo "path=$PWD/$found" >> "$GITHUB_OUTPUT"
+      - name: It says which version it is
+        env:
+          VERSION: ${{ needs.settle.outputs.version }}
+          TILIA: ${{ steps.binary.outputs.path }}
+        run: |
+          set -euo pipefail
+          said=$("$TILIA" --version)
+          echo "$said"
+          grep -qF "tilia $VERSION" <<<"$said"
+      - uses: haskell-actions/setup@v2
+        id: haskell
+        with:
+          ghc-version: ${{ env.GHC_VERSION }}
+          cabal-version: ${{ env.CABAL_VERSION }}
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/cabal/packages
+            ~/.local/state/cabal/store
+            ~/AppData/Roaming/cabal
+          key: smoke-${{ matrix.system }}-${{ env.GHC_VERSION }}-${{ hashFiles('cabal.project', 'tilia.cabal') }}
+          restore-keys: |
+            smoke-${{ matrix.system }}-${{ env.GHC_VERSION }}-
+      - name: It can format Tilia
+        env:
+          TILIA: ${{ steps.binary.outputs.path }}
+        run: |
+          set -uo pipefail
+          cabal update
+
+          "$TILIA" check 2>&1 | tee said.txt
+          status=${PIPESTATUS[0]}
+
+          if [ "$status" -ne 0 ]; then
+            echo "::error::tilia check exited $status against its own source" >&2
+            exit 1
+          fi
+
+          if grep -qE 'Declined|Failed' said.txt; then
+            echo "::error::it would not format some of this project" >&2
+            exit 1
+          fi
+
+  publish:
+    name: Publish the release
+    needs: [settle, smoke]
+    if: needs.settle.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: tilia-*
+          path: assets
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.settle.outputs.version }}
+          ANCHOR: ${{ needs.settle.outputs.anchor }}
+        run: |
+          set -euo pipefail
+          ls -l assets
+          notes="[What changed in this release](https://github.com/$REPO/blob/$TAG/CHANGELOG.md#$ANCHOR)"
+          gh release create "$TAG" \
+            --repo "$REPO" \
+            --title "Tilia $VERSION" \
+            --notes "$notes" \
+            assets/*

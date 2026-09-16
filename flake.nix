@@ -89,6 +89,20 @@
 
         base = perGHC.${baseCompiler};
 
+        release = pkgs.haskell-nix.cabalProject {
+          inherit src;
+          compiler-nix-name = baseCompiler;
+          modules = [{
+            packages.tilia.components.exes.tilia = {
+              configureFlags = [ "--ghc-option=-optl=-static" ];
+              dontStrip = false;
+            };
+          }];
+        };
+
+        releaseBinary =
+          release.projectCross.musl64.hsPkgs.tilia.components.exes.tilia;
+
         checking = name: tools: run:
           pkgs.runCommand "tilia-${name}" { nativeBuildInputs = tools; } ''
             ${run}
@@ -175,6 +189,7 @@
         packages = {
           default = base.tilia;
           lint = pkgs.linkFarm "tilia-lint" tidy;
+          release = releaseBinary;
         };
 
         checks = { inherit weeder; } // tidy;
