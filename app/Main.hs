@@ -11,12 +11,21 @@ import Data.Foldable (traverse_)
 import Data.Text (Text)
 import Data.Text.IO qualified as T
 import Data.Version (showVersion)
+import GHC.IO.Encoding (TextEncoding (textEncodingName))
 import Options.Applicative
 import Paths_tilia (version)
 import System.Directory (makeRelativeToCurrentDirectory)
 import System.Exit (ExitCode (..))
 import System.Exit qualified
-import System.IO (hFlush, stderr, stdout)
+import System.IO
+  ( Handle,
+    hFlush,
+    hGetEncoding,
+    hSetEncoding,
+    mkTextEncoding,
+    stderr,
+    stdout,
+  )
 import Tilia.Fixity.Debug (renderFixityNotes)
 import Tilia.Format
   ( FormatError,
@@ -48,11 +57,12 @@ import Tilia.Target
     filesOfComponents,
     parseTarget,
   )
-import Tilia.Utils (lineWidth)
+import Tilia.Utils (lineWidth, quietly)
 
 -- | The program's entry point.
 main :: IO ()
 main = do
+  traverse_ transliterateUnprintable [stdout, stderr]
   Opts {..} <- customExecParser (prefs (columns lineWidth)) optsParserInfo
   palette <- paletteFor
   target <-
@@ -81,6 +91,17 @@ main = do
       printReport (inplaceReport palette outcomes)
     Check -> printReport (checkReport palette outcomes)
   exitWith optMode outcomes
+
+-- | Transliterate unprintable characters if the stream cannot handle them.
+transliterateUnprintable :: Handle -> IO ()
+transliterateUnprintable h =
+  quietly () $
+    hGetEncoding h >>= \case
+      Just encoding
+        | name <- textEncodingName encoding,
+          '/' `notElem` name ->
+            hSetEncoding h =<< mkTextEncoding (name <> "//TRANSLIT")
+      _ -> pure ()
 
 -- | Exit the way the run turned out.
 exitWith :: Mode -> [(FilePath, Outcome)] -> IO ()
