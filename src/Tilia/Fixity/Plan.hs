@@ -26,6 +26,7 @@ module Tilia.Fixity.Plan
     checkReadiness,
     plannedTarballs,
     packageCacheRoot,
+    guessedPackageCacheRoot,
     Solves (..),
     forgetfulSolves,
     prepareWith,
@@ -46,7 +47,16 @@ import Codec.Compression.GZip qualified as GZip
 import Control.Applicative ((<|>))
 import Control.Monad (filterM, foldM, join)
 import Crypto.Hash.SHA256 qualified as SHA256
-import Data.Aeson (FromJSON (..), Value, eitherDecodeFileStrict, withObject, (.:), (.:?))
+import Data.Aeson
+  ( FromJSON (..),
+    Value,
+    decodeStrict,
+    eitherDecodeFileStrict,
+    withObject,
+    (.:),
+    (.:?),
+  )
+import Data.Aeson.Types (parseMaybe)
 import Data.ByteString qualified as BS
 import Data.ByteString.Base16 qualified as B16
 import Data.ByteString.Lazy qualified as BL
@@ -102,6 +112,7 @@ import Tilia.Fixity.Cabal
     cabalFileInArchive,
     containedModules,
     declaredExtensions,
+    entryPosixPath,
     packageModules,
     sourceDirs,
   )
@@ -111,6 +122,7 @@ import Tilia.Fixity.PackageDb
 import Tilia.Package (newPackageReader)
 import Tilia.Parser
 import Tilia.Pragma (effectiveExtensions)
+import Tilia.Process (readProgramOutput)
 import Tilia.Utils (quietly)
 
 ----------------------------------------------------------------------------
@@ -712,6 +724,20 @@ plannedTarballs plan = do
 -- repository it downloads from.
 packageCacheRoot :: IO FilePath
 packageCacheRoot =
+  readProgramOutput "cabal" ["path", "--remote-repo-cache", "--output-format=json"] >>= \case
+    Just said | Just dir <- remoteRepoCacheIn said -> pure dir
+    _ -> guessedPackageCacheRoot
+
+-- | The package cache directory, out of what @cabal path@ printed.
+remoteRepoCacheIn :: Text -> Maybe FilePath
+remoteRepoCacheIn said = do
+  spoken <- listToMaybe (reverse (filter (not . T.null) (map T.strip (T.lines said))))
+  value <- decodeStrict (T.encodeUtf8 spoken)
+  parseMaybe (withObject "cabal path" (.: "remote-repo-cache")) value
+
+-- | Where @cabal@ probably keeps them, for a @cabal@ that will not say.
+guessedPackageCacheRoot :: IO FilePath
+guessedPackageCacheRoot =
   lookupEnv "CABAL_DIR" >>= \case
     Just dir -> pure (dir </> "packages")
     Nothing -> do
@@ -1845,12 +1871,12 @@ readModule tarball modName = quietly Nothing $ do
     sweep cabal found = \case
       Tar.Next entry rest
         | Tar.NormalFile content _ <- Tar.entryContent entry,
-          cabalFileAtTop (Tar.entryPath entry),
+          cabalFileAtTop (entryPosixPath entry),
           Nothing <- cabal ->
             sweep (Just (decode content)) found rest
         | Tar.NormalFile content _ <- Tar.entryContent entry,
-          any (`isSuffixOf` Tar.entryPath entry) suffixes ->
-            sweep cabal ((Tar.entryPath entry, decode content) : found) rest
+          any (`isSuffixOf` entryPosixPath entry) suffixes ->
+            sweep cabal ((entryPosixPath entry, decode content) : found) rest
         | otherwise -> sweep cabal found rest
       _ -> (cabal, reverse found)
     pick dirs candidates ending =

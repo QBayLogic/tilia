@@ -3,13 +3,48 @@
 -- | Reading a @.cabal@ file's fields without a cabal parser.
 module Tilia.Fixity.CabalSpec (spec) where
 
+import Codec.Archive.Tar qualified as Tar
+import Codec.Archive.Tar.Entry qualified as Tar
+import Data.ByteString.Lazy qualified as BL
 import Data.Text (Text)
+import Data.Text.Encoding qualified as T
 import GHC.LanguageExtensions.Type (Extension (..))
 import Test.Hspec
 import Tilia.Fixity.Cabal
 
 spec :: Spec
 spec = do
+  describe "finding the cabal file in an archive" $ do
+    it "spells an entry's path the way the archive holds it" $
+      entryPosixPath (entryFor "hspec-2.11.17/hspec.cabal" "")
+        `shouldBe` "hspec-2.11.17/hspec.cabal"
+
+    it "is the same spelling on every machine" $
+      entryPosixPath (entryFor "hspec-2.11.17/hspec.cabal" "")
+        `shouldBe` Tar.fromTarPathToPosixPath
+          (Tar.entryTarPath (entryFor "hspec-2.11.17/hspec.cabal" ""))
+
+    it "knows a package's own cabal file from one further down" $
+      map
+        cabalFileAtTop
+        [ "hspec-2.11.17/hspec.cabal",
+          "hspec-2.11.17/vendor/other.cabal",
+          "hspec.cabal"
+        ]
+        `shouldBe` [True, False, False]
+
+    it "reads only a path written with the separator a tar file uses" $
+      cabalFileAtTop "hspec-2.11.17\\hspec.cabal" `shouldBe` False
+
+    it "takes the modules out of an archive's cabal file" $
+      cabalFileInArchive
+        ( archiveOf
+            [ ("hspec-2.11.17/Setup.lhs", "main = undefined\n"),
+              ("hspec-2.11.17/hspec.cabal", "library\n  exposed-modules: Test.Hspec, Test.Hspec.Runner\n")
+            ]
+        )
+        `shouldSatisfy` maybe False (elem "Test.Hspec.Runner" . containedModules)
+
   describe "plain fields" $ do
     it "reads a one-line field" $
       exposed "library\n  exposed-modules: A.B, C.D\n"
@@ -158,10 +193,6 @@ spec = do
 
   describe "the union is deliberate" $
     it "does not need to know which branch a build would take" $ do
-      -- Both are reported. A module the real build does not expose cannot
-      -- be imported by the project being formatted, so nothing will ever
-      -- ask about it, and the extra entry is dead weight rather than a
-      -- wrong answer.
       let both =
             exposed
               "library\n\
@@ -178,3 +209,13 @@ exposed = containedModules
 -- | What a @.cabal@ of this shape puts in force.
 extensions :: Text -> [Extension]
 extensions = declaredExtensions
+
+-- | A tar entry at the given path, holding the given text.
+entryFor :: FilePath -> Text -> Tar.Entry
+entryFor path contents = case Tar.toTarPath False path of
+  Left why -> error why
+  Right tarPath -> Tar.fileEntry tarPath (BL.fromStrict (T.encodeUtf8 contents))
+
+-- | An archive of those entries, in order.
+archiveOf :: [(FilePath, Text)] -> Tar.Entries e
+archiveOf = foldr (Tar.Next . uncurry entryFor) Tar.Done

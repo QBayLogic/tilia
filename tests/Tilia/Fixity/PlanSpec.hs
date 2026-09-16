@@ -43,6 +43,7 @@ import Tilia.Fixity
 import Tilia.Fixity.PackageDb (compilerIdentity)
 import Tilia.Fixity.Plan
 import Tilia.Parser
+import Tilia.Process (readProgramOutput)
 
 spec :: Spec
 spec = do
@@ -411,24 +412,36 @@ isUnder repo path = ("/" <> repo <> "/") `Data.List.isInfixOf` path
 -- directories it derives from, which on Unix are these two variables.
 packageCache :: Spec
 packageCache = describe "where the package cache is looked for" $ do
-  it "is what CABAL_DIR says, above all else" $
-    withSystemTempDirectory "tilia-cabal-dir" $ \dir ->
-      withEnvironment [("CABAL_DIR", dir)] $
-        packageCacheRoot `shouldReturn` (dir </> "packages")
+  -- Whatever cabal says it is. Checked against cabal rather than against a
+  -- path spelled out here, because the whole point of asking is that this
+  -- suite cannot know what the answer should be on somebody else's
+  -- machine—and did not, on Windows.
+  it "is the directory cabal reports" $ do
+    said <- readProgramOutput "cabal" ["path", "--remote-repo-cache"]
+    case said of
+      Nothing -> pendingWith "no cabal on the path to ask"
+      Just reported ->
+        packageCacheRoot `shouldReturn` T.unpack (T.strip reported)
 
-  it "is the XDG cache where the index is there" $
-    withLayouts $ \xdg _ -> do
-      withIndexIn xdg
-      packageCacheRoot `shouldReturn` xdg
+  describe "and where it is guessed, for a cabal too old to ask" $ do
+    it "is what CABAL_DIR says, above all else" $
+      withSystemTempDirectory "tilia-cabal-dir" $ \dir ->
+        withEnvironment [("CABAL_DIR", dir)] $
+          guessedPackageCacheRoot `shouldReturn` (dir </> "packages")
 
-  it "is still the old directory where the index is there instead" $
-    withLayouts $ \_ legacy -> do
-      withIndexIn legacy
-      packageCacheRoot `shouldReturn` legacy
+    it "is the XDG cache where the index is there" $
+      withLayouts $ \xdg _ -> do
+        withIndexIn xdg
+        guessedPackageCacheRoot `shouldReturn` xdg
 
-  it "is the platform's own default where there is no index anywhere" $
-    withLayouts $
-      \xdg _ -> packageCacheRoot `shouldReturn` xdg
+    it "is still the old directory where the index is there instead" $
+      withLayouts $ \_ legacy -> do
+        withIndexIn legacy
+        guessedPackageCacheRoot `shouldReturn` legacy
+
+    it "is the platform's own default where there is no index anywhere" $
+      withLayouts $
+        \xdg _ -> guessedPackageCacheRoot `shouldReturn` xdg
 
 -- | Run something against a home and an XDG cache directory of its own,
 -- handing it both of the places a cache could then be in.
