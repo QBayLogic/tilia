@@ -17,8 +17,8 @@ are:
 The two most useful (and only!) commands are `inplace` and `check`:
 
 ```console
-$ tilia inplace <COMPONENT> # format all files of COMPONENT in place
-$ tilia check   <COMPONENT> # check that all files of COMPONENT are formatted
+$ tilia inplace [COMPONENT] # format all files of COMPONENT in place
+$ tilia check   [COMPONENT] # check that all files of COMPONENT are formatted
 ```
 
 `COMPONENT` may be omitted and in that case it defaults to `all`. To be
@@ -87,25 +87,6 @@ CPP is a first-class formattable object to Tilia. Any Haskell syntactically
 enclosed in a conditional branch will format, and it does not even need to
 be self-contained valid Haskell on its own, as long as every configuration
 of the module is a valid Haskell module.
-
-## Declined and failing modules
-
-It may happen that Tilia declines to format your file or even claims that it
-does not parse. This almost always has to do with the file not belonging
-properly to a component in a package, and therefore not being parsed with
-the right language extensions.
-
-One valid cause of declining a module is when it uses an operator and we
-fail to resolve at least one of its imports to the extent that would
-establish with certainty what operators that module exports and what their
-fixities are. Tilia refuses to guess fixities. As long as there is the
-possibility that a module defines an operator you use, that module has to
-resolve; otherwise we risk either missing fixity info or an ambiguity. Both
-of those are unacceptable.
-
-If you find a case where Tilia declines to format a module which
-nevertheless belongs to a Cabal component, report it on [the issue
-tracker][issue-tracker].
 
 ## Development
 
