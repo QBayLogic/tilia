@@ -251,7 +251,7 @@ branchLeaves source = case scanDirectives source of
   Nothing -> Left (UnhandledDirective (unhandledIn source))
   Just ds -> case nesting 0 ds of
     Nothing -> Left UnsplittableConditional
-    Just forest -> traverse resolved (distinct (fmap configuration (assignments forest)))
+    Just forest -> traverse resolved (filter (null . unconditionalErrors) (distinct (fmap configuration (assignments forest))))
   where
     reachable = go Map.empty
       where
@@ -387,6 +387,7 @@ answeredLeaves :: Text -> Either CppError [(Answers, Text)]
 answeredLeaves = go Map.empty
   where
     go answers source = case configurations source of
+      Nothing | not (null (unconditionalErrors source)) -> Right []
       Nothing -> (\t -> [(answers, t)]) <$> resolved source
       Just c ->
         concat
