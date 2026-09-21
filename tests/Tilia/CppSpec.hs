@@ -20,6 +20,12 @@ formatCpp = said . formatWithCpp defaultParserConfig defaultRenderConfig "exampl
 
 spec :: Spec
 spec = do
+  describe "an empty case inside CPP" $ do
+    it "retains explicit braces on the first pass" $ do
+      let source = "{-# LANGUAGE CPP, EmptyCase #-}\nmodule M where\n#if FLAG\nf x = case x of\n  {}\n#endif\n"
+      settles source `shouldBe` Right ()
+      roundTrip source `shouldBe` Right ()
+      formatCpp source `shouldSatisfy` either (const False) (T.isInfixOf "{}")
   describe "splitting a module on its conditional" $ do
     it "keeps the directive as written, keyword and all" $
       cfgGuards <$> configurations atDeclarations
