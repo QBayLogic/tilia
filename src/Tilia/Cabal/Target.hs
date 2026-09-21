@@ -25,6 +25,7 @@ import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
+import Data.Text.IO qualified as T
 import Distribution.Fields.Field (Field (..), FieldLine (..), Name (..))
 import Distribution.Fields.ParseResult (runParseResult)
 import Distribution.Fields.Parser (readFields)
@@ -45,12 +46,20 @@ import Distribution.Parsec (showPError)
 import Distribution.Types.PackageId (PackageIdentifier (..))
 import Distribution.Utils.Path (getSymbolicPath)
 import System.Directory
-  ( doesDirectoryExist,
+  ( canonicalizePath,
+    doesDirectoryExist,
     doesFileExist,
     listDirectory,
   )
-import System.FilePath (normalise, takeDirectory, takeExtension, (</>))
-import Tilia.Cabal.Project (Marker (..), ProjectRoot (..), markerFile)
+import System.FilePath
+  ( dropTrailingPathSeparator,
+    normalise,
+    splitDirectories,
+    takeDirectory,
+    takeExtension,
+    (</>),
+  )
+import Tilia.Cabal.Project (Marker (..), ProjectRoot (..), findProjectRoot, markerFile)
 import Tilia.Fixity.Plan (PlanComponent (..))
 import Tilia.Utils (attempted, quietly)
 
@@ -220,11 +229,33 @@ filesOfComponent c =
             then walk path
             else pure [path | takeExtension path `elem` formattableFileExtensions]
 
--- | Every Haskell file a set of components holds, each named once.
+-- | Every Haskell file a set of components holds, each named once, except
+-- paths excluded by a .tiliaignore at the project root.
 filesOfComponents :: [Component] -> IO [FilePath]
-filesOfComponents components =
-  sort . Set.toList . Set.fromList . concat
-    <$> traverse filesOfComponent components
+filesOfComponents components = do
+  projects <- traverse (findProjectRoot . componentRoot) components
+  let roots = Set.toList (Set.fromList [prPath root | Just root <- projects])
+  ignored <- fmap pathParts . concat <$> traverse ignoredPaths roots
+  files <- sort . Set.toList . Set.fromList . concat <$> traverse filesOfComponent components
+  filterM (fmap (not . excluded ignored . pathParts) . canonicalizePath) files
+  where
+    excluded ignored path = any (`isPrefixOf` path) ignored
+    pathParts = splitDirectories . dropTrailingPathSeparator
+
+-- | Literal file or directory paths relative to the project root. A directory
+-- excludes everything below it. Empty lines and lines starting with # are
+-- comments; an unreadable ignore file must not silently enable formatting.
+ignoredPaths :: FilePath -> IO [FilePath]
+ignoredPaths root = do
+  let file = root </> ".tiliaignore"
+  exists <- doesFileExist file
+  if exists
+    then do
+      entries <- fmap T.strip . T.lines <$> T.readFile file
+      traverse
+        (canonicalizePath . (root </>) . T.unpack)
+        [entry | entry <- entries, not (T.null entry), not ("#" `T.isPrefixOf` entry)]
+    else pure []
 
 -- | The extensions a Haskell source file can have.
 formattableFileExtensions :: [String]

@@ -228,6 +228,51 @@ spec = do
             files <- filesOfComponents cs
             fmap takeFileName files `shouldBe` ["A.hs"]
 
+    it "excludes literal files and directory trees from .tiliaignore"
+      $ withProject
+        [ ("only.cabal", package "only" "src"),
+          (".tiliaignore", "  # Generated sources and runtime fixtures\r\n\r\n ./src/fixtures/ \r\nsrc/Generated.hs\r\n"),
+          ("src/Runner.hs", "module Runner where\n"),
+          ("src/Generated.hs", "module Generated where\n"),
+          ("src/fixtures/Input.hs", "module Input where\n"),
+          ("src/fixtures/nested/Other.hs", "module Other where\n"),
+          ("src/fixtures-other/Keep.hs", "module Keep where\n")
+        ]
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> do
+            files <- filesOfComponents cs
+            sort (map takeFileName files) `shouldBe` ["Keep.hs", "Runner.hs"]
+
+    it "uses the project ignore file for packages and explicit fixture source directories"
+      $ withProject
+        [ ("cabal.project", "packages: one two\n"),
+          (".tiliaignore", "one/fixtures\n"),
+          ("one/one.cabal", packageWith "one" ["src", "fixtures"]),
+          ("one/src/A.hs", "module A where\n"),
+          ("one/fixtures/Input.hs", "module Input where\n"),
+          ("two/two.cabal", package "two" "fixtures"),
+          ("two/fixtures/B.hs", "module B where\n")
+        ]
+      $ \root ->
+        componentsOfTarget root Everything >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> do
+            files <- filesOfComponents cs
+            sort (map takeFileName files) `shouldBe` ["A.hs", "B.hs"]
+
+    it "can exclude every file of an explicitly selected component"
+      $ withProject
+        [ ("only.cabal", package "only" "fixtures"),
+          (".tiliaignore", "fixtures/\n"),
+          ("fixtures/Input.hs", "module Input where\n")
+        ]
+      $ \root ->
+        componentsOfTarget root (Called "only") >>= \case
+          Left problem -> expectationFailure (T.unpack (describeTargetProblem problem))
+          Right cs -> filesOfComponents cs `shouldReturn` []
+
     it "says so when a cabal.project names nothing that exists" $
       withProject [("cabal.project", "packages: nowhere\n")] $ \root ->
         componentsOfTarget root Everything >>= \case

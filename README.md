@@ -54,7 +54,22 @@ repository resolves to the repository. It is worth pointing out that a
 package in the tree that the `packages` field does not name is not part of
 the project and will not be visited. Within a package, a component's
 `hs-source-dirs` say which files belong to it, and every `.hs`, `.hs-boot`,
-and `.hsig` under them gets formatted.
+and `.hsig` under them gets formatted unless it is excluded.
+
+To exclude generated sources or test fixtures with different language
+settings, list their paths in `.tiliaignore` at the project root:
+
+```text
+# Fixtures compiled by a separate driver
+tests/shouldwork/
+tests/shouldfail/
+```
+
+Entries are literal file or directory paths relative to the project root.
+Directories exclude all files below them. Blank lines, surrounding whitespace,
+and lines starting with `#` are ignored. Wildcards and re-inclusion patterns
+are not supported. Both `inplace` and `check` honor these exclusions, including
+when selecting a particular component or running from a package subdirectory.
 
 If there is no build plan yet, or it is older than the `.cabal` and
 `cabal.project` files, or it says nothing about a component you asked for,
